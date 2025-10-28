@@ -254,7 +254,7 @@ Widget _buildBottomNavigationBar() {
         } else if (index == 3) {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const ProfileScreen()),
+            MaterialPageRoute(builder: (context) => const ProfilePage()),
           );
         }
       },
