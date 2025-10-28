@@ -17,10 +17,10 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   final ScrollController _scrollController = ScrollController();
   bool _isLoading = false;
-  bool _hasMore = true; // ✅ 是否还有更多数据
+  bool _hasMore = true; // 是否还有更多数据
   final List<Post> _posts = [];
 
-  int _selectedTab = 0; // ✅ 0=发现, 1=分区
+  int _selectedTab = 0; // 0=发现, 1=分区
 
   @override
   void initState() {
@@ -75,7 +75,7 @@ void _loadInitialPosts() {
     );
   }
 
-  void _onSearchTap() {
+void _onSearchTap() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const SearchScreen()),
@@ -89,10 +89,10 @@ void _loadInitialPosts() {
       body: SafeArea(
         child: Column(
           children: [
-            // ✅ 顶部导航栏
+            // 顶部导航栏
             _buildTopBar(),
 
-            // ✅ 内容区域
+            // 内容区域
             Expanded(
               child: _selectedTab == 0
                   ? (_posts.isEmpty
@@ -107,7 +107,7 @@ void _loadInitialPosts() {
     );
   }
 
-  // ✅ 新的顶部栏
+  // 新的顶部栏
   Widget _buildTopBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -150,7 +150,7 @@ void _loadInitialPosts() {
     );
   }
 
-  // ✅ 顶部“发现 / 分区”按钮样式
+  // 顶部“发现 / 分区”按钮样式
   Widget _buildTabButton(String label, int index) {
     final bool selected = _selectedTab == index;
     return GestureDetector(
@@ -190,7 +190,7 @@ void _loadInitialPosts() {
     );
   }
 
-  // ✅ 根据是否还有更多，显示“加载中”或“没有更多内容了”
+  // 根据是否还有更多，显示“加载中”或“没有更多内容了”
   Widget _buildLoadMoreIndicator() {
     if (_isLoading) {
       return const Center(
@@ -228,7 +228,7 @@ void _loadInitialPosts() {
     );
   }
 
-  // ✅ 分区占位内容
+  // 分区占位内容
   Widget _buildZonePlaceholder() {
     return const Center(
       child: Text('分区内容开发中...', style: TextStyle(color: Colors.grey)),
