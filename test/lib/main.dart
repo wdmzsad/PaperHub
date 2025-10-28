@@ -4,7 +4,7 @@ import 'pages/register_page.dart';
 import 'pages/verify_email_page.dart';
 import 'pages/forgot_password_page.dart';
 import 'pages/reset_password_page.dart';
-import 'pages/home_page.dart';
+import 'screens/home_screen.dart';
 import 'services/local_storage.dart';
 
 void main() {
@@ -25,7 +25,7 @@ class PaperHubApp extends StatelessWidget {
         '/verify': (ctx) => VerifyEmailPage(),
         '/forgot': (ctx) => ForgotPasswordPage(),
         '/reset': (ctx) => ResetPasswordPage(),
-        '/home': (ctx) => HomePage(),
+        '/home': (ctx) => const HomeScreen(),
       },
     );
   }
