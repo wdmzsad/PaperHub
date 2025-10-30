@@ -1,0 +1,70 @@
+# 使用 GitLab Runner 的 Docker 执行环境
+# 你可以换成自己 Runner 上可用的镜像
+image: ubuntu:22.04
+
+stages:
+  - build
+  - test
+  - deploy
+
+# 统一定义缓存，加快构建速度
+cache:
+  paths:
+    - build/
+    - .gradle/
+    - .m2/repository/
+    - flutter/.pub-cache/
+
+# ---------- 前端 Flutter 构建 ----------
+build_flutter:
+  stage: build
+  image: cirrusci/flutter:3.24.0  # Flutter 官方CI镜像
+  script:
+    - echo "开始构建 Flutter 前端..."
+    - flutter --version
+    - flutter pub get
+    - flutter build web --release
+  artifacts:
+    paths:
+      - build/web   # 构建结果保存为 artifact
+  only:
+    - main
+
+# ---------- 后端 Spring Boot 构建 ----------
+build_backend:
+  stage: build
+  image: maven:3.9.6-eclipse-temurin-17
+  script:
+    - echo "开始构建 Spring Boot 后端..."
+    - mvn -B clean package -DskipTests
+  artifacts:
+    paths:
+      - target/*.jar
+  only:
+    - main
+
+# ---------- 测试阶段 ----------
+test_all:
+  stage: test
+  image: maven:3.9.6-eclipse-temurin-17
+  script:
+    - echo "运行后端单元测试..."
+    - mvn test
+  only:
+    - merge_requests
+    - main
+
+# ---------- 部署阶段 ----------
+deploy:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client
+  script:
+    - echo "部署到服务器..."
+    # 这里假设使用 SSH 部署
+    - scp -r build/web/* user@server:/var/www/html/
+    - scp target/*.jar user@server:/home/user/app/
+    - ssh user@server 'bash /home/user/app/restart.sh'
+  only:
+    - main
