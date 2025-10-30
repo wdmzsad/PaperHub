@@ -1,59 +1,80 @@
+# -------------------------------
+# GitLab CI/CD 配置：Flutter + Spring Boot (Maven)
+# -------------------------------
+
+image: ubuntu:22.04
+
 stages:
-  - backend_build
-  - frontend_build
-  - backend_test
+  - build_frontend
+  - build_backend
+  - test
+  - deploy
 
-# -------------------------------
-# 后端：Spring Boot 构建
-# -------------------------------
-backend_build:
-  stage: backend_build
-  image: gradle:8.6-jdk17
-  script:
-    - echo "🏗️ 构建 Spring Boot 后端..."
-    - cd Backend/paperhub
-    - gradle clean build -x test
-  artifacts:
-    paths:
-      - Backend/paperhub/build/libs/
-    expire_in: 1 week
-  only:
-    - main
-    - develop
-    - local-upload
+# 缓存（加速依赖安装）
+cache:
+  paths:
+    - Frontend/build/
+    - .m2/repository/
+    - Frontend/.pub-cache/
 
-# -------------------------------
-# 前端：Flutter 构建
-# -------------------------------
-frontend_build:
-  stage: frontend_build
-  image: cirrusci/flutter:3.24.0
+# ---------- 前端 Flutter ----------
+build_flutter:
+  stage: build_frontend
+  image: ghcr.io/cirruslabs/flutter:3.24.0
   script:
-    - echo "🎯 构建 Flutter 前端..."
+    - echo "🚀 构建 Flutter 前端..."
     - cd Frontend
+    - flutter --version
     - flutter pub get
-    - flutter build web
+    - flutter build web --release
   artifacts:
     paths:
       - Frontend/build/web
+  only:
+    - local-upload
+    - develop
+    - main
+
+# ---------- 后端 Spring Boot (Maven) ----------
+build_backend:
+  stage: build_backend
+  image: maven:3.9.9-eclipse-temurin-17
+  script:
+    - echo "🏗️ 构建 Spring Boot 后端..."
+    - cd Backend/paperhub
+    - ls -l  # 调试用
+    - mvn -B clean package -DskipTests
+  artifacts:
+    paths:
+      - Backend/paperhub/target/*.jar
     expire_in: 1 week
   only:
-    - main
-    - develop
     - local-upload
+    - develop
+    - main
 
-# -------------------------------
-# 后端测试（JUnit）
-# -------------------------------
-backend_test:
-  stage: backend_test
-  image: gradle:8.6-jdk17
+# ---------- 测试阶段 ----------
+test_backend:
+  stage: test
+  image: maven:3.9.9-eclipse-temurin-17
   script:
-    - echo "🧪 运行后端单元测试..."
+    - echo "🧪 运行后端测试..."
     - cd Backend/paperhub
-    - gradle test
+    - mvn test
   only:
     - merge_requests
     - main
-    - develop
-    - local-upload
+
+# ---------- 部署阶段 ----------
+deploy:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client
+  script:
+    - echo "📦 部署构建产物到服务器..."
+    - scp -r Frontend/build/web/* user@server:/var/www/html/
+    - scp Backend/paperhub/target/*.jar user@server:/home/user/app/
+    - ssh user@server 'bash /home/user/app/restart.sh'
+  only:
+    - main
