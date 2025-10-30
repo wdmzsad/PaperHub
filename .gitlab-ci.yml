@@ -1,5 +1,4 @@
 # 使用 GitLab Runner 的 Docker 执行环境
-# 你可以换成自己 Runner 上可用的镜像
 image: ubuntu:22.04
 
 stages:
@@ -7,7 +6,7 @@ stages:
   - test
   - deploy
 
-# 统一定义缓存，加快构建速度
+# ---------- 缓存配置 ----------
 cache:
   paths:
     - build/
@@ -26,9 +25,9 @@ build_flutter:
     - flutter build web --release
   artifacts:
     paths:
-      - build/web   # 构建结果保存为 artifact
+      - build/web
   only:
-    - main
+    - local-upload   # ✅ 改成你当前所在分支
 
 # ---------- 后端 Spring Boot 构建 ----------
 build_backend:
@@ -41,7 +40,7 @@ build_backend:
     paths:
       - target/*.jar
   only:
-    - main
+    - local-upload   # ✅ 允许在 local-upload 分支构建
 
 # ---------- 测试阶段 ----------
 test_all:
@@ -51,6 +50,7 @@ test_all:
     - echo "运行后端单元测试..."
     - mvn test
   only:
+    - local-upload   # ✅ 在本地分支也跑测试
     - merge_requests
     - main
 
@@ -62,9 +62,8 @@ deploy:
     - apk add --no-cache openssh-client
   script:
     - echo "部署到服务器..."
-    # 这里假设使用 SSH 部署
     - scp -r build/web/* user@server:/var/www/html/
     - scp target/*.jar user@server:/home/user/app/
     - ssh user@server 'bash /home/user/app/restart.sh'
   only:
-    - main
+    - main   # ✅ 只在 main 分支部署，避免本地测试时误触发
