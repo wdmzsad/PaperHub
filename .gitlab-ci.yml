@@ -6,53 +6,55 @@ stages:
   - test
   - deploy
 
-# ---------- 缓存配置 ----------
 cache:
   paths:
     - build/
     - .gradle/
-    - .m2/repository/
     - flutter/.pub-cache/
 
 # ---------- 前端 Flutter 构建 ----------
 build_flutter:
   stage: build
-  image: cirrusci/flutter:3.24.0  # Flutter 官方CI镜像
+  image: ghcr.io/cirruslabs/flutter:3.24.0
   script:
     - echo "开始构建 Flutter 前端..."
+    - cd frontend
     - flutter --version
     - flutter pub get
     - flutter build web --release
   artifacts:
     paths:
-      - build/web
+      - frontend/build/web
   only:
-    - local-upload   # ✅ 改成你当前所在分支
+    - local-upload
 
-# ---------- 后端 Spring Boot 构建 ----------
+# ---------- 后端 Spring Boot（Gradle）构建 ----------
 build_backend:
   stage: build
-  image: maven:3.9.6-eclipse-temurin-17
+  image: gradle:8.10.2-jdk17-alpine
   script:
     - echo "开始构建 Spring Boot 后端..."
-    - mvn -B clean package -DskipTests
+    - cd backend
+    # 确保 Gradle wrapper 可执行（部分 runner 环境需要这行）
+    - chmod +x gradlew
+    - ./gradlew clean build -x test
   artifacts:
     paths:
-      - target/*.jar
+      - backend/build/libs/*.jar
   only:
-    - local-upload   # ✅ 允许在 local-upload 分支构建
+    - local-upload
 
 # ---------- 测试阶段 ----------
 test_all:
   stage: test
-  image: maven:3.9.6-eclipse-temurin-17
+  image: gradle:8.10.2-jdk17-alpine
   script:
     - echo "运行后端单元测试..."
-    - mvn test
+    - cd backend
+    - chmod +x gradlew
+    - ./gradlew test
   only:
-    - local-upload   # ✅ 在本地分支也跑测试
-    - merge_requests
-    - main
+    - local-upload
 
 # ---------- 部署阶段 ----------
 deploy:
@@ -62,8 +64,8 @@ deploy:
     - apk add --no-cache openssh-client
   script:
     - echo "部署到服务器..."
-    - scp -r build/web/* user@server:/var/www/html/
-    - scp target/*.jar user@server:/home/user/app/
+    - scp -r frontend/build/web/* user@server:/var/www/html/
+    - scp backend/build/libs/*.jar user@server:/home/user/app/
     - ssh user@server 'bash /home/user/app/restart.sh'
   only:
-    - main   # ✅ 只在 main 分支部署，避免本地测试时误触发
+    - local-upload
