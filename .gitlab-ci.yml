@@ -1,71 +1,59 @@
-# 使用 GitLab Runner 的 Docker 执行环境
-image: ubuntu:22.04
-
 stages:
-  - build
-  - test
-  - deploy
+  - backend_build
+  - frontend_build
+  - backend_test
 
-cache:
-  paths:
-    - build/
-    - .gradle/
-    - flutter/.pub-cache/
-
-# ---------- 前端 Flutter 构建 ----------
-build_flutter:
-  stage: build
-  image: ghcr.io/cirruslabs/flutter:3.24.0
+# -------------------------------
+# 后端：Spring Boot 构建
+# -------------------------------
+backend_build:
+  stage: backend_build
+  image: gradle:8.6-jdk17
   script:
-    - echo "开始构建 Flutter 前端..."
-    - cd frontend
-    - flutter --version
+    - echo "🏗️ 构建 Spring Boot 后端..."
+    - cd Backend/paperhub
+    - gradle clean build -x test
+  artifacts:
+    paths:
+      - Backend/paperhub/build/libs/
+    expire_in: 1 week
+  only:
+    - main
+    - develop
+    - local-upload
+
+# -------------------------------
+# 前端：Flutter 构建
+# -------------------------------
+frontend_build:
+  stage: frontend_build
+  image: cirrusci/flutter:3.24.0
+  script:
+    - echo "🎯 构建 Flutter 前端..."
+    - cd Frontend
     - flutter pub get
-    - flutter build web --release
+    - flutter build web
   artifacts:
     paths:
-      - frontend/build/web
+      - Frontend/build/web
+    expire_in: 1 week
   only:
+    - main
+    - develop
     - local-upload
 
-# ---------- 后端 Spring Boot（Gradle）构建 ----------
-build_backend:
-  stage: build
-  image: gradle:8.10.2-jdk17-alpine
+# -------------------------------
+# 后端测试（JUnit）
+# -------------------------------
+backend_test:
+  stage: backend_test
+  image: gradle:8.6-jdk17
   script:
-    - echo "开始构建 Spring Boot 后端..."
-    - cd backend
-    # 确保 Gradle wrapper 可执行（部分 runner 环境需要这行）
-    - chmod +x gradlew
-    - ./gradlew clean build -x test
-  artifacts:
-    paths:
-      - backend/build/libs/*.jar
+    - echo "🧪 运行后端单元测试..."
+    - cd Backend/paperhub
+    - gradle test
   only:
-    - local-upload
-
-# ---------- 测试阶段 ----------
-test_all:
-  stage: test
-  image: gradle:8.10.2-jdk17-alpine
-  script:
-    - echo "运行后端单元测试..."
-    - cd backend
-    - chmod +x gradlew
-    - ./gradlew test
-  only:
-    - local-upload
-
-# ---------- 部署阶段 ----------
-deploy:
-  stage: deploy
-  image: alpine:latest
-  before_script:
-    - apk add --no-cache openssh-client
-  script:
-    - echo "部署到服务器..."
-    - scp -r frontend/build/web/* user@server:/var/www/html/
-    - scp backend/build/libs/*.jar user@server:/home/user/app/
-    - ssh user@server 'bash /home/user/app/restart.sh'
-  only:
+    - merge_requests
+    - main
+    - develop
     - local-upload
