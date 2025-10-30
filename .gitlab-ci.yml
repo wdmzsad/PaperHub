@@ -20,7 +20,7 @@ cache:
 # ---------- 前端 Flutter ----------
 build_flutter:
   stage: build_frontend
-  image: ghcr.io/cirruslabs/flutter:3.24.0
+  image: ghcr.io/cirruslabs/flutter:3.35.7
   script:
     - echo "🚀 构建 Flutter 前端..."
     - cd Frontend
