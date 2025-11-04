@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.Instant;
 
-@Service
+@Service//定义服务层
 public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -19,8 +19,9 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.mailService = mailService;
     }
-
-    public void register(String email, String rawPassword) {
+    
+    //以下函数是对应AuthController中的函数，负责处理用户认证相关的业务逻辑
+    public void register(String email, String rawPassword) {//注册新用户
         if (userRepository.existsByEmail(email)) {
             throw new IllegalArgumentException("该邮箱已注册，请直接登录或找回密码");
         }
@@ -34,7 +35,7 @@ public class AuthService {
         mailService.sendVerificationMail(email, code);
     }
 
-    public void resendVerification(String email) {
+    public void resendVerification(String email) {//重新发送验证邮件
         User user = userRepository.findByEmail(email).orElseThrow(() -> new IllegalArgumentException("邮箱未注册"));
         String code = generateCode(6);
         user.setVerifyCode(code);
@@ -43,7 +44,7 @@ public class AuthService {
         mailService.sendVerificationMail(email, code);
     }
 
-    public void verify(String email, String code) {
+    public void verify(String email, String code) {//验证用户邮箱
         User user = userRepository.findByEmail(email).orElseThrow(() -> new IllegalArgumentException("邮箱未注册"));
         if (user.getVerifyCode() == null || user.getVerifyExpiry() == null) {
             throw new IllegalArgumentException("无验证请求，请先注册或重新发送验证码");
@@ -60,7 +61,7 @@ public class AuthService {
         userRepository.save(user);
     }
 
-    public User validateLogin(String email, String rawPassword) {
+    public User validateLogin(String email, String rawPassword) {//验证用户登录
         User user = userRepository.findByEmail(email).orElseThrow(() -> new IllegalArgumentException("邮箱未注册"));
         if (!user.isVerified()) {
             throw new IllegalArgumentException("邮箱未验证，请先完成邮件验证");
@@ -71,7 +72,7 @@ public class AuthService {
         return user;
     }
 
-    public void requestReset(String email) {
+    public void requestReset(String email) {//请求重置密码
         User user = userRepository.findByEmail(email).orElseThrow(() -> new IllegalArgumentException("邮箱未注册"));
         String code = generateCode(6);
         user.setResetCode(code);
@@ -80,7 +81,7 @@ public class AuthService {
         mailService.sendResetMail(email, code);
     }
 
-    public void resetPassword(String email, String code, String newRawPassword) {
+    public void resetPassword(String email, String code, String newRawPassword) {//重置用户密码
         User user = userRepository.findByEmail(email).orElseThrow(() -> new IllegalArgumentException("邮箱未注册"));
         if (user.getResetCode() == null || user.getResetExpiry() == null) {
             throw new IllegalArgumentException("无重置请求，请先请求重置邮件");
@@ -97,7 +98,7 @@ public class AuthService {
         userRepository.save(user);
     }
 
-    private String generateCode(int len) {
+    private String generateCode(int len) {//生成验证码
         String digits = "0123456789";
         StringBuilder sb = new StringBuilder(len);
         for (int i = 0; i < len; i++) {

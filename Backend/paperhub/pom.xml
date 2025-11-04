@@ -1,3 +1,4 @@
+<!-- 这是Maven项目的配置文件，用于管理项目的依赖、构建和部署 -->
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -5,8 +6,8 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.7</version>
-        <relativePath/> <!-- lookup parent from repository -->
+        <version>3.5.7</version> <!-- 指定Spring Boot的版本 -->
+        <relativePath/> <!-- 从仓库中查找父项目 -->
     </parent>
     <groupId>com.example</groupId>
     <artifactId>paperhub</artifactId>

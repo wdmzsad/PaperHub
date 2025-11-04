@@ -1,3 +1,4 @@
+//notify模块，负责发送邮件，具体内容就是发送验证码和重置密码的邮件，其他模块需要发送邮件的时候只需要调用该模块的函数即可
 package com.example.paperhub.notify;
 
 import org.springframework.beans.factory.annotation.Autowired;

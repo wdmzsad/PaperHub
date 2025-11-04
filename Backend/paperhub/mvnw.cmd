@@ -1,3 +1,4 @@
+# 这是Maven的启动脚本，用于在Windows系统上启动Maven
 <# : batch portion
 @REM ----------------------------------------------------------------------------
 @REM Licensed to the Apache Software Foundation (ASF) under one

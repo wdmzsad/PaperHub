@@ -3,27 +3,27 @@ package com.example.paperhub.auth;
 import jakarta.persistence.*;
 import java.time.Instant;
 
-@Entity
-@Table(name = "users", indexes = { @Index(columnList = "email", unique = true) })
+@Entity//定义实体类
+@Table(name = "users", indexes = { @Index(columnList = "email", unique = true) })//定义数据库表和索引
 public class User {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Id//主键
+    @GeneratedValue(strategy = GenerationType.IDENTITY)//定义主键生成策略
+    private Long id;//用户ID
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true)//邮箱列
     private String email;
 
-    @Column(nullable = false)
+    @Column(nullable = false)//密码列
     private String passwordHash;
 
-    @Column(nullable = false)
+    @Column(nullable = false)//验证状态列
     private boolean verified = false;
 
-    private String verifyCode;
-    private Instant verifyExpiry;
+    private String verifyCode;//验证码
+    private Instant verifyExpiry;//验证码过期时间
 
-    private String resetCode;
-    private Instant resetExpiry;
+    private String resetCode;//重置码
+    private Instant resetExpiry;//重置码过期时间
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
