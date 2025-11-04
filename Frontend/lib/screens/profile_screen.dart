@@ -16,43 +16,79 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3, // TabBar有3个tab
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF5F5F5),
-        bottomNavigationBar: _buildBottomNavigationBar(),
-        body: SingleChildScrollView(
-          child: Column(
-            children: [
-              // 顶部个人信息区域
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('images/profile_bg.jpg'),
-                    fit: BoxFit.cover,
-                    colorFilter: ColorFilter.mode(
-                      Colors.grey.withOpacity(0.7),
-                      BlendMode.darken,
-                    ),
-                  ),
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(20),
-                    bottomRight: Radius.circular(20),
+  return DefaultTabController(
+    length: 3,
+    child: Scaffold(
+      // 🔹 添加 Drawer 组件
+      drawer: Drawer(
+        backgroundColor: Colors.white,
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: Colors.white,
+              ),
+              child: Text(
+                '菜单',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+            ),
+            // 🔹 登出按钮
+            ListTile(
+              leading: Icon(Icons.logout, color: Colors.red),
+              title: Text('登出'),
+              onTap: () {
+                Navigator.pop(context); // 先关闭Drawer
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => LoginPage()),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+
+      backgroundColor: const Color(0xFFF5F5F5),
+      bottomNavigationBar: _buildBottomNavigationBar(),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // 顶部个人信息区域
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage('images/profile_bg.jpg'),
+                  fit: BoxFit.cover,
+                  colorFilter: ColorFilter.mode(
+                    Colors.grey.withOpacity(0.7),
+                    BlendMode.darken,
                   ),
                 ),
-                child: Column(
-                  children: [
-                    Stack(
-                      children: [
-                        Positioned(
-                          top: 10,
-                          left: 10,
-                          child: IconButton(
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(20),
+                  bottomRight: Radius.circular(20),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Stack(
+                    children: [
+                      // 🔹 用 Scaffold.of(context).openDrawer() 打开侧边栏
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: Builder(
+                          builder: (context) => IconButton(
                             icon: const Icon(Icons.menu, color: Colors.white),
-                            onPressed: () {},
+                            onPressed: () {
+                              Scaffold.of(context).openDrawer();
+                            },
                           ),
                         ),
+                      ),
                         Positioned(
                           top: 10,
                           right: 10,
