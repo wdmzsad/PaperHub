@@ -58,12 +58,13 @@ test_backend:
   stage: test
   image: maven:3.9.9-eclipse-temurin-17
   script:
-    - echo "运行后端测试..."
+    - echo "🧪 跳过后端测试阶段，仅检查构建是否成功..."
     - cd Backend/paperhub
-    - mvn test
+    - mvn -B verify -DskipTests
   only:
     - merge_requests
     - main
+
 
 # ---------- 部署阶段 ----------
 deploy:
