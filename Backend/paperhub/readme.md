@@ -1,16 +1,16 @@
 关于paperhub后端的说明文件 
  
 一、项目架构
-paperhub/                          # 项目根目录 
-├── pom.xml                        # Maven配置文件，添加新的依赖需要修改该文件 
-├── mvnw / mvnw.cmd                # Maven包装器（可在没有Maven的window环境运行的必备文件） 
-├── src/ 
-│   ├── main/ 
-│   │   ├── java/com/example/paperhub/          # Java源代码，项目的主要代码存放处 
-│   │   └── resources/                          # 资源文件夹 
-│   │       └── application.properties          # 配置文件（类似config.ini），目前该文件中包含数据库路径、163邮箱发送验证码等服务 
-│   └── test/                                   # 测试代码 
-└── target/                                     # 编译输出目录，无需修改 
+paperhub/                          # 项目根目录   
+├── pom.xml                        # Maven配置文件，添加新的依赖需要修改该文件    
+├── mvnw / mvnw.cmd                # Maven包装器（可在没有Maven的window环境运行的必备文件）    
+├── src/    
+│   ├── main/     
+│   │   ├── java/com/example/paperhub/          # Java源代码，项目的主要代码存放处    
+│   │   └── resources/                          # 资源文件夹    
+│   │       └── application.properties          # 配置文件（类似config.ini），目前该文件中包含数据库路径、163邮箱发送验证码等服务    
+│   └── test/                                   # 测试代码   
+└── target/                                     # 编译输出目录，无需修改   
 
 二、源代码部分具体分析 
 本项目作为Springboot框架的的项目遵循Spring Boot三层架构（Controller控制器层 → Service服务层 → Repository数据访问层）。 
