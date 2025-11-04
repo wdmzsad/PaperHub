@@ -1,3 +1,7 @@
+# -------------------------------
+# GitLab CI/CD 配置：Flutter + Spring Boot (Maven)
+# -------------------------------
+
 image: ubuntu:22.04
 
 stages:
@@ -6,18 +10,21 @@ stages:
   - test
   - deploy
 
+# 缓存（加速依赖安装）
 cache:
   paths:
     - Frontend/build/
     - .m2/repository/
     - Frontend/.pub-cache/
 
-# ---------- 前端 ----------
+# ---------- 前端 Flutter ----------
 build_flutter:
   stage: build_frontend
-  image: ghcr.io/cirruslabs/flutter:3.35.7
+  image: ghcr.io/cirruslabs/flutter:3.24.0
   script:
+    - echo "🚀 构建 Flutter 前端..."
     - cd Frontend
+    - flutter --version
     - flutter pub get
     - flutter build web --release
   artifacts:
@@ -28,48 +35,44 @@ build_flutter:
     - develop
     - main
 
-# ---------- 后端 ----------
+# ---------- 后端 Spring Boot (Maven) ----------
 build_backend:
   stage: build_backend
   image: maven:3.9.9-eclipse-temurin-17
   script:
+    - echo "🏗️ 构建 Spring Boot 后端..."
     - cd Backend/paperhub
+    - ls -l  # 调试用
     - mvn -B clean package -DskipTests
   artifacts:
     paths:
       - Backend/paperhub/target/*.jar
+    expire_in: 1 week
   only:
     - local-upload
     - develop
     - main
 
-# ---------- 测试 ----------
+# ---------- 测试阶段 ----------
 test_backend:
   stage: test
   image: maven:3.9.9-eclipse-temurin-17
-  services:
-    - name: mysql:8.0
-      alias: mysql
-  variables:
-    MYSQL_ROOT_PASSWORD: root
-    MYSQL_DATABASE: spring_demo
-    MYSQL_USER: springuser
-    MYSQL_PASSWORD: 123456
-    SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/spring_demo?useSSL=false&serverTimezone=UTC
   script:
+    - echo "🧪 运行后端测试..."
     - cd Backend/paperhub
     - mvn test
   only:
     - merge_requests
     - main
 
-# ---------- 部署 ----------
+# ---------- 部署阶段 ----------
 deploy:
   stage: deploy
   image: alpine:latest
   before_script:
     - apk add --no-cache openssh-client
   script:
+    - echo "📦 部署构建产物到服务器..."
     - scp -r Frontend/build/web/* user@server:/var/www/html/
     - scp Backend/paperhub/target/*.jar user@server:/home/user/app/
     - ssh user@server 'bash /home/user/app/restart.sh'
