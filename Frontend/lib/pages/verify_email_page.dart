@@ -52,7 +52,7 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('邮箱验证（模拟）')),
+      appBar: AppBar(title: const Text('邮箱验证')),
       body: Center(
         child: Padding(
           padding: EdgeInsets.all(20),
@@ -61,7 +61,7 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
             child: Padding(
               padding: EdgeInsets.all(16),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text('请输入注册时收到的验证码（演示中会把验证码返回给前端）。'),
+                Text('请输入注册时收到的验证码。'),
                 SizedBox(height: 12),
                 TextFormField(
                   initialValue: email,
@@ -76,7 +76,7 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
                 SizedBox(height: 12),
                 ElevatedButton(onPressed: _verify, child: Text('确认验证')),
                 SizedBox(height: 8),
-                TextButton(onPressed: _sendAgain, child: Text('重新发送验证邮件（模拟）')),
+                TextButton(onPressed: _sendAgain, child: Text('重新发送验证邮件')),
               ]),
             ),
           ),

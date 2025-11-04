@@ -28,7 +28,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('找回密码（模拟）')),
+      appBar: AppBar(title: const Text('找回密码')),
       body: Center(
         child: Padding(
           padding: EdgeInsets.all(20),
@@ -39,7 +39,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               child: Form(
                 key: _formKey,
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text('请输入注册邮箱，我们会发送重置验证码（模拟）。'),
+                  Text('请输入注册邮箱，我们会发送重置验证码。'),
                   SizedBox(height: 12),
                   TextFormField(
                     decoration: InputDecoration(labelText: '邮箱'),
@@ -53,7 +53,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                   SizedBox(height: 12),
                   loading
                       ? CircularProgressIndicator()
-                      : ElevatedButton(onPressed: _requestReset, child: SizedBox(width: double.infinity, child: Center(child: Text('发送重置邮件（模拟）')))),
+                      : ElevatedButton(onPressed: _requestReset, child: SizedBox(width: double.infinity, child: Center(child: Text('发送重置邮件')))),
                 ]),
               ),
             ),

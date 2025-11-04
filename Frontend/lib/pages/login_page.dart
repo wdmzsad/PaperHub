@@ -36,7 +36,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('PaperHub 登录 (Demo)')),
+      appBar: AppBar(title: const Text('PaperHub 登录')),
       body: Center(
         child: SingleChildScrollView(
           padding: EdgeInsets.all(20),

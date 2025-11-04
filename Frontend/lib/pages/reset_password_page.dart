@@ -45,7 +45,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('重置密码（模拟）')),
+      appBar: AppBar(title: const Text('重置密码')),
       body: Center(
         child: Padding(
           padding: EdgeInsets.all(20),
@@ -56,7 +56,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
               child: Form(
                 key: _formKey,
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text('输入邮件里的重置验证码与新密码（演示中验证码会在之前请求时被返回）。'),
+                  Text('输入邮件里的重置验证码与新密码。'),
                   SizedBox(height: 12),
                   TextFormField(
                     initialValue: email,

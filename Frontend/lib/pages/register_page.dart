@@ -39,7 +39,7 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('PaperHub 注册 (Demo)')),
+      appBar: AppBar(title: const Text('PaperHub 注册')),
       body: Center(
         child: SingleChildScrollView(
           padding: EdgeInsets.all(20),
