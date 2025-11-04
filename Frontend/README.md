@@ -2,6 +2,7 @@
 
 一、项目架构
  paperhub/                        # 项目根目录
+ 
 └── Frontend/                     # 前端（Flutter）工程根目录
     ├── lib/                      # Dart 源代码（主要业务逻辑）
     │   ├── main.dart             # 应用入口与路由表
