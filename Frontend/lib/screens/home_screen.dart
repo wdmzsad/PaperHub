@@ -20,10 +20,10 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   final ScrollController _scrollController = ScrollController();
   bool _isLoading = false;
-  bool _hasMore = true; // ✅ 是否还有更多数据
+  bool _hasMore = true; //  是否还有更多数据
   final List<Post> _posts = [];
 
-  int _selectedTab = 0; // ✅ 0=发现, 1=分区
+  int _selectedTab = 0; //  0=发现, 1=分区
 
   @override
   void initState() {
@@ -152,7 +152,7 @@ void _loadInitialPosts() {
     );
   }
 
-  // ✅ 顶部“发现 / 分区”按钮样式
+  //  顶部“发现 / 分区”按钮样式
   Widget _buildTabButton(String label, int index) {
     final bool selected = _selectedTab == index;
     return GestureDetector(
@@ -230,7 +230,7 @@ void _loadInitialPosts() {
     );
   }
 
-  // ✅ 分区占位内容
+  //  分区占位内容
   Widget _buildZonePlaceholder() {
     return const Center(
       child: Text('分区内容开发中...', style: TextStyle(color: Colors.grey)),
