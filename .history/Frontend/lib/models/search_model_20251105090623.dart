@@ -1,21 +1,3 @@
-/// PaperHub 前端模型：热搜与搜索历史
-///
-/// 本文件定义：
-/// - HotSearchItem：表示热搜榜单中的一条目
-/// - SearchHistoryItem：表示一次搜索历史记录
-///
-/// 设计约定与数据契约（Contract）：
-/// - rank >= 1 且用于排序展示；同一时间应唯一。
-/// - tag 允许为 '新' | '热' | null（null 表示普通项）。
-/// - heat 为相对热度值（非百分比），建议范围 >= 0。
-/// - searchType 允许值：'keyword' | 'author' | 'tag'，用于驱动前端的不同搜索路径。
-/// - SearchHistoryItem.timestamp 使用本地时区的 DateTime，序列化为毫秒时间戳。
-///
-/// 使用建议：
-/// - UI 可根据 tag 渲染标记（如“新”“热”徽标），根据 rank 渲染前 3 名的特殊样式。
-/// - formattedHeat 仅做展示层格式化，不参与任何排序或计算。
-/// - 当接入真实后端时，确保后端返回字段与本数据模型保持一致或在适配层转换。
-///
 /// 热搜条目数据模型
 ///
 /// 用于表示热搜榜单中的单个项目。
@@ -25,18 +7,10 @@ class HotSearchItem {
   /// 热搜标题
   final String title;
   /// 标签，例如 '新' 或 '热'
-  /// 允许值：
-  /// - '新'：表示新近上榜/新增话题
-  /// - '热'：表示当前热度较高
-  /// - null：无特殊标记
   final String? tag;
   /// 热度值
-  /// 单位：相对热度分（非百分比），用于展示排序与强弱对比。
-  /// 建议范围：>= 0；来源可为后端统计或前端模拟。
   final double heat;
   /// 对应的搜索方式，例如 'keyword', 'author', 'tag'
-  /// 允许值：'keyword' | 'author' | 'tag'。
-  /// 用途：根据此类型决定触发的搜索 API 或过滤逻辑。
   final String searchType;
 
   /// [HotSearchItem] 的构造函数
@@ -52,10 +26,6 @@ class HotSearchItem {
   ///
   /// 如果热度值大于等于10000，则显示为'x.x万'的形式。
   /// 否则，直接显示为整数。
-  /// 示例：
-  /// - 9800 -> '9800'
-  /// - 12500 -> '1.3万'
-  /// 注意：此格式化仅影响展示，不改变原始数值。
   String get formattedHeat {
     if (heat >= 10000) {
       return '${(heat / 10000).toStringAsFixed(1)}万';
@@ -71,13 +41,10 @@ class SearchHistoryItem {
   /// 唯一标识符
   final String id;
   /// 搜索的关键词
-  /// 示例：'深度学习'、'李沐'、'Python' 等。
   final String keyword;
   /// 搜索类型
-  /// 与 HotSearchItem.searchType 含义一致，便于历史回放时决定搜索路径。
   final String searchType;
   /// 搜索操作的时间戳
-  /// 使用本地时间的 DateTime。持久化时将转换为毫秒时间戳（ since epoch ）。
   final DateTime timestamp;
 
   /// [SearchHistoryItem] 的构造函数
@@ -91,12 +58,6 @@ class SearchHistoryItem {
   /// 转换为Map用于存储
   ///
   /// 将 [SearchHistoryItem] 对象转换为一个Map，便于序列化和存储（例如在本地数据库中）。
-  /// 返回的键包含：
-  /// - 'id'：String
-  /// - 'keyword'：String
-  /// - 'searchType'：String（'keyword' | 'author' | 'tag'）
-  /// - 'timestamp'：int（毫秒）
-  /// 注意：请保持此 Schema 稳定，以避免存量数据解析失败。
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -109,8 +70,6 @@ class SearchHistoryItem {
   /// 从Map创建对象
   ///
   /// 从一个Map对象反序列化为 [SearchHistoryItem] 对象。
-  /// 要求传入的 map 至少包含键：'id'、'keyword'、'searchType'、'timestamp'（毫秒）。
-  /// 若缺失键或类型不匹配，调用方应在外层做校验或容错处理。
   static SearchHistoryItem fromMap(Map<String, dynamic> map) {
     return SearchHistoryItem(
       id: map['id'],
@@ -124,10 +83,6 @@ class SearchHistoryItem {
 /// 模拟的热搜数据列表
 ///
 /// 在没有后端API时，用于前端页面展示的静态热搜数据。
-/// 特性：
-/// - 数据按 rank 升序排列，便于直接展示。
-/// - 覆盖三类 searchType：'keyword'、'tag'、'author'，用于联调 UI 与交互逻辑。
-/// - 可作为单元测试或组件示例数据的固定输入。
 List<HotSearchItem> mockHotSearches = [
   HotSearchItem(
     rank: 1,
