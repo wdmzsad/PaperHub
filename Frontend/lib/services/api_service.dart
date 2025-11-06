@@ -119,6 +119,96 @@ class ApiService {
     return _parseResponse(resp);
   }
 
+  /// 获取帖子的评论列表
+  /// @param postId 帖子 ID
+  /// @param page 分页页码（从 1 开始）
+  /// @param pageSize 每页数量，默认 20
+  /// @param sort 排序方式，支持 'time'（时间）和 'hot'（热度），默认按时间
+  static Future<Map<String, dynamic>> getComments(
+    String postId, {
+    int page = 1,
+    int pageSize = 20,
+    String sort = 'time',
+  }) async {
+    final headers = _buildHeaders();
+    final uri = Uri.parse('$baseUrl/posts/$postId/comments').replace(
+      queryParameters: {
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+        'sort': sort,
+      },
+    );
+    final resp = await http.get(uri, headers: headers);
+    return _parseResponse(resp);
+  }
+
+  /// 发布评论
+  /// @param postId 帖子 ID
+  /// @param content 评论内容
+  /// @param parentId 回复的父评论 ID（可选，用于嵌套回复）
+  /// @param replyToId 被回复用户 ID（可选，用于 @ 通知）
+  static Future<Map<String, dynamic>> createComment(
+    String postId,
+    String content, {
+    String? parentId,
+    String? replyToId,
+  }) async {
+    final headers = _buildHeaders();
+    final resp = await http.post(
+      Uri.parse('$baseUrl/posts/$postId/comments'),
+      headers: headers,
+      body: jsonEncode({
+        'content': content,
+        if (parentId != null) 'parentId': parentId,
+        if (replyToId != null) 'replyToId': replyToId,
+      }),
+    );
+    return _parseResponse(resp);
+  }
+
+  /// 更新评论（仅评论作者可操作）
+  static Future<Map<String, dynamic>> updateComment(
+    String postId,
+    String commentId,
+    String content,
+  ) async {
+    final headers = _buildHeaders();
+    final resp = await http.put(
+      Uri.parse('$baseUrl/posts/$postId/comments/$commentId'),
+      headers: headers,
+      body: jsonEncode({'content': content}),
+    );
+    return _parseResponse(resp);
+  }
+
+  /// 删除评论（仅评论作者或帖子作者可操作）
+  static Future<Map<String, dynamic>> deleteComment(
+    String postId,
+    String commentId,
+  ) async {
+    final headers = _buildHeaders();
+    final resp = await http.delete(
+      Uri.parse('$baseUrl/posts/$postId/comments/$commentId'),
+      headers: headers,
+    );
+    return _parseResponse(resp);
+  }
+
+  /// 举报评论
+  static Future<Map<String, dynamic>> reportComment(
+    String postId,
+    String commentId,
+    String reason,
+  ) async {
+    final headers = _buildHeaders();
+    final resp = await http.post(
+      Uri.parse('$baseUrl/posts/$postId/comments/$commentId/report'),
+      headers: headers,
+      body: jsonEncode({'reason': reason}),
+    );
+    return _parseResponse(resp);
+  }
+
   static Map<String, dynamic> _parseResponse(http.Response resp) {
     try {
       final body = jsonDecode(resp.body);

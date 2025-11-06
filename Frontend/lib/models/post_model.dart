@@ -32,22 +32,106 @@ class Attachment {
 
 class Comment {
   final String id;
-  final String authorId;
-  final String authorName;
+  final Author author;
   final String content;
+  final String? parentId;  // 父评论ID，用于嵌套回复，顶层评论为 null
+  final Author? replyTo;   // 被回复的用户，用于 @ 通知
   int likesCount;
   bool isLiked;
   final DateTime createdAt;
+  final List<Comment> replies;  // 子回复列表
+  bool _expanded = true;  // UI 状态：是否展开子回复
+
+  bool get isExpanded => _expanded;
+  void toggleExpanded() => _expanded = !_expanded;
+  bool get hasReplies => replies.isNotEmpty;
+  bool get isReply => parentId != null;
 
   Comment({
     required this.id,
-    required this.authorId,
-    required this.authorName,
+    required this.author,
     required this.content,
+    this.parentId,
+    this.replyTo,
     this.likesCount = 0,
     this.isLiked = false,
+    this.replies = const [],
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
+
+  /// 创建一个回复
+  Comment createReply({
+    required String id,
+    required Author author,
+    required String content,
+    Author? replyTo,
+  }) {
+    return Comment(
+      id: id,
+      author: author,
+      content: content,
+      parentId: this.id,
+      replyTo: replyTo ?? this.author,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  /// 从 JSON 创建评论（用于 API 响应解析）
+  factory Comment.fromJson(Map<String, dynamic> json) {
+    return Comment(
+      id: json['id'] as String,
+      author: Author(
+        id: json['author']['id'] as String,
+        name: json['author']['name'] as String,
+        avatar: json['author']['avatar'] as String,
+        affiliation: json['author']['affiliation'] as String?,
+      ),
+      content: json['content'] as String,
+      parentId: json['parentId'] as String?,
+      replyTo: json['replyTo'] == null
+          ? null
+          : Author(
+              id: json['replyTo']['id'] as String,
+              name: json['replyTo']['name'] as String,
+              avatar: json['replyTo']['avatar'] as String,
+              affiliation: json['replyTo']['affiliation'] as String?,
+            ),
+      likesCount: json['likesCount'] as int? ?? 0,
+      isLiked: json['isLiked'] as bool? ?? false,
+      replies: (json['replies'] as List<dynamic>?)
+              ?.map((e) => Comment.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      createdAt: json['createdAt'] == null
+          ? null
+          : DateTime.parse(json['createdAt'] as String),
+    );
+  }
+
+  /// 转换为 JSON（用于 API 请求）
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'author': {
+          'id': author.id,
+          'name': author.name,
+          'avatar': author.avatar,
+          if (author.affiliation != null) 'affiliation': author.affiliation,
+        },
+        'content': content,
+        if (parentId != null) 'parentId': parentId,
+        if (replyTo != null)
+          'replyTo': {
+            'id': replyTo!.id,
+            'name': replyTo!.name,
+            'avatar': replyTo!.avatar,
+            if (replyTo!.affiliation != null)
+              'affiliation': replyTo!.affiliation,
+          },
+        'likesCount': likesCount,
+        'isLiked': isLiked,
+        'replies': replies.map((r) => r.toJson()).toList(),
+        'createdAt': createdAt.toIso8601String(),
+      };
 }
 
 class Post {
