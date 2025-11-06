@@ -3,6 +3,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/post_model.dart';
+import '../services/api_service.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -17,9 +18,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
   late bool isSaved;
   late int likeCount;
   late int commentCount;
+  // 本地缓存的评论（可来自后端），用于演示评论点赞
+  late List<Comment> _comments;
+  // 防止重复请求
+  bool _postLikeInFlight = false;
+  final Set<String> _commentLikeInFlight = {}; // commentId 集合
   final TextEditingController _commentController = TextEditingController();
   late AnimationController _heartCtrl;
   late Animation<double> _heartScale;
+  bool _showBigHeart = false;
 
   @override
   void initState() {
@@ -31,6 +38,32 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
 
     _heartCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
     _heartScale = Tween(begin: 0.3, end: 1.0).chain(CurveTween(curve: Curves.elasticOut)).animate(_heartCtrl);
+    // 在动画结束后自动隐藏大爱心（避免永久显示受 isLiked 控制）
+    _heartCtrl.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) {
+            setState(() {
+              _showBigHeart = false;
+            });
+            _heartCtrl.reset();
+          }
+        });
+      }
+    });
+    // 初始化评论（若 Post 已有 comments 列表则使用，否则构造示例）
+  _comments = widget.post.comments.isNotEmpty
+        ? List<Comment>.from(widget.post.comments)
+        : List.generate(
+            4,
+            (i) => Comment(
+                  id: '${widget.post.id}_c_$i',
+                  authorId: 'user_${i + 1}',
+                  authorName: '用户_${i + 1}',
+                  content: '示例评论 #${i + 1}：这是用户的观点或问题。',
+                  likesCount: i % 3,
+                  isLiked: false,
+                ));
   }
 
   @override
@@ -41,14 +74,72 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
   }
 
   void _toggleLike() {
+    // keep backward-compatible call site (double tap)
+    _handlePostLikePressed();
+  }
+
+  Future<void> _handlePostLikePressed() async {
+    if (_postLikeInFlight) return; // 防止重复请求
+    _postLikeInFlight = true;
+
+    final previousLiked = isLiked;
+    final previousCount = likeCount;
+
+    // 乐观更新
     setState(() {
       isLiked = !isLiked;
       likeCount += isLiked ? 1 : -1;
       widget.post.isLiked = isLiked;
       widget.post.likesCount = likeCount;
     });
-    if (isLiked) _heartCtrl.forward(from: 0.0);
-    // TODO: 调用后端 like/unlike
+
+    if (isLiked) {
+      // 仅控制动画显示，不作为大爱心常驻显示的条件
+      setState(() {
+        _showBigHeart = true;
+      });
+      _heartCtrl.forward(from: 0.0);
+    }
+
+    try {
+      final resp = isLiked ? await ApiService.likePost(widget.post.id) : await ApiService.unlikePost(widget.post.id);
+      final status = (resp['statusCode'] ?? 500) as int;
+      final body = resp['body'] as Map<String, dynamic>?;
+      if (status >= 200 && status < 300) {
+        // 如果后端返回了最新计数，则以后端为准
+        if (body != null) {
+          setState(() {
+            if (body.containsKey('likesCount')) likeCount = body['likesCount'] as int;
+            if (body.containsKey('isLiked')) isLiked = body['isLiked'] as bool;
+            widget.post.likesCount = likeCount;
+            widget.post.isLiked = isLiked;
+          });
+        }
+        // （可选）如果后端不自动创建通知，前端可以调用通知接口：
+        // await ApiService.createNotification({ ... });
+      } else {
+        // 请求失败 -> 回滚
+        setState(() {
+          isLiked = previousLiked;
+          likeCount = previousCount;
+          widget.post.isLiked = previousLiked;
+          widget.post.likesCount = previousCount;
+        });
+        final msg = body != null && body['message'] != null ? body['message'] : '点赞失败';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg.toString())));
+      }
+    } catch (e) {
+      // 网络或解析错误 -> 回滚
+      setState(() {
+        isLiked = previousLiked;
+        likeCount = previousCount;
+        widget.post.isLiked = previousLiked;
+        widget.post.likesCount = previousCount;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('网络错误，点赞未成功')));
+    } finally {
+      _postLikeInFlight = false;
+    }
   }
 
   void _toggleSave() {
@@ -142,10 +233,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
             ),
           ),
           Positioned(
-            child: ScaleTransition(
-              scale: _heartScale,
-              child: Icon(Icons.favorite, color: isLiked ? Colors.redAccent : Colors.white.withOpacity(0.0), size: 100),
-            ),
+            child: _showBigHeart
+                ? ScaleTransition(
+                    scale: _heartScale,
+                    child: const Icon(Icons.favorite, color: Colors.redAccent, size: 100),
+                  )
+                : const SizedBox.shrink(),
           ),
         ],
       ),
@@ -246,8 +339,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
   }
 
   Widget _buildCommentsSection() {
-    final comments = List.generate(4, (i) => '示例评论 #${i + 1}：这是用户的观点或问题。');
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -259,22 +350,73 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
         ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: comments.length,
+          itemCount: _comments.length,
           separatorBuilder: (_, __) => const Divider(indent: 16),
           itemBuilder: (context, idx) {
-            final c = comments[idx];
+            final c = _comments[idx];
+            final inFlight = _commentLikeInFlight.contains(c.id);
             return ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               leading: CircleAvatar(radius: 16, backgroundColor: Colors.grey[300], child: const Icon(Icons.person, size: 16)),
-              title: Text('用户_${idx + 1}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-              subtitle: Text(c, style: const TextStyle(fontSize: 13)),
-              trailing: IconButton(icon: const Icon(Icons.thumb_up_off_alt, size: 18), onPressed: () {}),
+              title: Text(c.authorName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              subtitle: Text(c.content, style: const TextStyle(fontSize: 13)),
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text('${c.likesCount}'),
+                const SizedBox(width: 6),
+                IconButton(
+                  icon: Icon(c.isLiked ? Icons.thumb_up : Icons.thumb_up_off_alt, size: 18, color: c.isLiked ? Colors.blue : Colors.black87),
+                  onPressed: inFlight ? null : () => _handleCommentLikePressed(c),
+                ),
+              ]),
             );
           },
         ),
         const SizedBox(height: 80),
       ],
     );
+  }
+
+  Future<void> _handleCommentLikePressed(Comment c) async {
+    if (_commentLikeInFlight.contains(c.id)) return;
+    _commentLikeInFlight.add(c.id);
+
+    final prevLiked = c.isLiked;
+    final prevCount = c.likesCount;
+
+    // 乐观更新
+    setState(() {
+      c.isLiked = !c.isLiked;
+      c.likesCount += c.isLiked ? 1 : -1;
+    });
+
+    try {
+      final resp = c.isLiked ? await ApiService.likeComment(widget.post.id, c.id) : await ApiService.unlikeComment(widget.post.id, c.id);
+      final status = (resp['statusCode'] ?? 500) as int;
+      final body = resp['body'] as Map<String, dynamic>?;
+      if (status >= 200 && status < 300) {
+        if (body != null) {
+          setState(() {
+            if (body.containsKey('likesCount')) c.likesCount = body['likesCount'] as int;
+            if (body.containsKey('isLiked')) c.isLiked = body['isLiked'] as bool;
+          });
+        }
+      } else {
+        setState(() {
+          c.isLiked = prevLiked;
+          c.likesCount = prevCount;
+        });
+        final msg = body != null && body['message'] != null ? body['message'] : '操作失败';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg.toString())));
+      }
+    } catch (e) {
+      setState(() {
+        c.isLiked = prevLiked;
+        c.likesCount = prevCount;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('网络错误，操作未成功')));
+    } finally {
+      _commentLikeInFlight.remove(c.id);
+    }
   }
 
   Widget _buildBottomCommentInput() {

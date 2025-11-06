@@ -30,6 +30,26 @@ class Attachment {
   });
 }
 
+class Comment {
+  final String id;
+  final String authorId;
+  final String authorName;
+  final String content;
+  int likesCount;
+  bool isLiked;
+  final DateTime createdAt;
+
+  Comment({
+    required this.id,
+    required this.authorId,
+    required this.authorName,
+    required this.content,
+    this.likesCount = 0,
+    this.isLiked = false,
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
+}
+
 class Post {
   final String id;
   final String title;
@@ -57,6 +77,8 @@ class Post {
   final double imageNaturalHeight;
 
   final DateTime createdAt;
+  // 可选：帖子下的评论列表（通常由后端分页查询，这里在 Post 载入详情时可填充）
+  final List<Comment> comments;
 
   Post({
     required this.id,
@@ -66,6 +88,7 @@ class Post {
     required this.attachments,
     required this.tags,
     required this.author,
+    this.comments = const [],
     this.likesCount = 0,
     this.commentsCount = 0,
     this.viewsCount = 0,
