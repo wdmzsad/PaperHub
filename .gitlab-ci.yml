@@ -30,41 +30,36 @@ build_flutter:
   artifacts:
     paths:
       - Frontend/build/web
-  only:
-    - local-upload
-    - develop
-    - main
-
-# ---------- 后端 Spring Boot (Maven) ----------
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "local-upload")'
+    - when: never
+# ---------- 后端  ----------
 build_backend:
   stage: build_backend
   image: maven:3.9.9-eclipse-temurin-17
   script:
     - echo "构建 Spring Boot 后端..."
     - cd Backend/paperhub
-    - ls -l  # 调试用
+    - ls -l
     - mvn -B clean package -DskipTests
   artifacts:
     paths:
       - Backend/paperhub/target/*.jar
     expire_in: 1 week
-  only:
-    - local-upload
-    - develop
-    - main
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "local-upload")'
+    - when: never
 
-# ---------- 测试阶段 ----------
 test_backend:
   stage: test
   image: maven:3.9.9-eclipse-temurin-17
   script:
-    - echo "🧪 跳过后端测试阶段，仅检查构建是否成功..."
+    - echo "跳过后端测试阶段，仅检查构建是否成功..."
     - cd Backend/paperhub
     - mvn -B verify -DskipTests
-  only:
-    - merge_requests
-    - main
-
-
-# ---------- 部署阶段 ----------
-
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+    - when: never
