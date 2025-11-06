@@ -47,7 +47,6 @@ build_backend:
   script:
     - echo "构建 Spring Boot 后端..."
     - cd Backend/paperhub
-    - ls -l
     - mvn -B clean package -DskipTests
   artifacts:
     paths:
