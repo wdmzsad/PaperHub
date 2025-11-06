@@ -2,6 +2,8 @@
 //merge request测试1104 单个帖子界面
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
 
@@ -14,6 +16,7 @@ class PostDetailScreen extends StatefulWidget {
 }
 
 class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerProviderStateMixin {
+  WebSocketChannel? _wsChannel;
   late bool isLiked;
   late bool isSaved;
   late int likeCount;
@@ -52,7 +55,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
       }
     });
     // 初始化评论（若 Post 已有 comments 列表则使用，否则构造示例）
-  _comments = widget.post.comments.isNotEmpty
+    _comments = widget.post.comments.isNotEmpty
         ? List<Comment>.from(widget.post.comments)
         : List.generate(
             4,
@@ -64,13 +67,51 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
                   likesCount: i % 3,
                   isLiked: false,
                 ));
+
+    // WebSocket 实时点赞监听
+    _initWebSocket();
   }
 
   @override
   void dispose() {
     _heartCtrl.dispose();
     _commentController.dispose();
+    _wsChannel?.sink.close();
     super.dispose();
+  }
+
+  /// 初始化 WebSocket 连接，监听后端推送的点赞/评论点赞变更
+  void _initWebSocket() {
+    // TODO: 替换为你后端实际 ws 地址
+    final wsUrl = 'ws://localhost:8080/ws/posts/${widget.post.id}';
+    _wsChannel = WebSocketChannel.connect(Uri.parse(wsUrl));
+    _wsChannel!.stream.listen((event) {
+      try {
+        final data = jsonDecode(event);
+        // 假设后端推送格式：{"type":"like_update","likesCount":123,"isLiked":true}
+        if (data['type'] == 'like_update') {
+          setState(() {
+            if (data.containsKey('likesCount')) likeCount = data['likesCount'] as int;
+            if (data.containsKey('isLiked')) isLiked = data['isLiked'] as bool;
+          });
+        } else if (data['type'] == 'comment_like_update' && data['commentId'] != null) {
+          // 评论点赞变更：{"type":"comment_like_update","commentId":"xxx","likesCount":5,"isLiked":true}
+          final idx = _comments.indexWhere((c) => c.id == data['commentId']);
+          if (idx != -1) {
+            setState(() {
+              if (data.containsKey('likesCount')) _comments[idx].likesCount = data['likesCount'] as int;
+              if (data.containsKey('isLiked')) _comments[idx].isLiked = data['isLiked'] as bool;
+            });
+          }
+        }
+      } catch (e) {
+        // ignore 格式错误
+      }
+    }, onError: (err) {
+      // 可选：处理 ws 错误
+    }, onDone: () {
+      // 可选：自动重连
+    });
   }
 
   void _toggleLike() {
