@@ -4,6 +4,7 @@ import 'home_screen.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../widgets/bottom_navigation.dart';
 import '../pages/login_page.dart';
+import '../pages/note_editor_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -286,7 +287,13 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
             });
           });
         } else if (index == 2) {
-          _showPublishDialog();
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (context) => const NoteEditorPage()),
+          ).then((_) {
+            setState(() {
+              _currentIndex = 0;
+            });
+          });
         } else if (index == 3) {
           Navigator.push(
             context,
