@@ -31,7 +31,7 @@ import 'message_screen.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'post_detail_screen.dart';
 import '../widgets/bottom_navigation.dart';
-import '../pages/note_editor_page.dart';
+
 
 /// 首页入口组件（Stateful）：承载发现流与分区切换
 class HomeScreen extends StatefulWidget {
@@ -305,13 +305,7 @@ void _loadInitialPosts() {
             });
           });
         } else if (index == 2) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => const NoteEditorPage()),
-          ).then((_) {
-            setState(() {
-              _currentIndex = 0;
-            });
-          });
+          _showPublishDialog();
         } else if (index == 3) {
           Navigator.push(
             context,
