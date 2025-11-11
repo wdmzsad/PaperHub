@@ -35,6 +35,7 @@ public class LikeService {
     /**
      * 点赞帖子
      */
+    //20251111陈佳怡修改逻辑
     @Transactional
     public boolean likePost(Long postId, User user) {
         Post post = postRepository.findById(postId)
@@ -42,16 +43,19 @@ public class LikeService {
         
         Optional<PostLike> existingLike = postLikeRepository.findByPostAndUser(post, user);
         if (existingLike.isPresent()) {
-            return false; // 已经点赞过
+            postLikeRepository.delete(existingLike.get());
+            postService.decrementLikesCount(postId);
+            return false;// 点赞已取消
         }
 
         PostLike like = new PostLike();
         like.setPost(post);
         like.setUser(user);
         postLikeRepository.save(like);
-        
+
         postService.incrementLikesCount(postId);
-        return true;
+        
+        return true; // 点赞成功
     }
 
     /**
@@ -96,17 +100,22 @@ public class LikeService {
         
         Optional<CommentLike> existingLike = commentLikeRepository.findByCommentAndUser(comment, user);
         if (existingLike.isPresent()) {
-            return false; // 已经点赞过
+            commentLikeRepository.delete(existingLike.get());
+            if(comment.getLikesCount() > 0) {
+                comment.setLikesCount(comment.getLikesCount() - 1);
+                commentRepository.save(comment);
+            }
+            return false;// 点赞已取消
         }
 
         CommentLike like = new CommentLike();
         like.setComment(comment);
         like.setUser(user);
         commentLikeRepository.save(like);
-        
         comment.setLikesCount(comment.getLikesCount() + 1);
         commentRepository.save(comment);
-        return true;
+        
+        return true; // 点赞成功
     }
 
     /**

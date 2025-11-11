@@ -184,7 +184,7 @@ public class CommentController {
             author.getId(),
             author.getEmail(),
             authorName,
-            author.getAvatar() != null ? author.getAvatar() : "",
+            resolveAvatar(author.getAvatar()),
             author.getAffiliation()
         );
 
@@ -200,7 +200,7 @@ public class CommentController {
                 replyTo.getId(),
                 replyTo.getEmail(),
                 replyToName,
-                replyTo.getAvatar() != null ? replyTo.getAvatar() : "",
+                resolveAvatar(replyTo.getAvatar()),
                 replyTo.getAffiliation()
             );
         }
@@ -219,7 +219,7 @@ public class CommentController {
                     replyAuthor.getId(),
                     replyAuthor.getEmail(),
                     replyAuthorName,
-                    replyAuthor.getAvatar() != null ? replyAuthor.getAvatar() : "",
+                    resolveAvatar(replyAuthor.getAvatar()),
                     replyAuthor.getAffiliation()
                 );
                 
@@ -235,7 +235,7 @@ public class CommentController {
                         replyReplyTo.getId(),
                         replyReplyTo.getEmail(),
                         replyReplyToName,
-                        replyReplyTo.getAvatar() != null ? replyReplyTo.getAvatar() : "",
+                        resolveAvatar(replyReplyTo.getAvatar()),
                         replyReplyTo.getAffiliation()
                     );
                 }
@@ -267,6 +267,11 @@ public class CommentController {
             comment.getCreatedAt().atOffset(ZoneOffset.UTC).toString(),
             replyList
         );
+    }
+    private String resolveAvatar(String avatar) {
+        return (avatar != null && !avatar.trim().isEmpty())
+            ? avatar
+            : "images/DefaultAvatar.png";
     }
 }
 
