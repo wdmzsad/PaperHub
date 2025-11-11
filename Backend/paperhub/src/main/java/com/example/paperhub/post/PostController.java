@@ -171,7 +171,7 @@ public class PostController {
             author.getId(),
             author.getEmail(),
             authorName,
-            author.getAvatar() != null ? author.getAvatar() : "",
+            resolveAvatar(author.getAvatar()),
             author.getAffiliation()
         );
 
@@ -206,5 +206,10 @@ public class PostController {
             naturalWidth,
             naturalHeight
         );
+    }
+    private String resolveAvatar(String avatar) {
+        return (avatar != null && !avatar.trim().isEmpty())
+            ? avatar
+            : "images/DefaultAvatar.png";
     }
 }
