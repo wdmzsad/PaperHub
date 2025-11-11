@@ -4,26 +4,42 @@ import jakarta.persistence.*;
 import java.time.Instant;
 
 @Entity//定义实体类
-@Table(name = "users", indexes = { @Index(columnList = "email", unique = true) })//定义数据库表和索引
+@Table(name = "users", indexes = { @Index(name = "idx_email", columnList = "email", unique = true) })//定义数据库表和索引
 public class User {
     @Id//主键
     @GeneratedValue(strategy = GenerationType.IDENTITY)//定义主键生成策略
+    @Column(name = "id")
     private Long id;//用户ID
 
-    @Column(nullable = false, unique = true)//邮箱列
+    @Column(name = "email", nullable = false, unique = true)//邮箱列
     private String email;
 
-    @Column(nullable = false)//密码列
+    @Column(name = "password_hash", nullable = false)//密码列
     private String passwordHash;
 
-    @Column(nullable = false)//验证状态列
+    @Column(name = "name")//用户昵称
+    private String name;
+    
+    @Column(name = "avatar")//头像URL
+    private String avatar;
+    
+    @Column(name = "affiliation")//所属机构
+    private String affiliation;
+
+    @Column(name = "verified", nullable = false)//验证状态列
     private boolean verified = false;
 
-    private String verifyCode;//验证码
-    private Instant verifyExpiry;//验证码过期时间
+    @Column(name = "verify_code")//验证码
+    private String verifyCode;
+    
+    @Column(name = "verify_expiry")//验证码过期时间
+    private Instant verifyExpiry;
 
-    private String resetCode;//重置码
-    private Instant resetExpiry;//重置码过期时间
+    @Column(name = "reset_code")//重置码
+    private String resetCode;
+    
+    @Column(name = "reset_expiry")//重置码过期时间
+    private Instant resetExpiry;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -41,6 +57,12 @@ public class User {
     public void setResetCode(String resetCode) { this.resetCode = resetCode; }
     public Instant getResetExpiry() { return resetExpiry; }
     public void setResetExpiry(Instant resetExpiry) { this.resetExpiry = resetExpiry; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getAvatar() { return avatar; }
+    public void setAvatar(String avatar) { this.avatar = avatar; }
+    public String getAffiliation() { return affiliation; }
+    public void setAffiliation(String affiliation) { this.affiliation = affiliation; }
 }
 
 

@@ -19,11 +19,94 @@ class _User {
   _User(this.email, this.password, {this.verified = false});
 }
 
+class _CommentStore {
+  final String postId;
+  final Map<String, Map<String, dynamic>> comments = {};
+  final Map<String, List<String>> commentLikes = {}; // commentId -> [userId]
+  int nextCommentId = 1;
+
+  _CommentStore(this.postId);
+
+  String generateCommentId() => '${postId}_c_${nextCommentId++}';
+}
+
 class MockApiService {
   static final MockApiService instance = MockApiService._();
   final Map<String, _User> _users = {};
+  final Map<String, _CommentStore> _commentStores = {};
 
-  MockApiService._();
+  MockApiService._() {
+    // 初始化一些示例评论
+    _initMockComments();
+  }
+
+  void _initMockComments() {
+    // 为演示帖子创建一些示例评论
+    final store = _CommentStore('1');  // 为 ID 为 1 的帖子创建评论
+    
+    // 添加一些顶层评论
+    final comment1 = {
+      'id': store.generateCommentId(),
+      'author': {
+        'id': 'user_1',
+        'name': '张三',
+        'avatar': 'images/userAvatar1.png',
+      },
+      'content': '这篇论文的方法很有创新性，特别是在模型优化方面的改进。',
+      'parentId': null,
+      'replyTo': null,
+      'likesCount': 5,
+      'isLiked': false,
+      'replies': [],
+      'createdAt': DateTime.now().subtract(Duration(hours: 2)).toIso8601String(),
+    };
+    store.comments[comment1['id'] as String] = comment1;
+    store.commentLikes[comment1['id'] as String] = [];
+
+    // 添加带有回复的评论
+    final comment2 = {
+      'id': store.generateCommentId(),
+      'author': {
+        'id': 'user_2',
+        'name': '李四',
+        'avatar': 'images/userAvatar2.png',
+      },
+      'content': '我在实现过程中遇到了一些问题，不知道作者是如何处理数据预处理的？',
+      'parentId': null,
+      'replyTo': null,
+      'likesCount': 3,
+      'isLiked': false,
+      'replies': [],
+      'createdAt': DateTime.now().subtract(Duration(hours: 1)).toIso8601String(),
+    };
+    store.comments[comment2['id'] as String] = comment2;
+    store.commentLikes[comment2['id'] as String] = [];
+
+    // 添加一个回复
+    final reply1 = {
+      'id': store.generateCommentId(),
+      'author': {
+        'id': 'user_3',
+        'name': '王五',
+        'avatar': 'images/userAvatar3.png',
+      },
+      'content': '我建议可以先对数据进行归一化处理，这样可以提高模型的稳定性。',
+      'parentId': comment2['id'],
+      'replyTo': {
+        'id': 'user_2',
+        'name': '李四',
+        'avatar': 'images/userAvatar2.png',
+      },
+      'likesCount': 2,
+      'isLiked': false,
+      'replies': [],
+      'createdAt': DateTime.now().subtract(Duration(minutes: 30)).toIso8601String(),
+    };
+    store.comments[reply1['id'] as String] = reply1;
+    store.commentLikes[reply1['id'] as String] = [];
+
+    _commentStores[store.postId] = store;
+  }
 
   String _randCode([int len = 6]) {
     final rnd = Random();
@@ -99,5 +182,150 @@ class MockApiService {
     u.resetCode = null;
     u.resetExpiry = null;
     return MockApiResponse(200, {'message': '密码已重置'});
+  }
+
+  // 评论相关的 mock API
+  Future<MockApiResponse> getComments(String postId, {int page = 1, int pageSize = 20, String sort = 'time'}) async {
+    await Future.delayed(Duration(milliseconds: 300));
+    final store = _commentStores[postId];
+    if (store == null) {
+      return MockApiResponse(200, {
+        'comments': [],
+        'total': 0,
+        'page': page,
+        'pageSize': pageSize,
+      });
+    }
+
+    // 获取顶层评论（parentId 为 null 的评论）
+    final topLevelComments = store.comments.values
+        .where((c) => c['parentId'] == null)
+        .toList();
+
+    // 按时间或热度排序
+    if (sort == 'time') {
+      topLevelComments.sort((a, b) => DateTime.parse(b['createdAt'] as String)
+          .compareTo(DateTime.parse(a['createdAt'] as String)));
+    } else {
+      // 热度排序：按点赞数
+      topLevelComments.sort((a, b) => (b['likesCount'] as int).compareTo(a['likesCount'] as int));
+    }
+
+    // 分页
+    final start = (page - 1) * pageSize;
+    final end = start + pageSize;
+    final pagedComments = topLevelComments.skip(start).take(pageSize).toList();
+
+    // 为每个顶层评论添加回复
+    for (var comment in pagedComments) {
+      final replies = store.comments.values
+          .where((c) => c['parentId'] == comment['id'])
+          .toList()
+        ..sort((a, b) => DateTime.parse(a['createdAt'] as String)
+            .compareTo(DateTime.parse(b['createdAt'] as String)));
+      comment['replies'] = replies;
+    }
+
+    return MockApiResponse(200, {
+      'comments': pagedComments,
+      'total': topLevelComments.length,
+      'page': page,
+      'pageSize': pageSize,
+    });
+  }
+
+  Future<MockApiResponse> createComment(String postId, String content,
+      {String? parentId, String? replyToId}) async {
+    await Future.delayed(Duration(milliseconds: 400));
+    final store = _commentStores[postId] ?? _CommentStore(postId);
+    _commentStores[postId] = store;
+
+    Map<String, dynamic>? replyTo;
+    if (replyToId != null) {
+      final targetComment = store.comments[parentId ?? replyToId];
+      if (targetComment != null) {
+        replyTo = targetComment['author'] as Map<String, dynamic>;
+      }
+    }
+
+    final comment = {
+      'id': store.generateCommentId(),
+      'author': {
+        'id': 'current_user',  // 模拟当前用户
+        'name': '当前用户',
+        'avatar': 'images/userAvatar0.png',
+      },
+      'content': content,
+      'parentId': parentId,
+      'replyTo': replyTo,
+      'likesCount': 0,
+      'isLiked': false,
+      'replies': [],
+      'createdAt': DateTime.now().toIso8601String(),
+    };
+
+    store.comments[comment['id'] as String] = comment;
+    store.commentLikes[comment['id'] as String] = [];
+
+    return MockApiResponse(200, {
+      'message': '评论成功',
+      'comment': comment,
+    });
+  }
+
+  Future<MockApiResponse> likeComment(String postId, String commentId) async {
+    await Future.delayed(Duration(milliseconds: 300));
+    final store = _commentStores[postId];
+    if (store == null) {
+      return MockApiResponse(404, {'message': '帖子不存在'});
+    }
+
+    final comment = store.comments[commentId];
+    if (comment == null) {
+      return MockApiResponse(404, {'message': '评论不存在'});
+    }
+
+    final userId = 'current_user';  // 模拟当前用户
+    final likes = store.commentLikes[commentId]!;
+    
+    if (!likes.contains(userId)) {
+      likes.add(userId);
+      comment['likesCount'] = (comment['likesCount'] as int) + 1;
+      comment['isLiked'] = true;
+    }
+
+    return MockApiResponse(200, {
+      'message': '点赞成功',
+      'likesCount': comment['likesCount'],
+      'isLiked': comment['isLiked'],
+    });
+  }
+
+  Future<MockApiResponse> unlikeComment(String postId, String commentId) async {
+    await Future.delayed(Duration(milliseconds: 300));
+    final store = _commentStores[postId];
+    if (store == null) {
+      return MockApiResponse(404, {'message': '帖子不存在'});
+    }
+
+    final comment = store.comments[commentId];
+    if (comment == null) {
+      return MockApiResponse(404, {'message': '评论不存在'});
+    }
+
+    final userId = 'current_user';  // 模拟当前用户
+    final likes = store.commentLikes[commentId]!;
+    
+    if (likes.contains(userId)) {
+      likes.remove(userId);
+      comment['likesCount'] = (comment['likesCount'] as int) - 1;
+      comment['isLiked'] = false;
+    }
+
+    return MockApiResponse(200, {
+      'message': '取消点赞成功',
+      'likesCount': comment['likesCount'],
+      'isLiked': comment['isLiked'],
+    });
   }
 }

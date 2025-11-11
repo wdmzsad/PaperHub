@@ -32,7 +32,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+<<<<<<< HEAD
+      
+=======
     
+>>>>>>> origin/main
   # 屈越 2025/11/4
   image_picker: ^0.8.7+4  # 笔记上传图片
   file_picker: ^5.2.7 #笔记添加附件
@@ -40,6 +44,9 @@ dependencies:
   flutter_staggered_grid_view: ^0.7.0 # sissi
   http: ^1.1.0 
   shared_preferences: ^2.2.2  # sissi 用于本地存储搜索历史
+
+  # WebSocket 支持，用于实时点赞等推送
+  web_socket_channel: ^2.4.0
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

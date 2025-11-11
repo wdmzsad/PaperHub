@@ -5,7 +5,6 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../widgets/bottom_navigation.dart';
 import '../pages/login_page.dart';
 import '../pages/note_editor_page.dart';
-//
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
