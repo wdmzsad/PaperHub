@@ -1,5 +1,6 @@
-# -------------------------------
+# ------------------------------- 
 # GitLab CI/CD 配置：Flutter + Spring Boot (Maven)
+# 使用自定义 Runner（名称：test，tags：前端、后端）
 # -------------------------------
 
 image: ubuntu:22.04
@@ -20,6 +21,8 @@ cache:
 # ---------- 前端 Flutter ----------
 build_flutter:
   stage: build_frontend
+  tags:
+    - 前端   # ✅ 使用“前端”标签的自定义 Runner
   image: ghcr.io/cirruslabs/flutter:3.35.7
   script:
     - echo "构建 Flutter 前端..."
@@ -30,14 +33,16 @@ build_flutter:
   artifacts:
     paths:
       - Frontend/build/web
-  only:
-    - local-upload
-    - develop
-    - main
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "local-upload")'
+    - when: never
 
-# ---------- 后端 Spring Boot (Maven) ----------
+# ---------- 后端 ----------
 build_backend:
   stage: build_backend
+  tags:
+    - 后端   # ✅ 使用“后端”标签的自定义 Runner
   image: maven:3.9.9-eclipse-temurin-17
   script:
     - echo "构建 Spring Boot 后端..."
@@ -47,23 +52,21 @@ build_backend:
     paths:
       - Backend/paperhub/target/*.jar
     expire_in: 1 week
-  only:
-    - local-upload
-    - develop
-    - main
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "local-upload")'
+    - when: never
 
-# ---------- 测试阶段 ----------
 test_backend:
   stage: test
+  tags:
+    - 后端   # ✅ 测试阶段同样使用“后端” Runner
   image: maven:3.9.9-eclipse-temurin-17
   script:
-    - echo "🧪 跳过后端测试阶段，仅检查构建是否成功..."
+    - echo "跳过后端测试阶段，仅检查构建是否成功..."
     - cd Backend/paperhub
     - mvn -B verify -DskipTests
-  only:
-    - merge_requests
-    - main
-
-
-# ---------- 部署阶段 ----------
-
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+    - when: never

@@ -32,7 +32,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+<<<<<<< HEAD
       
+=======
+    
+>>>>>>> origin/main
   # 屈越 2025/11/4
   image_picker: ^0.8.7+4  # 笔记上传图片
   file_picker: ^5.2.7 #笔记添加附件
