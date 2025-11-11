@@ -4,7 +4,18 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2e281e09-5d8e-43b1-8df1-7a8f46fbb586" name="更改" comment="" />
+    <list default="true" id="2e281e09-5d8e-43b1-8df1-7a8f46fbb586" name="更改" comment="">
+      <change beforePath="$PROJECT_DIR$/../.idea/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../.idea/misc.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../.idea/modules.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../.idea/paperhub.iml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../.idea/vcs.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/paperhub/src/main/java/com/example/paperhub/auth/User.java" beforeDir="false" afterPath="$PROJECT_DIR$/paperhub/src/main/java/com/example/paperhub/auth/User.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/paperhub/src/main/java/com/example/paperhub/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/paperhub/src/main/java/com/example/paperhub/config/SecurityConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/paperhub/src/main/java/com/example/paperhub/jwt/JwtService.java" beforeDir="false" afterPath="$PROJECT_DIR$/paperhub/src/main/java/com/example/paperhub/jwt/JwtService.java" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -22,17 +33,18 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "post__likes__frontend",
-    "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "E:/sw/paperhub/Backend",
-    "应用程序.PaperhubApplication.executor": "Run"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;模块三&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/AndroidStudioProjects/paperhub - 副本/Backend&quot;,
+    &quot;应用程序.PaperhubApplication.executor&quot;: &quot;Run&quot;
   }
-}]]></component>
+}</component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="默认任务">
       <changelist id="2e281e09-5d8e-43b1-8df1-7a8f46fbb586" name="更改" comment="" />

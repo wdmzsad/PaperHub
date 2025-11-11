@@ -164,11 +164,41 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
         });
       }
     });
+    
+    // 从后端获取最新的帖子信息
+    _loadPostDetail();
+    
     // 加载评论
     _loadComments();
 
     // WebSocket 实时点赞监听
     _initWebSocket();
+  }
+
+  /// 从后端加载帖子详情
+  Future<void> _loadPostDetail() async {
+    try {
+      final resp = await ApiService.getPost(widget.post.id);
+      final status = resp['statusCode'] as int? ?? 500;
+      final body = resp['body'] as Map<String, dynamic>?;
+      
+      if (status >= 200 && status < 300 && body != null) {
+        final updatedPost = Post.fromJson(body);
+        if (mounted) {
+          setState(() {
+            isLiked = updatedPost.isLiked;
+            likeCount = updatedPost.likesCount;
+            commentCount = updatedPost.commentsCount;
+            widget.post.likesCount = updatedPost.likesCount;
+            widget.post.isLiked = updatedPost.isLiked;
+            widget.post.commentsCount = updatedPost.commentsCount;
+          });
+        }
+      }
+    } catch (e) {
+      // 如果加载失败，使用传入的post对象
+      // 不显示错误，因为已经有初始数据
+    }
   }
 
   Future<void> _loadComments({bool refresh = false}) async {

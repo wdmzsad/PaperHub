@@ -209,6 +209,79 @@ class ApiService {
     return _parseResponse(resp);
   }
 
+  /// 获取帖子列表
+  /// @param page 页码，从1开始
+  /// @param pageSize 每页数量，默认20
+  static Future<Map<String, dynamic>> getPosts({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    try {
+      final headers = _buildHeaders();
+      final uri = Uri.parse('$baseUrl/posts').replace(
+        queryParameters: {
+          'page': page.toString(),
+          'pageSize': pageSize.toString(),
+        },
+      );
+      print('请求帖子列表: $uri'); // 调试日志
+      final resp = await http.get(uri, headers: headers).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('请求超时，请检查后端服务是否启动');
+        },
+      );
+      print('响应状态码: ${resp.statusCode}'); // 调试日志
+      print('响应内容: ${resp.body}'); // 调试日志
+      return _parseResponse(resp);
+    } catch (e) {
+      print('API请求异常: $e'); // 调试日志
+      rethrow;
+    }
+  }
+
+  /// 获取帖子详情
+  /// @param postId 帖子ID
+  static Future<Map<String, dynamic>> getPost(String postId) async {
+    final headers = _buildHeaders();
+    final resp = await http.get(Uri.parse('$baseUrl/posts/$postId'), headers: headers);
+    return _parseResponse(resp);
+  }
+
+  /// 创建帖子
+  /// @param title 标题
+  /// @param content 内容
+  /// @param media 图片URL列表
+  /// @param tags 标签列表
+  /// @param doi DOI（可选）
+  /// @param journal 期刊（可选）
+  /// @param year 年份（可选）
+  static Future<Map<String, dynamic>> createPost({
+    required String title,
+    String? content,
+    List<String>? media,
+    List<String>? tags,
+    String? doi,
+    String? journal,
+    int? year,
+  }) async {
+    final headers = _buildHeaders();
+    final resp = await http.post(
+      Uri.parse('$baseUrl/posts'),
+      headers: headers,
+      body: jsonEncode({
+        'title': title,
+        if (content != null) 'content': content,
+        if (media != null) 'media': media,
+        if (tags != null) 'tags': tags,
+        if (doi != null) 'doi': doi,
+        if (journal != null) 'journal': journal,
+        if (year != null) 'year': year,
+      }),
+    );
+    return _parseResponse(resp);
+  }
+
   static Map<String, dynamic> _parseResponse(http.Response resp) {
     try {
       final body = jsonDecode(resp.body);

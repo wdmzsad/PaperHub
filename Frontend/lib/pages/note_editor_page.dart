@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import '../services/api_service.dart';
 
 class NoteEditorPage extends StatefulWidget {
   const NoteEditorPage({Key? key}) : super(key: key);
@@ -59,8 +60,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     });
   }
 
-  // 发布逻辑（这里只示范校验并弹窗）
-  void _publishNote() {
+  // 发布逻辑
+  Future<void> _publishNote() async {
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
 
@@ -71,24 +72,69 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       return;
     }
 
-    // TODO: 在这里加入上传逻辑（图片/文件/表单数据）到后端
-    // 目前我们只弹出成功提示并返回上一页
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入标题')),
+      );
+      return;
+    }
+
+    // 显示加载中
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('发布'),
-        content: const Text('笔记已发布（示例）。实际请在此处实现上传逻辑。'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop(); // 返回到上一个页面
-            },
-            child: const Text('确定'),
-          ),
-        ],
-      ),
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
     );
+
+    try {
+      // TODO: 图片上传功能需要单独的文件上传API，这里暂时使用空列表
+      // 后续需要实现图片上传到服务器，获取URL后再传递
+      final List<String> mediaUrls = []; // 图片URL列表
+
+      final resp = await ApiService.createPost(
+        title: title,
+        content: content.isNotEmpty ? content : null,
+        media: mediaUrls.isNotEmpty ? mediaUrls : null,
+        tags: null, // TODO: 可以添加标签输入功能
+        doi: null,
+        journal: null,
+        year: null,
+      );
+
+      // 关闭加载对话框
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      final status = resp['statusCode'] as int? ?? 500;
+      final body = resp['body'] as Map<String, dynamic>?;
+
+      if (status >= 200 && status < 300) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('发布成功')),
+          );
+          Navigator.of(context).pop(); // 返回到上一个页面
+        }
+      } else {
+        final msg = body != null && body['message'] != null 
+            ? body['message'].toString() 
+            : '发布失败';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg)),
+          );
+        }
+      }
+    } catch (e) {
+      // 关闭加载对话框
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('网络错误，发布失败')),
+        );
+      }
+    }
   }
 
   @override

@@ -2,6 +2,7 @@
 //如果后续添加的模块实现的都是用户登录之后才能使用的功能，那么jwt无需修改，只需要在后续的模块中使用JwtService生成JWT令牌并进行身份验证即可
 package com.example.paperhub.jwt;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
@@ -37,6 +38,44 @@ public class JwtService {
 
     public long getExpiresInSeconds() {
         return expiresInSeconds;
+    }
+
+    /**
+     * 验证并解析JWT token
+     * @param token JWT token
+     * @return Claims对象，包含token中的所有信息
+     * @throws io.jsonwebtoken.JwtException 如果token无效或已过期
+     */
+    public Claims parseToken(String token) {
+        return Jwts.parserBuilder()
+            .setSigningKey(key)
+            .build()
+            .parseClaimsJws(token)
+            .getBody();
+    }
+
+    /**
+     * 从token中提取email（subject）
+     * @param token JWT token
+     * @return email地址
+     */
+    public String extractEmail(String token) {
+        Claims claims = parseToken(token);
+        return claims.getSubject();
+    }
+
+    /**
+     * 验证token是否有效
+     * @param token JWT token
+     * @return true if valid, false otherwise
+     */
+    public boolean validateToken(String token) {
+        try {
+            parseToken(token);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
 

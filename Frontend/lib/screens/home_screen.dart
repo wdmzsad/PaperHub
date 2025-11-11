@@ -32,6 +32,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'post_detail_screen.dart';
 import '../widgets/bottom_navigation.dart';
 import '../pages/note_editor_page.dart';
+import '../services/api_service.dart';
 
 
 /// 首页入口组件（Stateful）：承载发现流与分区切换
@@ -65,39 +66,163 @@ class _HomeScreenState extends State<HomeScreen> {
     _scrollController.addListener(_scrollListener);
   }
 
-/// 初始加载首屏内容（最多 6 条）
-void _loadInitialPosts() {
-    // 初始加载前 6 个
-    final int initialCount = mockPosts.length >= 6 ? 6 : mockPosts.length;
+/// 初始加载首屏内容
+  Future<void> _loadInitialPosts() async {
+    if (_isLoading) return;
+    
     setState(() {
-      _posts.addAll(mockPosts.take(initialCount));
-      _hasMore = _posts.length < mockPosts.length;
+      _isLoading = true;
     });
+
+    try {
+      final resp = await ApiService.getPosts(page: 1, pageSize: 6);
+      final status = resp['statusCode'] as int? ?? 500;
+      final body = resp['body'] as Map<String, dynamic>?;
+      
+      print('加载帖子响应: status=$status, body=$body'); // 调试日志
+      
+      if (status >= 200 && status < 300 && body != null) {
+        final postsData = (body['posts'] as List<dynamic>?) ?? <dynamic>[];
+        final total = body['total'] as int? ?? 0;
+        
+        print('获取到 ${postsData.length} 条帖子'); // 调试日志
+        
+        final newPosts = postsData
+            .map((p) => Post.fromJson(p as Map<String, dynamic>))
+            .toList();
+
+        setState(() {
+          _posts.clear();
+          _posts.addAll(newPosts);
+          _hasMore = _posts.length < total;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+        // 显示更详细的错误信息
+        final errorMsg = body != null && body['message'] != null 
+            ? '加载失败: ${body['message']}' 
+            : '加载失败: HTTP $status，请确保后端服务已启动 (http://localhost:8080)';
+        print('加载帖子失败: $errorMsg'); // 调试日志
+        
+        // 如果后端失败，可以使用模拟数据作为降级方案（可选）
+        // 取消下面的注释以启用降级方案
+        /*
+        if (_posts.isEmpty) {
+          // 使用模拟数据作为降级方案
+          final mockData = mockPosts.take(6).toList();
+          setState(() {
+            _posts.addAll(mockData);
+            _hasMore = mockData.length < mockPosts.length;
+            _isLoading = false;
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('使用演示数据（后端连接失败）'),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+          return;
+        }
+        */
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMsg),
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e, stackTrace) {
+      setState(() {
+        _isLoading = false;
+      });
+      print('加载帖子异常: $e'); // 调试日志
+      print('堆栈跟踪: $stackTrace'); // 调试日志
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('网络错误: $e\n请确保后端服务已启动 (http://localhost:8080)'),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  /// 刷新第一页（用于发布后获取最新内容）
+  Future<void> _refreshFirstPage() async {
+    try {
+      final resp = await ApiService.getPosts(page: 1, pageSize: 6);
+      final status = resp['statusCode'] as int? ?? 500;
+      final body = resp['body'] as Map<String, dynamic>?;
+      
+      if (status >= 200 && status < 300 && body != null) {
+        final postsData = (body['posts'] as List<dynamic>?) ?? <dynamic>[];
+        final total = body['total'] as int? ?? 0;
+        
+        final newPosts = postsData
+            .map((p) => Post.fromJson(p as Map<String, dynamic>))
+            .toList();
+
+        setState(() {
+          // 插入新帖子到列表开头，但避免重复
+          for (var newPost in newPosts) {
+            if (!_posts.any((p) => p.id == newPost.id)) {
+              _posts.insert(0, newPost);
+            }
+          }
+          _hasMore = _posts.length < total;
+        });
+      }
+    } catch (e) {
+      // 忽略错误
+    }
   }
 
   /// 触底后加载下一页（每次追加 6 条）
-  ///
-  /// 防重入：当 `_isLoading` 为 true 或 `_hasMore` 为 false 时直接返回。
-  /// 模拟网络耗时：`Future.delayed` 2 秒。
-  /// 边界处理：通过 `clamp` 保证 sublist 的结束索引不超过数据源长度。
-  void _loadMorePosts() async {
+  Future<void> _loadMorePosts() async {
     if (_isLoading || !_hasMore) return;
 
     setState(() {
       _isLoading = true;
     });
 
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final currentPage = (_posts.length ~/ 6) + 1;
+      final resp = await ApiService.getPosts(page: currentPage, pageSize: 6);
+      final status = resp['statusCode'] as int? ?? 500;
+      final body = resp['body'] as Map<String, dynamic>?;
+      
+      if (status >= 200 && status < 300 && body != null) {
+        final postsData = (body['posts'] as List<dynamic>?) ?? <dynamic>[];
+        final total = body['total'] as int? ?? 0;
+        
+        final newPosts = postsData
+            .map((p) => Post.fromJson(p as Map<String, dynamic>))
+            .toList();
 
-    // 计算下一批加载数量（每次加载 6 个）
-    final int nextStart = _posts.length;
-    final int nextEnd = (nextStart + 6).clamp(0, mockPosts.length);
-
-    setState(() {
-      _posts.addAll(mockPosts.sublist(nextStart, nextEnd));
-      _isLoading = false;
-      _hasMore = _posts.length < mockPosts.length;
-    });
+        setState(() {
+          _posts.addAll(newPosts);
+          _hasMore = _posts.length < total;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
 
@@ -115,7 +240,16 @@ void _loadInitialPosts() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => PostDetailScreen(post: post)),
-    );
+    ).then((_) {
+      // 从详情页返回后，刷新当前帖子信息（而不是整个列表）
+      // 这里可以选择只更新当前帖子，或者重新加载整个列表
+      // 为了简单，我们重新加载第一页
+      final currentPostIndex = _posts.indexWhere((p) => p.id == post.id);
+      if (currentPostIndex != -1) {
+        // 可以只刷新单个帖子，这里暂时重新加载
+        _loadInitialPosts();
+      }
+    });
   }
 
 
@@ -312,6 +446,17 @@ void _loadInitialPosts() {
             setState(() {
               _currentIndex = 0;
             });
+            // 发布后刷新列表（重新加载第一页）
+            final firstPagePosts = _posts.take(6).length;
+            if (firstPagePosts < 6 || _posts.isEmpty) {
+              // 如果当前列表为空或少于6条，重新加载
+              _posts.clear();
+              _hasMore = true;
+              _loadInitialPosts();
+            } else {
+              // 否则只重新加载第一页来获取最新发布的帖子
+              _refreshFirstPage();
+            }
           });
 
         } else if (index == 3) {

@@ -3,17 +3,27 @@ package com.example.paperhub.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 
 import java.util.List;
 
 @Configuration//定义配置类
+@EnableWebSecurity
 public class SecurityConfig {
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    }
+
     @Bean//定义Bean，用于Spring Boot自动配置
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {//定义安全过滤器链
         http
@@ -23,12 +33,19 @@ public class SecurityConfig {
                 cfg.setAllowedOrigins(List.of("*"));
                 cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
                 cfg.setAllowedHeaders(List.of("*"));
+                cfg.setAllowCredentials(false);
                 return cfg;
             }))
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(reg -> reg
                 .requestMatchers("/auth/**").permitAll()//允许所有以/auth开头的请求
+                .requestMatchers("/ws/**").permitAll()//允许WebSocket连接（如果需要认证可以在WebSocket握手时验证）
+                .requestMatchers(HttpMethod.GET, "/posts/health").permitAll()//允许健康检查
+                .requestMatchers(HttpMethod.GET, "/posts").permitAll()//允许未登录用户查看帖子列表
+                .requestMatchers(HttpMethod.GET, "/posts/*").permitAll()//允许未登录用户查看帖子详情
+                .requestMatchers(HttpMethod.GET, "/posts/*/comments").permitAll()//允许未登录用户查看评论列表
                 .anyRequest().authenticated())//任何其他请求都需要认证
-            .httpBasic(Customizer.withDefaults());
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
