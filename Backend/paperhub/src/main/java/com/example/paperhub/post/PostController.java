@@ -1,5 +1,4 @@
 package com.example.paperhub.post;
-
 import com.example.paperhub.auth.User;
 import com.example.paperhub.like.LikeService;
 import com.example.paperhub.post.dto.PostDtos;
@@ -9,18 +8,35 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
+import com.example.paperhub.config.ObsConfig;
+import com.obs.services.ObsClient;
+import com.obs.services.model.PutObjectResult;
+import org.springframework.beans.factory.annotation.Autowired;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+// 屈越-11.4
+import com.obs.services.exception.ObsException;
+import java.util.HashMap;
+
+
 @RestController
 @RequestMapping("/posts")
+@CrossOrigin(origins = "*")
 public class PostController {
     private final PostService postService;
     private final LikeService likeService;
     private final WebSocketService webSocketService;
+
+    @Autowired
+    private ObsClient obsClient;
+
+    @Autowired
+    private ObsConfig obsConfig;
 
     public PostController(PostService postService, LikeService likeService, WebSocketService webSocketService) {
         this.postService = postService;
@@ -117,6 +133,42 @@ public class PostController {
         PostDtos.PostResp resp = convertToPostResp(post, user.getId());
         return ResponseEntity.status(201).body(resp);
     }
+
+    // 上传图片接口
+    @PostMapping("/upload")
+    public ResponseEntity<Map<String, String>> uploadFile(@RequestParam("file") MultipartFile file) {
+        System.out.println("=== 上传接口开始执行 ===");
+        String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+        String url = "https://" + obsConfig.getBucketName() + ".obs.cn-north-4.myhuaweicloud.com/" + fileName;
+
+        Map<String, String> res = new HashMap<>();
+
+        try {
+            PutObjectResult result = obsClient.putObject(obsConfig.getBucketName(), fileName, file.getInputStream());
+
+            // 上传成功
+            res.put("message", "文件上传成功");
+            res.put("url", url);
+            res.put("fileName", fileName);
+            return ResponseEntity.ok(res);
+
+        } catch (ObsException e) {
+            System.out.println("Error code: " + e.getErrorCode());
+            System.out.println("Error message: " + e.getErrorMessage());
+            System.out.println("Request ID: " + e.getErrorRequestId());
+            System.out.println("Host ID: " + e.getErrorHostId());
+
+            res.put("message", "上传失败：" + e.getErrorMessage());
+            res.put("errorCode", e.getErrorCode());
+            return ResponseEntity.status(500).body(res);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            res.put("message", "未知错误：" + e.getMessage());
+            return ResponseEntity.status(500).body(res);
+        }
+    }
+
 
     /**
      * 点赞帖子

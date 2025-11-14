@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
+import 'dart:io';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -652,35 +653,64 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
   }
 
   Widget _buildMediaGallery() {
-    return GestureDetector(
-      onDoubleTap: _toggleLike,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            height: 320,
-            child: PageView(
-              children: widget.post.media.isNotEmpty
-                  ? widget.post.media.map((m) {
-                      return Image.asset(m, fit: BoxFit.cover, width: double.infinity, height: 320, errorBuilder: (_, __, ___) {
-                        return Container(color: Colors.grey[200], height: 320, child: const Center(child: Icon(Icons.broken_image, size: 48, color: Colors.grey)));
-                      });
-                    }).toList()
-                  : [Container(color: Colors.grey[200], height: 320, child: const Center(child: Icon(Icons.image_not_supported, size: 48, color: Colors.grey)))],
-            ),
+  return GestureDetector(
+    onDoubleTap: _toggleLike,
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        SizedBox(
+          height: 320,
+          child: PageView(
+            children: widget.post.media.isNotEmpty
+                ? widget.post.media.map((m) {
+                    // 判断是网络图片还是本地文件
+                    ImageProvider imageProvider;
+                    if (m.startsWith('http')) {
+                      imageProvider = NetworkImage(m);
+                    } else {
+                      imageProvider = FileImage(File(m));
+                    }
+
+                    return Image(
+                      image: imageProvider,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: 320,
+                      errorBuilder: (_, __, ___) {
+                        return Container(
+                          color: Colors.grey[200],
+                          height: 320,
+                          child: const Center(
+                            child: Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                          ),
+                        );
+                      },
+                    );
+                  }).toList()
+                : [
+                    Container(
+                      color: Colors.grey[200],
+                      height: 320,
+                      child: const Center(
+                        child: Icon(Icons.image_not_supported, size: 48, color: Colors.grey),
+                      ),
+                    )
+                  ],
           ),
-          Positioned(
-            child: _showBigHeart
-                ? ScaleTransition(
-                    scale: _heartScale,
-                    child: const Icon(Icons.favorite, color: Colors.redAccent, size: 100),
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+        // 喜欢动画
+        Positioned(
+          child: _showBigHeart
+              ? ScaleTransition(
+                  scale: _heartScale,
+                  child: const Icon(Icons.favorite, color: Colors.redAccent, size: 100),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildAuthorRow() {
     return ListTile(

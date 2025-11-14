@@ -1,0 +1,19 @@
+{
+    "sqltools.connections": [
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Disabled"
+            },
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "124.70.87.106",
+            "port": 3306,
+            "driver": "MySQL",
+            "name": "test",
+            "database": "paperHub",
+            "username": "team",
+            "askForPassword": true
+        }
+    ]
+}
