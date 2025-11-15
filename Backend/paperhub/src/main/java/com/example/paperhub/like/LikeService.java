@@ -33,27 +33,30 @@ public class LikeService {
     }
 
     /**
-     * 点赞帖子
+     * 点赞帖子（只点赞，不切换）1115陈佳怡修改逻辑
      */
-    //20251111陈佳怡修改逻辑
     @Transactional
     public boolean likePost(Long postId, User user) {
         Post post = postRepository.findById(postId)
             .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
         
+        // 检查是否已经点赞
         Optional<PostLike> existingLike = postLikeRepository.findByPostAndUser(post, user);
         if (existingLike.isPresent()) {
-            postLikeRepository.delete(existingLike.get());
-            postService.decrementLikesCount(postId);
-            return false;// 点赞已取消
+            // 已经点赞，直接返回成功
+            return true;
         }
 
+        // 创建新的点赞记录
         PostLike like = new PostLike();
         like.setPost(post);
         like.setUser(user);
         postLikeRepository.save(like);
 
-        postService.incrementLikesCount(postId);
+        // 更新帖子点赞数（从数据库统计，确保一致性）
+        long actualCount = postLikeRepository.countByPostId(postId);
+        post.setLikesCount((int) actualCount);
+        postRepository.save(post);
         
         return true; // 点赞成功
     }
@@ -68,11 +71,18 @@ public class LikeService {
         
         Optional<PostLike> existingLike = postLikeRepository.findByPostAndUser(post, user);
         if (existingLike.isEmpty()) {
-            return false; // 未点赞
+            // 未点赞，直接返回成功（幂等性）
+            return true;
         }
 
+        // 删除点赞记录
         postLikeRepository.delete(existingLike.get());
-        postService.decrementLikesCount(postId);
+        
+        // 更新帖子点赞数（从数据库统计，确保一致性）
+        long actualCount = postLikeRepository.countByPostId(postId);
+        post.setLikesCount((int) actualCount);
+        postRepository.save(post);
+        
         return true;
     }
 
@@ -84,35 +94,51 @@ public class LikeService {
     }
 
     /**
-     * 获取帖子的点赞数
+     * 获取帖子的点赞数（从数据库统计，确保准确性）
      */
     public long getPostLikesCount(Long postId) {
-        return postLikeRepository.countByPostId(postId);
+        try {
+            long count = postLikeRepository.countByPostId(postId);
+            // 同步更新Post实体的likesCount字段，保持一致性
+            postRepository.findById(postId).ifPresent(post -> {
+                if (post.getLikesCount() != (int) count) {
+                    post.setLikesCount((int) count);
+                    postRepository.save(post);
+                }
+            });
+            return count;
+        } catch (Exception e) {
+            System.err.println("获取点赞数失败: " + e.getMessage());
+            e.printStackTrace();
+            // 如果查询失败，返回0，避免影响主流程
+            return 0;
+        }
     }
 
     /**
-     * 点赞评论
+     * 点赞评论（只点赞，不切换）
      */
     @Transactional
     public boolean likeComment(Long commentId, User user) {
         Comment comment = commentRepository.findById(commentId)
             .orElseThrow(() -> new IllegalArgumentException("评论不存在"));
         
+        // 检查是否已经点赞
         Optional<CommentLike> existingLike = commentLikeRepository.findByCommentAndUser(comment, user);
         if (existingLike.isPresent()) {
-            commentLikeRepository.delete(existingLike.get());
-            if(comment.getLikesCount() > 0) {
-                comment.setLikesCount(comment.getLikesCount() - 1);
-                commentRepository.save(comment);
-            }
-            return false;// 点赞已取消
+            // 已经点赞，直接返回成功
+            return true;
         }
 
+        // 创建新的点赞记录
         CommentLike like = new CommentLike();
         like.setComment(comment);
         like.setUser(user);
         commentLikeRepository.save(like);
-        comment.setLikesCount(comment.getLikesCount() + 1);
+        
+        // 更新评论点赞数（从数据库统计，确保一致性）
+        long actualCount = commentLikeRepository.countByCommentId(commentId);
+        comment.setLikesCount((int) actualCount);
         commentRepository.save(comment);
         
         return true; // 点赞成功
@@ -128,14 +154,18 @@ public class LikeService {
         
         Optional<CommentLike> existingLike = commentLikeRepository.findByCommentAndUser(comment, user);
         if (existingLike.isEmpty()) {
-            return false; // 未点赞
+            // 未点赞，直接返回成功（幂等性）
+            return true;
         }
 
+        // 删除点赞记录
         commentLikeRepository.delete(existingLike.get());
-        if (comment.getLikesCount() > 0) {
-            comment.setLikesCount(comment.getLikesCount() - 1);
-            commentRepository.save(comment);
-        }
+        
+        // 更新评论点赞数（从数据库统计，确保一致性）
+        long actualCount = commentLikeRepository.countByCommentId(commentId);
+        comment.setLikesCount((int) actualCount);
+        commentRepository.save(comment);
+        
         return true;
     }
 
@@ -147,10 +177,25 @@ public class LikeService {
     }
 
     /**
-     * 获取评论的点赞数
+     * 获取评论的点赞数（从数据库统计，确保准确性）
      */
     public long getCommentLikesCount(Long commentId) {
-        return commentLikeRepository.countByCommentId(commentId);
+        try {
+            long count = commentLikeRepository.countByCommentId(commentId);
+            // 同步更新Comment实体的likesCount字段，保持一致性
+            commentRepository.findById(commentId).ifPresent(comment -> {
+                if (comment.getLikesCount() != (int) count) {
+                    comment.setLikesCount((int) count);
+                    commentRepository.save(comment);
+                }
+            });
+            return count;
+        } catch (Exception e) {
+            System.err.println("获取评论点赞数失败: " + e.getMessage());
+            e.printStackTrace();
+            // 如果查询失败，返回0，避免影响主流程
+            return 0;
+        }
     }
 }
 
