@@ -5,6 +5,11 @@ import 'package:file_picker/file_picker.dart';
 import '../services/api_service.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:typed_data';              // 用于 Uint8List
+import 'package:flutter/foundation.dart' show kIsWeb;  // 用于 kIsWeb
+import 'package:http_parser/http_parser.dart';        // 用于 MediaType
+   
+   
 
 class NoteEditorPage extends StatefulWidget {
   const NoteEditorPage({Key? key}) : super(key: key);
@@ -66,29 +71,49 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   // 上传图片方法
   Future<String?> _uploadImageToServer(XFile image) async {
     try {
-      // 将图片转换为 multipart/form-data
-      final uri = Uri.parse('http://localhost:8080/posts/upload'); // 后端图片上传接口
+      final uri = Uri.parse('http://localhost:8080/posts/upload');
       final request = http.MultipartRequest('POST', uri);
 
-      request.files.add(await http.MultipartFile.fromPath('file', image.path));
-
-      final response = await request.send();
-      print(response.statusCode);
-      print("\n");
-      if (response.statusCode == 200) {
-        final respStr = await response.stream.bytesToString();
-        final Map<String, dynamic> data = jsonDecode(respStr);
-        print(data['url']);
-        print("\n");
-        return data['url']; // 后端返回的图片 URL
+      if (kIsWeb) {
+       // -------------------------------------------
+        // ✔ Web 端：使用 bytes 创建 MultipartFile
+        // -------------------------------------------
+        Uint8List bytes = await image.readAsBytes();
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            bytes,
+            filename: image.name,
+            contentType: MediaType('image', image.mimeType?.split('/').last ?? 'jpeg'),
+          ),
+        );
       } else {
-        return null;
-      }
-    } catch (e) {
-      print('上传图片失败: $e');
+        // -------------------------------------------
+        // ✔ 移动端/桌面端：使用文件路径上传
+        // -------------------------------------------
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'file',
+            image.path,
+        ),
+      );
+    }
+
+    final response = await request.send();
+
+    if (response.statusCode == 200) {
+      final respStr = await response.stream.bytesToString();
+      final Map<String, dynamic> data = jsonDecode(respStr);
+      return data['url'];
+    } else {
+      print("上传失败: ${response.statusCode}");
       return null;
     }
+  } catch (e) {
+    print('上传图片失败: $e');
+    return null;
   }
+}
 
   // 发布逻辑
   Future<void> _publishNote() async {
