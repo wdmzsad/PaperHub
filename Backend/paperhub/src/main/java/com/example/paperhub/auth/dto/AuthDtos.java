@@ -11,7 +11,9 @@ public class AuthDtos {//定义数据传输对象,说明的是前端请求传输
     public record ResetReq(@Email @NotBlank String email, @NotBlank String code, @NotBlank String newPassword) {}//重置请求
 
     public record MessageResp(String message) {}//消息响应
-    public record LoginResp(String message, String token, long expiresIn) {}//登录响应
+    public record LoginResp(String message, String token, String refreshToken, long expiresIn, long refreshExpiresIn) {}//登录响应
+    public record RefreshTokenReq(@NotBlank String refreshToken) {}//刷新令牌请求
+    public record RefreshTokenResp(String token, String refreshToken, long expiresIn, long refreshExpiresIn) {}//刷新令牌响应
 }
 
 

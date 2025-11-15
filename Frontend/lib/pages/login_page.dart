@@ -25,7 +25,10 @@ class _LoginPageState extends State<LoginPage> {
     setState(() { loading = false; });
     if (res['statusCode'] == 200) {
       final token = res['body']['token'] ?? '';
-      await LocalStorage.instance.write('auth_token', token);
+      final refreshToken = res['body']['refreshToken'] ?? '';
+      // 保存双Token
+      await LocalStorage.instance.write('accessToken', token);
+      await LocalStorage.instance.write('refreshToken', refreshToken);
       _showSnack(res['body']['message'] ?? '登录成功');
       Navigator.of(context).pushReplacementNamed('/home');
     } else {

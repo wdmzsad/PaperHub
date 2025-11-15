@@ -5,6 +5,8 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../widgets/bottom_navigation.dart';
 import '../pages/login_page.dart';
 import '../pages/note_editor_page.dart';
+import '../services/local_storage.dart';
+import '../services/api_service.dart';
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
@@ -39,8 +41,10 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
             ListTile(
               leading: Icon(Icons.logout, color: Colors.red),
               title: Text('登出'),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context); // 先关闭Drawer
+                // 清除双Token
+                await ApiService.logout();
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(builder: (context) => LoginPage()),
