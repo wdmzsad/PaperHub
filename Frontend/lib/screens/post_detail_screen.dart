@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
+import 'dart:io';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -495,15 +496,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
       final resp = isLiked ? await ApiService.likePost(widget.post.id) : await ApiService.unlikePost(widget.post.id);
       final status = (resp['statusCode'] ?? 500) as int;
       final body = resp['body'] as Map<String, dynamic>?;
+      
+      print('点赞响应: status=$status, body=$body'); // 调试日志
+      
       if (status >= 200 && status < 300) {
         // 如果后端返回了最新计数，则以后端为准
-        if (body != null) {
+        if (body != null && body.containsKey('likesCount') && body.containsKey('isLiked')) {
           setState(() {
-            if (body.containsKey('likesCount')) likeCount = body['likesCount'] as int;
-            if (body.containsKey('isLiked')) isLiked = body['isLiked'] as bool;
+            likeCount = body['likesCount'] as int;
+            isLiked = body['isLiked'] as bool;
             widget.post.likesCount = likeCount;
             widget.post.isLiked = isLiked;
           });
+        } else if (body != null && body.containsKey('message')) {
+          // 如果只有 message，说明可能是 204 或其他情况，保持乐观更新
+          print('警告: 响应缺少 likesCount 或 isLiked，保持乐观更新');
         }
         // （可选）如果后端不自动创建通知，前端可以调用通知接口：
         // await ApiService.createNotification({ ... });
@@ -515,18 +522,29 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
           widget.post.isLiked = previousLiked;
           widget.post.likesCount = previousCount;
         });
-        final msg = body != null && body['message'] != null ? body['message'] : '点赞失败';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg.toString())));
+        final msg = body != null && body['message'] != null 
+            ? body['message'].toString() 
+            : '点赞失败，请稍后重试';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       // 网络或解析错误 -> 回滚
+      print('点赞异常: $e');
+      print('堆栈跟踪: $stackTrace');
       setState(() {
         isLiked = previousLiked;
         likeCount = previousCount;
         widget.post.isLiked = previousLiked;
         widget.post.likesCount = previousCount;
       });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('网络错误，点赞未成功')));
+      if (mounted) {
+        final errorMsg = e.toString().contains('超时') 
+            ? '请求超时，请检查网络连接'
+            : '网络错误，点赞未成功，请稍后重试';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg)));
+      }
     } finally {
       _postLikeInFlight = false;
     }
@@ -565,8 +583,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
 
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
+      
+      print('创建评论响应: status=$status, body=$body'); // 调试日志
+      
       if (status >= 200 && status < 300 && body != null) {
-        // 期望后端返回 {'comment': {...}}
+        // 期望后端返回 {'comment': {...}} 或直接返回评论对象
         final commentJson = (body['comment'] as Map<String, dynamic>?) ?? body;
         final newComment = Comment.fromJson(commentJson);
         setState(() {
@@ -587,15 +608,32 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
             _cancelReply(); // 清除回复状态
           }
         });
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('评论发表成功')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('评论发表成功')));
+        }
       } else {
-        final msg = body != null && body['message'] != null ? body['message'].toString() : '评论失败';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        // 处理错误响应
+        String errorMsg = '评论失败，请稍后重试';
+        if (status == 401 || status == 403) {
+          errorMsg = body != null && body['message'] != null 
+              ? body['message'].toString() 
+              : '未认证，请先登录';
+        } else if (body != null && body['message'] != null) {
+          errorMsg = body['message'].toString();
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg)));
+        }
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('网络错误，评论未成功')),
-      );
+    } catch (e, stackTrace) {
+      print('创建评论异常: $e');
+      print('堆栈跟踪: $stackTrace');
+      if (mounted) {
+        final errorMsg = e.toString().contains('超时') 
+            ? '请求超时，请检查网络连接'
+            : '网络错误，评论未成功，请稍后重试';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg)));
+      }
     } finally {
       setState(() {
         _isSubmittingComment = false;
@@ -652,46 +690,69 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
   }
 
   Widget _buildMediaGallery() {
-    return GestureDetector(
-      onDoubleTap: _toggleLike,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            height: 320,
-            child: PageView(
-              children: widget.post.media.isNotEmpty
-                  ? widget.post.media.map((m) {
-                      return Image.asset(m, fit: BoxFit.cover, width: double.infinity, height: 320, errorBuilder: (_, __, ___) {
-                        return Container(color: Colors.grey[200], height: 320, child: const Center(child: Icon(Icons.broken_image, size: 48, color: Colors.grey)));
-                      });
-                    }).toList()
-                  : [Container(color: Colors.grey[200], height: 320, child: const Center(child: Icon(Icons.image_not_supported, size: 48, color: Colors.grey)))],
-            ),
+  return GestureDetector(
+    onDoubleTap: _toggleLike,
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        SizedBox(
+          height: 320,
+          child: PageView(
+            children: widget.post.media.isNotEmpty
+                ? widget.post.media.map((m) {
+                    // 判断是网络图片还是本地文件
+                    ImageProvider imageProvider;
+                    if (m.startsWith('http')) {
+                      imageProvider = NetworkImage(m);
+                    } else {
+                      imageProvider = FileImage(File(m));
+                    }
+
+                    return Image(
+                      image: imageProvider,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: 320,
+                      errorBuilder: (_, __, ___) {
+                        return Container(
+                          color: Colors.grey[200],
+                          height: 320,
+                          child: const Center(
+                            child: Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                          ),
+                        );
+                      },
+                    );
+                  }).toList()
+                : [
+                    Container(
+                      color: Colors.grey[200],
+                      height: 320,
+                      child: const Center(
+                        child: Icon(Icons.image_not_supported, size: 48, color: Colors.grey),
+                      ),
+                    )
+                  ],
           ),
-          Positioned(
-            child: _showBigHeart
-                ? ScaleTransition(
-                    scale: _heartScale,
-                    child: const Icon(Icons.favorite, color: Colors.redAccent, size: 100),
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+        // 喜欢动画
+        Positioned(
+          child: _showBigHeart
+              ? ScaleTransition(
+                  scale: _heartScale,
+                  child: const Icon(Icons.favorite, color: Colors.redAccent, size: 100),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildAuthorRow() {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      leading: CircleAvatar(
-        radius: 20,
-        backgroundColor: Colors.grey[300],
-        child: ClipOval(
-          child: Image.asset(widget.post.author.avatar, width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person)),
-        ),
-      ),
+      leading: _buildAvatarWidget(widget.post.author.avatar, 20),
       title: Text(widget.post.author.name, style: const TextStyle(fontWeight: FontWeight.w600)),
       subtitle: Text(
         '${widget.post.author.affiliation ?? ''} • ${_formatRelative(widget.post.createdAt)}',
@@ -828,11 +889,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
               children: [
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Colors.grey[300],
-                    backgroundImage: AssetImage(c.author.avatar),
-                  ),
+                  leading: _buildAvatarWidget(c.author.avatar, 16),
                   title: Text(c.author.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -880,11 +937,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
                         final replyInFlight = _commentLikeInFlight.contains(reply.id);
                         return ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                          leading: CircleAvatar(
-                            radius: 14,
-                            backgroundColor: Colors.grey[300],
-                            backgroundImage: AssetImage(reply.author.avatar),
-                          ),
+                          leading: _buildAvatarWidget(reply.author.avatar, 14),
                           title: Text(reply.author.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1076,6 +1129,54 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
           ),
           _buildBottomCommentInput(),
         ],
+      ),
+    );
+  }
+
+  /// 构建头像 Widget，支持本地资源和网络 URL，带错误处理
+  Widget _buildAvatarWidget(String avatarPath, double radius) {
+    // 判断是否为网络 URL（以 http:// 或 https:// 开头）
+    if (avatarPath.startsWith('http://') || avatarPath.startsWith('https://')) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: Colors.grey[300],
+        child: ClipOval(
+          child: Image.network(
+            avatarPath,
+            width: radius * 2,
+            height: radius * 2,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Icon(Icons.person, size: radius, color: Colors.grey);
+            },
+          ),
+        ),
+      );
+    }
+    
+    // 处理本地资源路径
+    // pubspec.yaml 配置了 assets: - assets/images/，所以使用时应该是 images/xxx
+    String assetPath = avatarPath;
+    if (assetPath.startsWith('assets/images/')) {
+      assetPath = assetPath.substring(14); // 去掉 "assets/images/" 前缀
+    } else if (assetPath.startsWith('assets/')) {
+      assetPath = assetPath.substring(7); // 去掉 "assets/" 前缀
+    }
+    
+    // 使用 Image.asset 并添加错误处理
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: Colors.grey[300],
+      child: ClipOval(
+        child: Image.asset(
+          assetPath,
+          width: radius * 2,
+          height: radius * 2,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Icon(Icons.person, size: radius, color: Colors.grey);
+          },
+        ),
       ),
     );
   }

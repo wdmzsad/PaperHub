@@ -77,30 +77,82 @@ class ApiService {
   /// 点赞帖子 (临时模拟实现)
   /// 返回的 body 推荐包含最新的 likesCount 和 isLiked（由后端返回以保证正确性）
   static Future<Map<String, dynamic>> likePost(String postId, {String? authToken}) async {
-    final headers = _buildHeaders();
-    final resp = await http.post(Uri.parse('$baseUrl/posts/$postId/like'), headers: headers);
-    return _parseResponse(resp);
+    try {
+      final headers = _buildHeaders();
+      final resp = await http.post(
+        Uri.parse('$baseUrl/posts/$postId/like'),
+        headers: headers,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('请求超时，请稍后重试');
+        },
+      );
+      return _parseResponse(resp);
+    } catch (e) {
+      print('点赞帖子请求异常: $e');
+      rethrow;
+    }
   }
 
   /// 取消点赞帖子 (临时模拟实现)
   static Future<Map<String, dynamic>> unlikePost(String postId, {String? authToken}) async {
-    final headers = _buildHeaders();
-    final resp = await http.delete(Uri.parse('$baseUrl/posts/$postId/like'), headers: headers);
-    return _parseResponse(resp);
+    try {
+      final headers = _buildHeaders();
+      final resp = await http.delete(
+        Uri.parse('$baseUrl/posts/$postId/like'),
+        headers: headers,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('请求超时，请稍后重试');
+        },
+      );
+      return _parseResponse(resp);
+    } catch (e) {
+      print('取消点赞请求异常: $e');
+      rethrow;
+    }
   }
 
   /// 点赞评论 (临时模拟实现)
   static Future<Map<String, dynamic>> likeComment(String postId, String commentId, {String? authToken}) async {
-    final headers = _buildHeaders();
-    final resp = await http.post(Uri.parse('$baseUrl/posts/$postId/comments/$commentId/like'), headers: headers);
-    return _parseResponse(resp);
+    try {
+      final headers = _buildHeaders();
+      final resp = await http.post(
+        Uri.parse('$baseUrl/posts/$postId/comments/$commentId/like'),
+        headers: headers,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('请求超时，请稍后重试');
+        },
+      );
+      return _parseResponse(resp);
+    } catch (e) {
+      print('点赞评论请求异常: $e');
+      rethrow;
+    }
   }
 
   /// 取消点赞评论 (临时模拟实现)
   static Future<Map<String, dynamic>> unlikeComment(String postId, String commentId, {String? authToken}) async {
-    final headers = _buildHeaders();
-    final resp = await http.delete(Uri.parse('$baseUrl/posts/$postId/comments/$commentId/like'), headers: headers);
-    return _parseResponse(resp);
+    try {
+      final headers = _buildHeaders();
+      final resp = await http.delete(
+        Uri.parse('$baseUrl/posts/$postId/comments/$commentId/like'),
+        headers: headers,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('请求超时，请稍后重试');
+        },
+      );
+      return _parseResponse(resp);
+    } catch (e) {
+      print('取消点赞评论请求异常: $e');
+      rethrow;
+    }
   }
 
   /// 可选：请求后端创建/触发通知（多数后端会在 like 接口内部处理通知，这里提供独立接口以备后端需要前端主动调用）
@@ -153,17 +205,27 @@ class ApiService {
     String? parentId,
     String? replyToId,
   }) async {
-    final headers = _buildHeaders();
-    final resp = await http.post(
-      Uri.parse('$baseUrl/posts/$postId/comments'),
-      headers: headers,
-      body: jsonEncode({
-        'content': content,
-        if (parentId != null) 'parentId': parentId,
-        if (replyToId != null) 'replyToId': replyToId,
-      }),
-    );
-    return _parseResponse(resp);
+    try {
+      final headers = _buildHeaders();
+      final resp = await http.post(
+        Uri.parse('$baseUrl/posts/$postId/comments'),
+        headers: headers,
+        body: jsonEncode({
+          'content': content,
+          if (parentId != null) 'parentId': parentId,
+          if (replyToId != null) 'replyToId': replyToId,
+        }),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('请求超时，请稍后重试');
+        },
+      );
+      return _parseResponse(resp);
+    } catch (e) {
+      print('创建评论请求异常: $e');
+      rethrow;
+    }
   }
 
   /// 更新评论（仅评论作者可操作）
@@ -284,15 +346,56 @@ class ApiService {
 
   static Map<String, dynamic> _parseResponse(http.Response resp) {
     try {
+      // 处理空响应体
+      if (resp.body.isEmpty || resp.body.trim().isEmpty) {
+        print('警告: 服务器返回空响应体，状态码: ${resp.statusCode}');
+        // 对于 204 No Content，这是正常的
+        if (resp.statusCode == 204) {
+          return {
+            'statusCode': resp.statusCode,
+            'body': {'message': '操作成功'},
+          };
+        }
+        // 对于 403 Forbidden，返回友好的错误消息
+        if (resp.statusCode == 403) {
+          return {
+            'statusCode': resp.statusCode,
+            'body': {'message': '权限不足，请先登录'},
+          };
+        }
+        // 对于 401 Unauthorized，返回友好的错误消息
+        if (resp.statusCode == 401) {
+          return {
+            'statusCode': resp.statusCode,
+            'body': {'message': '未认证，请先登录'},
+          };
+        }
+        // 其他情况返回错误
+        return {
+          'statusCode': resp.statusCode,
+          'body': {'message': '服务器返回空响应，请稍后重试'},
+        };
+      }
+      
       final body = jsonDecode(resp.body);
       return {
         'statusCode': resp.statusCode,
         'body': body,
       };
     } catch (e) {
+      // 记录解析错误详情
+      print('JSON解析失败: $e');
+      print('响应状态码: ${resp.statusCode}');
+      print('响应内容长度: ${resp.body.length}');
+      print('响应内容前100字符: ${resp.body.length > 100 ? resp.body.substring(0, 100) : resp.body}');
+      
       return {
         'statusCode': resp.statusCode,
-        'body': {'message': 'Invalid response from server'},
+        'body': {
+          'message': resp.body.isNotEmpty 
+              ? '服务器响应格式错误: ${resp.body.substring(0, resp.body.length > 100 ? 100 : resp.body.length)}'
+              : 'Invalid response from server'
+        },
       };
     }
   }

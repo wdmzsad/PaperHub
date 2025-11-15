@@ -104,7 +104,7 @@ class PostCard extends StatelessWidget {
                         radius: 12,
                         backgroundColor: Colors.grey[300],
                         child: ClipOval(
-                          child: Image.asset(
+                          child: Image.network(
                             post.author.avatar,
                             width: 24,
                             height: 24,
@@ -162,7 +162,7 @@ class PostCard extends StatelessWidget {
 
   /// 构建封面图内容：
   /// - 无媒体：展示占位图标
-  /// - 有媒体：使用 `Image.asset` 加载第一张图片，`FittedBox` 等比裁切填充
+  /// - 有媒体：使用 `Image.network` 加载第一张图片，`FittedBox` 等比裁切填充
   /// - 错误/加载动画：`errorBuilder` 与 `frameBuilder` 处理兜底与淡入
   Widget _buildImageContent(
     double containerWidth,
@@ -187,7 +187,7 @@ class PostCard extends StatelessWidget {
         child: SizedBox(
           width: containerWidth,
           height: naturalHeight,
-          child: Image.asset(
+          child: Image.network(
             imageUrl,
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) {
