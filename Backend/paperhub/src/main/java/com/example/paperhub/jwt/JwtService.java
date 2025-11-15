@@ -17,15 +17,21 @@ import java.util.Date;
 public class JwtService {
     private final SecretKey key;
     private final long expiresInSeconds;
+    private final long refreshExpiresInSeconds;
 
     public JwtService(
         @Value("${jwt.secret:change-this-to-strong-secret-change}") String secret,
-        @Value("${jwt.expires-in-seconds:3600}") long expiresInSeconds
+        @Value("${jwt.expires-in-seconds:3600}") long expiresInSeconds,
+        @Value("${jwt.refresh-expires-in-seconds:604800}") long refreshExpiresInSeconds
     ) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes());
         this.expiresInSeconds = expiresInSeconds;
+        this.refreshExpiresInSeconds = refreshExpiresInSeconds;
     }
 
+    /**
+     * 生成Access Token（短期令牌，用于API请求）
+     */
     public String generateToken(String subject) {
         Instant now = Instant.now();
         return Jwts.builder()
@@ -36,8 +42,26 @@ public class JwtService {
             .compact();
     }
 
+    /**
+     * 生成Refresh Token（长期令牌，用于刷新Access Token）
+     */
+    public String generateRefreshToken(String subject) {
+        Instant now = Instant.now();
+        return Jwts.builder()
+            .setSubject(subject)
+            .setIssuedAt(Date.from(now))
+            .setExpiration(Date.from(now.plusSeconds(refreshExpiresInSeconds)))
+            .claim("type", "refresh") // 标记为refresh token
+            .signWith(key, SignatureAlgorithm.HS256)
+            .compact();
+    }
+
     public long getExpiresInSeconds() {
         return expiresInSeconds;
+    }
+
+    public long getRefreshExpiresInSeconds() {
+        return refreshExpiresInSeconds;
     }
 
     /**
@@ -73,6 +97,22 @@ public class JwtService {
         try {
             parseToken(token);
             return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 验证refresh token是否有效
+     * @param token Refresh token
+     * @return true if valid, false otherwise
+     */
+    public boolean validateRefreshToken(String token) {
+        try {
+            Claims claims = parseToken(token);
+            // 检查是否是refresh token类型
+            String type = claims.get("type", String.class);
+            return "refresh".equals(type);
         } catch (Exception e) {
             return false;
         }

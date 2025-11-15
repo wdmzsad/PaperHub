@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'local_storage.dart';
@@ -7,9 +8,13 @@ import 'local_storage.dart';
 
   - 自动注入 Authorization header：
     本模块在每次发起 HTTP 请求前会调用 `_buildHeaders()`，
-    它会从 `LocalStorage.instance.read('auth_token')` 读取 token（如果存在），
+    它会从 `LocalStorage.instance.read('accessToken')` 读取 token（如果存在），
     并将其放到请求头 `Authorization: Bearer <token>` 中。这样前端发起的请求
     会自动携带当前登录用户的凭证，后端可以在请求中对该 header 进行校验。
+    
+  - 自动刷新Token机制：
+    当API请求返回401错误时，会自动使用refreshToken刷新accessToken，然后重试原请求。
+    如果刷新失败，会清除所有token，调用方需要处理401错误并引导用户重新登录。
 
     注意：当前 `LocalStorage` 是一个内存存储（同步读取），如果你的实现改为
     异步（例如 SharedPreferences），需要将 `_buildHeaders` 改为异步并调整调用处。
@@ -30,19 +35,146 @@ import 'local_storage.dart';
 */
 
 /// TODO: 把 baseUrl 换成你后端的地址
-const String baseUrl = 'http://124.70.87.106:8080';
+//const String baseUrl = 'http://124.70.87.106:8080';
+const String baseUrl = 'http://localhost:8080';
 
 class ApiService {
-  static Map<String, String> _buildHeaders({bool json = true}) {
+  // 标记是否正在刷新，避免并发请求时多次刷新
+  static bool _isRefreshing = false;
+  // 存储等待刷新的请求队列
+  static final List<Completer<Map<String, dynamic>>> _refreshQueue = [];
+
+  static Map<String, String> _buildHeaders({bool json = true, bool skipAuth = false}) {
     final headers = <String, String>{};
     if (json) headers['Content-Type'] = 'application/json';
-    try {
-      final token = LocalStorage.instance.read('auth_token');
-      if (token != null && token.isNotEmpty) headers['Authorization'] = 'Bearer $token';
-    } catch (e) {
-      // ignore - LocalStorage read should normally be available
+    if (!skipAuth) {
+      try {
+        final token = LocalStorage.instance.read('accessToken');
+        if (token != null && token.isNotEmpty) headers['Authorization'] = 'Bearer $token';
+      } catch (e) {
+        // ignore - LocalStorage read should normally be available
+      }
     }
     return headers;
+  }
+
+  /// 刷新Token
+  static Future<Map<String, dynamic>> refreshToken() async {
+    final refreshToken = LocalStorage.instance.read('refreshToken');
+    if (refreshToken == null || refreshToken.isEmpty) {
+      throw Exception('没有refreshToken，请重新登录');
+    }
+    
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+    };
+    final resp = await http.post(
+      Uri.parse('$baseUrl/auth/refresh'),
+      headers: headers,
+      body: jsonEncode({'refreshToken': refreshToken}),
+    );
+    return _parseResponse(resp);
+  }
+
+  /// 处理队列中等待的请求
+  static void _processRefreshQueue(Map<String, dynamic>? refreshResult, Exception? error) {
+    for (var completer in _refreshQueue) {
+      if (error != null) {
+        completer.completeError(error);
+      } else if (refreshResult != null) {
+        completer.complete(refreshResult);
+      }
+    }
+    _refreshQueue.clear();
+  }
+
+  /// 使用刷新Token重试请求
+  static Future<Map<String, dynamic>> _retryWithRefresh(
+    Future<http.Response> Function() requestFn,
+    String requestPath,
+  ) async {
+    if (_isRefreshing) {
+      // 如果正在刷新，等待刷新完成
+      final completer = Completer<Map<String, dynamic>>();
+      _refreshQueue.add(completer);
+      final refreshResult = await completer.future;
+      
+      if (refreshResult['statusCode'] == 200) {
+        // 刷新成功，重试原请求
+        final retryResp = await requestFn();
+        return _parseResponse(retryResp);
+      } else {
+        return refreshResult;
+      }
+    }
+
+    _isRefreshing = true;
+
+    try {
+      final refreshResult = await refreshToken();
+      
+      if (refreshResult['statusCode'] == 200) {
+        final newToken = refreshResult['body']['token'] ?? '';
+        final newRefreshToken = refreshResult['body']['refreshToken'] ?? '';
+        
+        // 更新本地存储
+        await LocalStorage.instance.write('accessToken', newToken);
+        await LocalStorage.instance.write('refreshToken', newRefreshToken);
+        
+        // 处理队列
+        _processRefreshQueue(refreshResult, null);
+        
+        // 重试原请求
+        final retryResp = await requestFn();
+        return _parseResponse(retryResp);
+      } else {
+        // 刷新失败，清除token并抛出错误
+        await _clearTokens();
+        _processRefreshQueue(null, Exception('刷新Token失败'));
+        return refreshResult;
+      }
+    } catch (e) {
+      // 刷新失败，清除token
+      await _clearTokens();
+      _processRefreshQueue(null, e as Exception);
+      return {
+        'statusCode': 401,
+        'body': {'message': '刷新Token失败，请重新登录'},
+      };
+    } finally {
+      _isRefreshing = false;
+    }
+  }
+
+  /// 清除所有Token
+  static Future<void> _clearTokens() async {
+    await LocalStorage.instance.delete('accessToken');
+    await LocalStorage.instance.delete('refreshToken');
+  }
+
+  /// 退出登录（清除所有Token）
+  static Future<void> logout() async {
+    await _clearTokens();
+  }
+
+  /// 包装HTTP请求，自动处理401错误
+  static Future<Map<String, dynamic>> _makeRequest(
+    Future<http.Response> Function() requestFn,
+    String requestPath,
+  ) async {
+    try {
+      final resp = await requestFn();
+      final result = _parseResponse(resp);
+      
+      // 如果是401错误，尝试刷新Token
+      if (result['statusCode'] == 401 && !requestPath.contains('/auth/refresh')) {
+        return await _retryWithRefresh(requestFn, requestPath);
+      }
+      
+      return result;
+    } catch (e) {
+      rethrow;
+    }
   }
   static Future<Map<String, dynamic>> register(String email, String password) async {
     final headers = _buildHeaders();
@@ -78,17 +210,18 @@ class ApiService {
   /// 返回的 body 推荐包含最新的 likesCount 和 isLiked（由后端返回以保证正确性）
   static Future<Map<String, dynamic>> likePost(String postId, {String? authToken}) async {
     try {
-      final headers = _buildHeaders();
-      final resp = await http.post(
-        Uri.parse('$baseUrl/posts/$postId/like'),
-        headers: headers,
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('请求超时，请稍后重试');
-        },
+      return await _makeRequest(
+        () => http.post(
+          Uri.parse('$baseUrl/posts/$postId/like'),
+          headers: _buildHeaders(),
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw Exception('请求超时，请稍后重试');
+          },
+        ),
+        '/posts/$postId/like',
       );
-      return _parseResponse(resp);
     } catch (e) {
       print('点赞帖子请求异常: $e');
       rethrow;
@@ -98,17 +231,18 @@ class ApiService {
   /// 取消点赞帖子 (临时模拟实现)
   static Future<Map<String, dynamic>> unlikePost(String postId, {String? authToken}) async {
     try {
-      final headers = _buildHeaders();
-      final resp = await http.delete(
-        Uri.parse('$baseUrl/posts/$postId/like'),
-        headers: headers,
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('请求超时，请稍后重试');
-        },
+      return await _makeRequest(
+        () => http.delete(
+          Uri.parse('$baseUrl/posts/$postId/like'),
+          headers: _buildHeaders(),
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw Exception('请求超时，请稍后重试');
+          },
+        ),
+        '/posts/$postId/like',
       );
-      return _parseResponse(resp);
     } catch (e) {
       print('取消点赞请求异常: $e');
       rethrow;
@@ -118,17 +252,18 @@ class ApiService {
   /// 点赞评论 (临时模拟实现)
   static Future<Map<String, dynamic>> likeComment(String postId, String commentId, {String? authToken}) async {
     try {
-      final headers = _buildHeaders();
-      final resp = await http.post(
-        Uri.parse('$baseUrl/posts/$postId/comments/$commentId/like'),
-        headers: headers,
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('请求超时，请稍后重试');
-        },
+      return await _makeRequest(
+        () => http.post(
+          Uri.parse('$baseUrl/posts/$postId/comments/$commentId/like'),
+          headers: _buildHeaders(),
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw Exception('请求超时，请稍后重试');
+          },
+        ),
+        '/posts/$postId/comments/$commentId/like',
       );
-      return _parseResponse(resp);
     } catch (e) {
       print('点赞评论请求异常: $e');
       rethrow;
@@ -138,17 +273,18 @@ class ApiService {
   /// 取消点赞评论 (临时模拟实现)
   static Future<Map<String, dynamic>> unlikeComment(String postId, String commentId, {String? authToken}) async {
     try {
-      final headers = _buildHeaders();
-      final resp = await http.delete(
-        Uri.parse('$baseUrl/posts/$postId/comments/$commentId/like'),
-        headers: headers,
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('请求超时，请稍后重试');
-        },
+      return await _makeRequest(
+        () => http.delete(
+          Uri.parse('$baseUrl/posts/$postId/comments/$commentId/like'),
+          headers: _buildHeaders(),
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw Exception('请求超时，请稍后重试');
+          },
+        ),
+        '/posts/$postId/comments/$commentId/like',
       );
-      return _parseResponse(resp);
     } catch (e) {
       print('取消点赞评论请求异常: $e');
       rethrow;
@@ -157,9 +293,14 @@ class ApiService {
 
   /// 可选：请求后端创建/触发通知（多数后端会在 like 接口内部处理通知，这里提供独立接口以备后端需要前端主动调用）
   static Future<Map<String, dynamic>> createNotification(Map<String, dynamic> payload, {String? authToken}) async {
-    final headers = _buildHeaders();
-    final resp = await http.post(Uri.parse('$baseUrl/notifications'), headers: headers, body: jsonEncode(payload));
-    return _parseResponse(resp);
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/notifications'),
+        headers: _buildHeaders(),
+        body: jsonEncode(payload),
+      ),
+      '/notifications',
+    );
   }
 
   static Future<Map<String, dynamic>> resetPassword(String email, String code, String newPassword) async {
@@ -182,7 +323,6 @@ class ApiService {
     int pageSize = 20,
     String sort = 'time',
   }) async {
-    final headers = _buildHeaders();
     final uri = Uri.parse('$baseUrl/posts/$postId/comments').replace(
       queryParameters: {
         'page': page.toString(),
@@ -190,8 +330,10 @@ class ApiService {
         'sort': sort,
       },
     );
-    final resp = await http.get(uri, headers: headers);
-    return _parseResponse(resp);
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/posts/$postId/comments',
+    );
   }
 
   /// 发布评论
@@ -206,22 +348,23 @@ class ApiService {
     String? replyToId,
   }) async {
     try {
-      final headers = _buildHeaders();
-      final resp = await http.post(
-        Uri.parse('$baseUrl/posts/$postId/comments'),
-        headers: headers,
-        body: jsonEncode({
-          'content': content,
-          if (parentId != null) 'parentId': parentId,
-          if (replyToId != null) 'replyToId': replyToId,
-        }),
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('请求超时，请稍后重试');
-        },
+      return await _makeRequest(
+        () => http.post(
+          Uri.parse('$baseUrl/posts/$postId/comments'),
+          headers: _buildHeaders(),
+          body: jsonEncode({
+            'content': content,
+            if (parentId != null) 'parentId': parentId,
+            if (replyToId != null) 'replyToId': replyToId,
+          }),
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw Exception('请求超时，请稍后重试');
+          },
+        ),
+        '/posts/$postId/comments',
       );
-      return _parseResponse(resp);
     } catch (e) {
       print('创建评论请求异常: $e');
       rethrow;
@@ -234,13 +377,14 @@ class ApiService {
     String commentId,
     String content,
   ) async {
-    final headers = _buildHeaders();
-    final resp = await http.put(
-      Uri.parse('$baseUrl/posts/$postId/comments/$commentId'),
-      headers: headers,
-      body: jsonEncode({'content': content}),
+    return await _makeRequest(
+      () => http.put(
+        Uri.parse('$baseUrl/posts/$postId/comments/$commentId'),
+        headers: _buildHeaders(),
+        body: jsonEncode({'content': content}),
+      ),
+      '/posts/$postId/comments/$commentId',
     );
-    return _parseResponse(resp);
   }
 
   /// 删除评论（仅评论作者或帖子作者可操作）
@@ -248,12 +392,13 @@ class ApiService {
     String postId,
     String commentId,
   ) async {
-    final headers = _buildHeaders();
-    final resp = await http.delete(
-      Uri.parse('$baseUrl/posts/$postId/comments/$commentId'),
-      headers: headers,
+    return await _makeRequest(
+      () => http.delete(
+        Uri.parse('$baseUrl/posts/$postId/comments/$commentId'),
+        headers: _buildHeaders(),
+      ),
+      '/posts/$postId/comments/$commentId',
     );
-    return _parseResponse(resp);
   }
 
   /// 举报评论
@@ -262,13 +407,14 @@ class ApiService {
     String commentId,
     String reason,
   ) async {
-    final headers = _buildHeaders();
-    final resp = await http.post(
-      Uri.parse('$baseUrl/posts/$postId/comments/$commentId/report'),
-      headers: headers,
-      body: jsonEncode({'reason': reason}),
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/posts/$postId/comments/$commentId/report'),
+        headers: _buildHeaders(),
+        body: jsonEncode({'reason': reason}),
+      ),
+      '/posts/$postId/comments/$commentId/report',
     );
-    return _parseResponse(resp);
   }
 
   /// 获取帖子列表
@@ -279,7 +425,6 @@ class ApiService {
     int pageSize = 20,
   }) async {
     try {
-      final headers = _buildHeaders();
       final uri = Uri.parse('$baseUrl/posts').replace(
         queryParameters: {
           'page': page.toString(),
@@ -287,15 +432,17 @@ class ApiService {
         },
       );
       print('请求帖子列表: $uri'); // 调试日志
-      final resp = await http.get(uri, headers: headers).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('请求超时，请检查后端服务是否启动');
-        },
+      final result = await _makeRequest(
+        () => http.get(uri, headers: _buildHeaders()).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw Exception('请求超时，请检查后端服务是否启动');
+          },
+        ),
+        '/posts',
       );
-      print('响应状态码: ${resp.statusCode}'); // 调试日志
-      print('响应内容: ${resp.body}'); // 调试日志
-      return _parseResponse(resp);
+      print('响应状态码: ${result['statusCode']}'); // 调试日志
+      return result;
     } catch (e) {
       print('API请求异常: $e'); // 调试日志
       rethrow;
@@ -305,9 +452,10 @@ class ApiService {
   /// 获取帖子详情
   /// @param postId 帖子ID
   static Future<Map<String, dynamic>> getPost(String postId) async {
-    final headers = _buildHeaders();
-    final resp = await http.get(Uri.parse('$baseUrl/posts/$postId'), headers: headers);
-    return _parseResponse(resp);
+    return await _makeRequest(
+      () => http.get(Uri.parse('$baseUrl/posts/$postId'), headers: _buildHeaders()),
+      '/posts/$postId',
+    );
   }
 
   /// 创建帖子
@@ -327,21 +475,22 @@ class ApiService {
     String? journal,
     int? year,
   }) async {
-    final headers = _buildHeaders();
-    final resp = await http.post(
-      Uri.parse('$baseUrl/posts'),
-      headers: headers,
-      body: jsonEncode({
-        'title': title,
-        if (content != null) 'content': content,
-        if (media != null) 'media': media,
-        if (tags != null) 'tags': tags,
-        if (doi != null) 'doi': doi,
-        if (journal != null) 'journal': journal,
-        if (year != null) 'year': year,
-      }),
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/posts'),
+        headers: _buildHeaders(),
+        body: jsonEncode({
+          'title': title,
+          if (content != null) 'content': content,
+          if (media != null) 'media': media,
+          if (tags != null) 'tags': tags,
+          if (doi != null) 'doi': doi,
+          if (journal != null) 'journal': journal,
+          if (year != null) 'year': year,
+        }),
+      ),
+      '/posts',
     );
-    return _parseResponse(resp);
   }
 
   static Map<String, dynamic> _parseResponse(http.Response resp) {

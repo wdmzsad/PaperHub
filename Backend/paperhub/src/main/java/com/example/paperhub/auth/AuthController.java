@@ -40,8 +40,10 @@ public class AuthController {
     public ResponseEntity<LoginResp> login(@Valid @RequestBody LoginReq req) {
         User u = authService.validateLogin(req.email(), req.password());
         String token = jwtService.generateToken(u.getEmail());
+        String refreshToken = jwtService.generateRefreshToken(u.getEmail());
         long expiresIn = jwtService.getExpiresInSeconds();
-        return ResponseEntity.ok(new LoginResp("登录成功", token, expiresIn));
+        long refreshExpiresIn = jwtService.getRefreshExpiresInSeconds();
+        return ResponseEntity.ok(new LoginResp("登录成功", token, refreshToken, expiresIn, refreshExpiresIn));
     }
 
     @PostMapping("/request-reset")//处理所有以/auth/request-reset开头的请求，请求重置密码
@@ -54,6 +56,33 @@ public class AuthController {
     public ResponseEntity<MessageResp> resetPassword(@Valid @RequestBody ResetReq req) {
         authService.resetPassword(req.email(), req.code(), req.newPassword());
         return ResponseEntity.ok(new MessageResp("密码已重置"));
+    }
+
+    @PostMapping("/refresh")//处理所有以/auth/refresh开头的请求，刷新Access Token
+    public ResponseEntity<RefreshTokenResp> refresh(@Valid @RequestBody RefreshTokenReq req) {
+        // 验证refresh token
+        if (!jwtService.validateRefreshToken(req.refreshToken())) {
+            return ResponseEntity.status(401).build();
+        }
+        
+        // 从refresh token中提取用户email
+        String email = jwtService.extractEmail(req.refreshToken());
+        
+        // 验证用户是否存在且已验证
+        User user = authService.findByEmail(email)
+            .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        
+        if (!user.isVerified()) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        // 生成新的access token和refresh token
+        String newToken = jwtService.generateToken(email);
+        String newRefreshToken = jwtService.generateRefreshToken(email);
+        long expiresIn = jwtService.getExpiresInSeconds();
+        long refreshExpiresIn = jwtService.getRefreshExpiresInSeconds();
+        
+        return ResponseEntity.ok(new RefreshTokenResp(newToken, newRefreshToken, expiresIn, refreshExpiresIn));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)//处理所有以/auth/开头的请求，返回错误信息

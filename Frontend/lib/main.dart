@@ -46,7 +46,7 @@ class _SplashOrLoginState extends State<SplashOrLogin> {
 
   Future<void> _checkToken() async {
     await Future.delayed(Duration(milliseconds: 400));
-    final token = LocalStorage.instance.read('auth_token');
+    final token = LocalStorage.instance.read('accessToken');
     if (token != null && token.isNotEmpty) {
       Navigator.of(context).pushReplacementNamed('/home');
     } else {
