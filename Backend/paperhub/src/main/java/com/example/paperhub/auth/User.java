@@ -26,6 +26,15 @@ public class User {
     @Column(name = "affiliation")//所属机构
     private String affiliation;
 
+    @Column(name = "bio", columnDefinition = "TEXT")//个人简介
+    private String bio;
+
+    @Column(name = "research_directions", columnDefinition = "TEXT")//研究方向(逗号分隔)
+    private String researchDirections;
+
+    @Column(name = "profile_background")//主页背景图URL
+    private String profileBackground;
+
     @Column(name = "verified", nullable = false)//验证状态列
     private boolean verified = false;
 
@@ -63,6 +72,12 @@ public class User {
     public void setAvatar(String avatar) { this.avatar = avatar; }
     public String getAffiliation() { return affiliation; }
     public void setAffiliation(String affiliation) { this.affiliation = affiliation; }
+    public String getBio() { return bio; }
+    public void setBio(String bio) { this.bio = bio; }
+    public String getResearchDirections() { return researchDirections; }
+    public void setResearchDirections(String researchDirections) { this.researchDirections = researchDirections; }
+    public String getProfileBackground() { return profileBackground; }
+    public void setProfileBackground(String profileBackground) { this.profileBackground = profileBackground; }
 }
 
 

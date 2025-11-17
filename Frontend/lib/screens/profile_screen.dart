@@ -1,324 +1,671 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
-import 'message_screen.dart';
-import 'home_screen.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
-import '../widgets/bottom_navigation.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../models/post_model.dart';
+import '../models/user_profile.dart';
+import '../models/user_summary.dart';
 import '../pages/login_page.dart';
 import '../pages/note_editor_page.dart';
-import '../services/local_storage.dart';
 import '../services/api_service.dart';
+import '../services/local_storage.dart';
+import '../widgets/bottom_navigation.dart';
+import 'home_screen.dart';
+import 'message_screen.dart';
+import 'post_detail_screen.dart';
+
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  final String? userId;
+  const ProfilePage({super.key, this.userId});
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin {
+class _ProfilePageState extends State<ProfilePage>
+    with TickerProviderStateMixin {
   int _currentIndex = 3;
+  UserProfile? _profile;
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+  String? _currentUserId;
+  bool? _isFollowing;
+  List<Post> _authoredPosts = [];
+  List<Post> _favoritePosts = [];
+  bool _loadingAuthored = false;
+  bool _loadingFavorites = false;
+  bool _hasMoreAuthored = true;
+  bool _hasMoreFavorites = true;
+  int _authoredPage = 1;
+  int _favoritesPage = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUserId = LocalStorage.instance.read('userId');
+    _loadProfile();
+  }
+
+  bool get _isViewingSelf {
+    if (widget.userId == null) return true;
+    if (_currentUserId == null) return false;
+    return widget.userId == _currentUserId;
+  }
+
+  Future<void> _loadProfile({bool forceNetwork = false}) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      Map<String, dynamic>? payload;
+
+      if (_isViewingSelf && !forceNetwork) {
+        final cached = LocalStorage.instance.read('currentUser');
+        if (cached != null) {
+          payload = jsonDecode(cached) as Map<String, dynamic>;
+        }
+      }
+
+      if (payload == null) {
+        final resp = widget.userId == null
+            ? await ApiService.getCurrentUserProfile()
+            : await ApiService.getUserProfile(widget.userId!);
+        if (resp['statusCode'] != 200) {
+          final message =
+              (resp['body'] as Map<String, dynamic>?)?['message'] ?? '加载失败';
+          throw Exception(message);
+        }
+        payload = resp['body'] as Map<String, dynamic>;
+        if (_isViewingSelf) {
+          await LocalStorage.instance.write('currentUser', jsonEncode(payload));
+          final id = payload['id'];
+          if (id != null) {
+            await LocalStorage.instance.write('userId', id.toString());
+            _currentUserId = id.toString();
+          }
+        }
+      }
+
+      setState(() {
+        _profile = UserProfile.fromJson(payload!);
+        _isFollowing = _profile!.isFollowing;
+        _loading = false;
+      });
+      await Future.wait([
+        _loadUserPosts(refresh: true),
+        _loadFavoritePosts(refresh: true),
+      ]);
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _handleRefresh() => _loadProfile(forceNetwork: true);
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _openEditProfileSheet() async {
+    if (!_isViewingSelf || _profile == null) return;
+    final result = await showModalBottomSheet<_ProfileEditResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ProfileEditSheet(profile: _profile!),
+    );
+
+    if (result != null) {
+      await _submitProfileChanges(result);
+    }
+  }
+
+  Future<void> _openDirectionsSheet() async {
+    if (!_isViewingSelf || _profile == null) return;
+    final result = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _DirectionsEditSheet(directions: _profile!.researchDirections),
+    );
+    if (result != null) {
+      await _submitDirectionChanges(result);
+    }
+  }
+
+  Future<void> _openFollowList(bool showFollowers) async {
+    if (_profile == null) return;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _FollowListSheet(userId: _profile!.id, showFollowers: showFollowers),
+    );
+  }
+
+  Future<void> _toggleFollow() async {
+    if (_profile == null || _isViewingSelf || _profile!.id.isEmpty) return;
+    final targetId = _profile!.id;
+    final originalFollowers = _profile!.followersCount;
+    final prev = _isFollowing ?? false;
+    final next = !prev;
+    setState(() {
+      final updated = next
+          ? originalFollowers + 1
+          : (originalFollowers > 0 ? originalFollowers - 1 : 0);
+      _isFollowing = next;
+      _profile = _profile!.copyWith(followersCount: updated, isFollowing: next);
+    });
+    try {
+      final resp = next
+          ? await ApiService.followUser(targetId)
+          : await ApiService.unfollowUser(targetId);
+      if (resp['statusCode'] != 200) {
+        throw Exception(
+          (resp['body'] as Map<String, dynamic>?)?['message'] ?? '操作失败',
+        );
+      }
+    } catch (e) {
+      setState(() {
+        final restored = originalFollowers;
+        _isFollowing = prev;
+        _profile = _profile!.copyWith(
+          followersCount: restored,
+          isFollowing: prev,
+        );
+      });
+      _showSnack('操作失败：$e');
+    }
+  }
+
+  void _openPostDetail(Post post) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PostDetailScreen(post: post)),
+    ).then((_) {
+      _loadProfile(forceNetwork: true);
+    });
+  }
+
+  Future<void> _submitDirectionChanges(List<String> directions) async {
+    setState(() => _saving = true);
+    try {
+      final resp = await ApiService.updateProfile(
+        displayName: _profile!.displayName,
+        researchDirections: directions,
+      );
+      if (resp['statusCode'] != 200) {
+        final message =
+            (resp['body'] as Map<String, dynamic>?)?['message'] ?? '保存失败';
+        throw Exception(message);
+      }
+      await _loadProfile(forceNetwork: true);
+      _showSnack('研究方向已更新');
+    } catch (e) {
+      _showSnack('更新失败：$e');
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _submitProfileChanges(_ProfileEditResult result) async {
+    setState(() => _saving = true);
+    try {
+      final avatarUrl = await _uploadAvatarIfNeeded(result);
+      final backgroundUrl = await _uploadBackgroundIfNeeded(result);
+      final resp = await ApiService.updateProfile(
+        displayName: result.displayName,
+        bio: result.bio,
+        researchDirections: result.researchDirections,
+        avatarUrl: avatarUrl,
+        backgroundImage: backgroundUrl,
+      );
+      if (resp['statusCode'] != 200) {
+        final message =
+            (resp['body'] as Map<String, dynamic>?)?['message'] ?? '保存失败';
+        throw Exception(message);
+      }
+      await _loadProfile(forceNetwork: true);
+      _showSnack('资料已更新');
+    } catch (e) {
+      _showSnack('保存失败：$e');
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _loadUserPosts({bool refresh = false}) async {
+    if (_profile == null) return;
+    if (_loadingAuthored) return;
+    setState(() {
+      _loadingAuthored = true;
+      if (refresh) {
+        _authoredPage = 1;
+        _hasMoreAuthored = true;
+        _authoredPosts = [];
+      }
+    });
+    final page = refresh ? 1 : _authoredPage;
+    try {
+      final resp = await ApiService.getUserPosts(
+        _profile!.id,
+        page: page,
+        pageSize: 10,
+      );
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>?;
+        final data = (body?['posts'] as List<dynamic>?) ?? [];
+        final total = body?['total'] as int? ?? data.length;
+        final newPosts = data
+            .map((item) => Post.fromJson(item as Map<String, dynamic>))
+            .toList();
+        setState(() {
+          if (refresh) {
+            _authoredPosts = newPosts;
+          } else {
+            _authoredPosts.addAll(newPosts);
+          }
+          _hasMoreAuthored = _authoredPosts.length < total;
+          _authoredPage = page + 1;
+        });
+      }
+    } catch (e) {
+      _showSnack('加载我的笔记失败：$e');
+    } finally {
+      if (mounted) {
+        setState(() => _loadingAuthored = false);
+      }
+    }
+  }
+
+  Future<void> _loadFavoritePosts({bool refresh = false}) async {
+    if (_profile == null) return;
+    if (_loadingFavorites) return;
+    setState(() {
+      _loadingFavorites = true;
+      if (refresh) {
+        _favoritesPage = 1;
+        _hasMoreFavorites = true;
+        _favoritePosts = [];
+      }
+    });
+    final page = refresh ? 1 : _favoritesPage;
+    try {
+      final resp = await ApiService.getUserFavorites(
+        _profile!.id,
+        page: page,
+        pageSize: 10,
+      );
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>?;
+        final data = (body?['posts'] as List<dynamic>?) ?? [];
+        final total = body?['total'] as int? ?? data.length;
+        final newPosts = data
+            .map((item) => Post.fromJson(item as Map<String, dynamic>))
+            .toList();
+        setState(() {
+          if (refresh) {
+            _favoritePosts = newPosts;
+          } else {
+            _favoritePosts.addAll(newPosts);
+          }
+          _hasMoreFavorites = _favoritePosts.length < total;
+          _favoritesPage = page + 1;
+        });
+      }
+    } catch (e) {
+      _showSnack('加载收藏失败：$e');
+    } finally {
+      if (mounted) {
+        setState(() => _loadingFavorites = false);
+      }
+    }
+  }
+
+  Future<String?> _uploadAvatarIfNeeded(_ProfileEditResult result) async {
+    if (result.avatarBytes == null || result.avatarBytes!.isEmpty) return null;
+    final uploadResp = await ApiService.uploadAvatarBytes(
+      result.avatarBytes!,
+      result.avatarFileName ?? 'avatar.png',
+    );
+    if (uploadResp['statusCode'] != 200) {
+      final message =
+          (uploadResp['body'] as Map<String, dynamic>?)?['message'] ?? '头像上传失败';
+      throw Exception(message);
+    }
+    final body = uploadResp['body'] as Map<String, dynamic>;
+    return (body['url'] ?? body['avatar'])?.toString();
+  }
+
+  Future<String?> _uploadBackgroundIfNeeded(_ProfileEditResult result) async {
+    if (result.backgroundBytes == null || result.backgroundBytes!.isEmpty)
+      return null;
+    final uploadResp = await ApiService.uploadBackgroundBytes(
+      result.backgroundBytes!,
+      result.backgroundFileName ?? 'background.png',
+    );
+    if (uploadResp['statusCode'] != 200) {
+      final message =
+          (uploadResp['body'] as Map<String, dynamic>?)?['message'] ??
+          '背景图上传失败';
+      throw Exception(message);
+    }
+    final body = uploadResp['body'] as Map<String, dynamic>;
+    return (body['url'] ?? body['background'])?.toString();
+  }
+
+  ImageProvider<Object> _resolveAvatar(String? avatar) {
+    if (avatar == null || avatar.isEmpty) {
+      return const AssetImage('images/DefaultAvatar.png');
+    }
+    if (avatar.startsWith('http')) {
+      return NetworkImage(avatar);
+    }
+    if (avatar.startsWith('assets/')) {
+      return AssetImage(avatar);
+    }
+    return AssetImage(avatar);
+  }
+
+  ImageProvider<Object> _resolveBackground(String? bg) {
+    if (bg == null || bg.isEmpty) {
+      return const AssetImage('images/profile_bg.jpg');
+    }
+    if (bg.startsWith('http')) {
+      return NetworkImage(bg);
+    }
+    if (bg.startsWith('assets/')) {
+      return AssetImage(bg);
+    }
+    return AssetImage(bg);
+  }
+
+  Drawer? _buildDrawer() {
+    if (!_isViewingSelf) return null;
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          const DrawerHeader(
+            child: Text(
+              '菜单',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text('登出'),
+            onTap: () async {
+              Navigator.pop(context);
+              await ApiService.logout();
+              if (!mounted) return;
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => LoginPage()),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-  return DefaultTabController(
-    length: 3,
-    child: Scaffold(
-      // 🔹 添加 Drawer 组件
-      drawer: Drawer(
-        backgroundColor: Colors.white,
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(
-                color: Colors.white,
-              ),
-              child: Text(
-                '菜单',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-            ),
-            // 🔹 登出按钮
-            ListTile(
-              leading: Icon(Icons.logout, color: Colors.red),
-              title: Text('登出'),
-              onTap: () async {
-                Navigator.pop(context); // 先关闭Drawer
-                // 清除双Token
-                await ApiService.logout();
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => LoginPage()),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-
-      backgroundColor: const Color(0xFFF5F5F5),
-      bottomNavigationBar: _buildBottomNavigationBar(),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // 顶部个人信息区域
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage('images/profile_bg.jpg'),
-                  fit: BoxFit.cover,
-                  colorFilter: ColorFilter.mode(
-                    Colors.grey.withOpacity(0.7),
-                    BlendMode.darken,
-                  ),
-                ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(20),
-                  bottomRight: Radius.circular(20),
-                ),
-              ),
-              child: Column(
-                children: [
-                  Stack(
-                    children: [
-                      // 🔹 用 Scaffold.of(context).openDrawer() 打开侧边栏
-                      Positioned(
-                        top: 10,
-                        left: 10,
-                        child: Builder(
-                          builder: (context) => IconButton(
-                            icon: const Icon(Icons.menu, color: Colors.white),
-                            onPressed: () {
-                              Scaffold.of(context).openDrawer();
-                            },
-                          ),
-                        ),
-                      ),
-                        Positioned(
-                          top: 10,
-                          right: 10,
-                          child: IconButton(
-                            icon: const Icon(Icons.share_outlined, color: Colors.white),
-                            onPressed: () {},
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 20),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const CircleAvatar(
-                                radius: 50,
-                                backgroundImage: AssetImage('images/touxiang.jpg'),
-                              ),
-                              const SizedBox(width: 20),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Text(
-                                    'SCI批发4S店',
-                                    style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white),
-                                  ),
-                                  SizedBox(height: 5),
-                                  Text(
-                                    'hello world',
-                                    style: TextStyle(color: Colors.white70),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 20, left: 16, right: 16),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.85),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.start,
-                              children: const [
-                                _StatItem(title: '关注', count: '120'),
-                                SizedBox(width: 50),
-                                _StatItem(title: '粉丝', count: '305'),
-                                SizedBox(width: 50),
-                                _StatItem(title: '动态', count: '42'),
-                              ],
-                            ),
-                          ),
-                          ElevatedButton(
-                            onPressed: () {},
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFF5F5F5),
-                              foregroundColor: Colors.black,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            child: const Text('编辑资料'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              // 研究方向展示区
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '研究方向',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.2),
-                            blurRadius: 6,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildDirectionChip('人工智能'),
-                          _buildDirectionChip('机器学习'),
-                          _buildDirectionChip('多模态学习'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              // TabBar + TabBarView
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    const TabBar(
-                      labelColor: Colors.black,
-                      indicatorColor: Colors.blueAccent,
-                      tabs: [
-                        Tab(text: '笔记'),
-                        Tab(text: '论文'),
-                        Tab(text: '收藏'),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 400,
-                      child: TabBarView(
-                        children: [
-                          _PlaceholderList(label: '笔记'),
-                          _PlaceholderList(label: '论文'),
-                          _PlaceholderList(label: '收藏'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        drawer: _buildDrawer(),
+        backgroundColor: const Color(0xFFF5F5F5),
+        bottomNavigationBar: _buildBottomNavigationBar(),
+        body: SafeArea(
+          child: RefreshIndicator(
+            onRefresh: _handleRefresh,
+            child: _buildBody(),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildBottomNavigationBar() {
-    return BottomNavigation(
-      currentIndex: _currentIndex,
-      onTap: (index) {
-        setState(() {
-          _currentIndex = index;
-        });
+  Widget _buildBody() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                  const SizedBox(height: 12),
+                  Text(_error!),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () => _loadProfile(forceNetwork: true),
+                    child: const Text('重试'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    if (_profile == null) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 200, child: Center(child: Text('暂无资料'))),
+        ],
+      );
+    }
 
-        if (index == 0) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => HomeScreen()),
-          ).then((_) {
-            // 当从消息页面返回时，恢复首页高亮
-            setState(() {
-              _currentIndex = 3;
-            });
-          });
-        } 
-        else if (index == 1) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const MessageScreen()),
-          ).then((_) {
-            setState(() {
-              _currentIndex = 3;
-            });
-          });
-        } else if (index == 2) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => const NoteEditorPage()),
-          ).then((_) {
-            setState(() {
-              _currentIndex = 0;
-            });
-          });
-        } else if (index == 3) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const ProfilePage()),
-          ).then((_) {
-            setState(() {
-              _currentIndex = 3;
-            });
-          });
-        }
-      },
-      context: context,
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Column(
+        children: [
+          if (_saving) const LinearProgressIndicator(minHeight: 2),
+          _buildHeader(_profile!),
+          _buildResearchDirections(_profile!),
+          _buildTabsSection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(UserProfile profile) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        image: DecorationImage(
+          image: _resolveBackground(profile.backgroundImage),
+          fit: BoxFit.cover,
+          colorFilter: ColorFilter.mode(
+            Colors.black.withOpacity(0.45),
+            BlendMode.darken,
+          ),
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(20),
+          bottomRight: Radius.circular(20),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(
+          top: 32,
+          bottom: 24,
+          left: 20,
+          right: 20,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 48,
+                  backgroundImage: _resolveAvatar(profile.avatar),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        profile.displayName,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (profile.bio != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          profile.bio!,
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Text(
+                        profile.email,
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_isViewingSelf)
+                  IconButton(
+                    onPressed: _openEditProfileSheet,
+                    icon: const Icon(Icons.edit, color: Colors.white),
+                  )
+                else
+                  ElevatedButton(
+                    onPressed: _toggleFollow,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: (_isFollowing ?? false)
+                          ? Colors.white.withOpacity(0.2)
+                          : Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: Text((_isFollowing ?? false) ? '已关注' : '关注'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _StatItem(
+                    title: '关注',
+                    count: profile.followingCount,
+                    onTap: _isViewingSelf ? () => _openFollowList(false) : null,
+                  ),
+                  _StatItem(
+                    title: '粉丝',
+                    count: profile.followersCount,
+                    onTap: () => _openFollowList(true),
+                  ),
+                  _StatItem(title: '收藏', count: profile.favoritesCount),
+                  _StatItem(title: '点赞', count: profile.likesCount),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResearchDirections(UserProfile profile) {
+    final directions = profile.researchDirections;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                '研究方向',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              if (_isViewingSelf)
+                TextButton(
+                  onPressed: _openDirectionsSheet,
+                  child: const Text('管理标签'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.2),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: directions.isEmpty
+                ? const Text('还没有填写研究方向', style: TextStyle(color: Colors.grey))
+                : Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: directions.map(_buildDirectionChip).toList(),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildDirectionChip(String label) {
     return Container(
-      margin: const EdgeInsets.only(right: 8.0, bottom: 8.0),
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: const Color(0xFFF2F2F2),
-        borderRadius: BorderRadius.circular(10.0),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         label,
@@ -327,41 +674,178 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     );
   }
 
-  // 发布笔记（暂定）
-  void _showPublishDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('发布笔记'),
-        content: const Text('发布功能开发中...'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('确定'),
+  Widget _buildTabsSection() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          const TabBar(
+            labelColor: Colors.black,
+            indicatorColor: Colors.blueAccent,
+            tabs: [
+              Tab(text: '我的笔记'),
+              Tab(text: '我的收藏'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 420,
+            child: TabBarView(
+              children: [
+                _buildPostListContent(
+                  posts: _authoredPosts,
+                  isLoading: _loadingAuthored,
+                  hasMore: _hasMoreAuthored,
+                  loader: _loadUserPosts,
+                ),
+                _buildPostListContent(
+                  posts: _favoritePosts,
+                  isLoading: _loadingFavorites,
+                  hasMore: _hasMoreFavorites,
+                  loader: _loadFavoritePosts,
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildPostListContent({
+    required List<Post> posts,
+    required bool isLoading,
+    required bool hasMore,
+    required Future<void> Function({bool refresh}) loader,
+  }) {
+    if (posts.isEmpty && !isLoading) {
+      return RefreshIndicator(
+        onRefresh: () => loader(refresh: true),
+        child: ListView(
+          children: const [
+            SizedBox(height: 180),
+            Center(child: Text('暂无数据')),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: () => loader(refresh: true),
+      child: ListView.separated(
+        itemCount: posts.length + (hasMore ? 1 : 0),
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          if (index == posts.length) {
+            if (isLoading) {
+              return const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              );
+            }
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12.0),
+              child: Center(
+                child: TextButton.icon(
+                  onPressed: () => loader(refresh: false),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('加载更多'),
+                ),
+              ),
+            );
+          }
+          final post = posts[index];
+          return ListTile(
+            title: Text(
+              post.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              _formatPostTime(post.createdAt),
+              style: const TextStyle(fontSize: 12),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _openPostDetail(post),
+          );
+        },
+      ),
+    );
+  }
+
+  String _formatPostTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前';
+    if (diff.inHours < 24) return '${diff.inHours} 小时前';
+    if (diff.inDays < 7) return '${diff.inDays} 天前';
+    return dt.toLocal().toString().split('.').first;
+  }
+
+  Widget _buildBottomNavigationBar() {
+    return BottomNavigation(
+      currentIndex: _currentIndex,
+      onTap: (index) {
+        setState(() => _currentIndex = index);
+
+        if (index == 0) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          ).then((_) => setState(() => _currentIndex = 3));
+        } else if (index == 1) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MessageScreen()),
+          ).then((_) => setState(() => _currentIndex = 3));
+        } else if (index == 2) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NoteEditorPage()),
+          ).then((_) => setState(() => _currentIndex = 0));
+        } else if (index == 3 && !_isViewingSelf) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ProfilePage()),
+          ).then((_) => setState(() => _currentIndex = 3));
+        }
+      },
+      context: context,
+    );
+  }
 }
 
-// ======= 组件 =======
 class _StatItem extends StatelessWidget {
   final String title;
-  final String count;
+  final int count;
+  final VoidCallback? onTap;
 
-  const _StatItem({required this.title, required this.count});
+  const _StatItem({required this.title, required this.count, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final content = Column(
       children: [
-        Text(count,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        Text(
+          '$count',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         const SizedBox(height: 5),
         Text(title, style: const TextStyle(color: Colors.grey)),
       ],
     );
+    if (onTap == null) return content;
+    return InkWell(onTap: onTap, child: content);
   }
 }
 
@@ -375,6 +859,597 @@ class _PlaceholderList extends StatelessWidget {
       child: Text(
         '这里显示 $label 内容',
         style: const TextStyle(color: Colors.grey, fontSize: 16),
+      ),
+    );
+  }
+}
+
+class _ProfileEditResult {
+  final String displayName;
+  final String? bio;
+  final List<String> researchDirections;
+  final Uint8List? avatarBytes;
+  final String? avatarFileName;
+  final Uint8List? backgroundBytes;
+  final String? backgroundFileName;
+
+  _ProfileEditResult({
+    required this.displayName,
+    required this.researchDirections,
+    this.bio,
+    this.avatarBytes,
+    this.avatarFileName,
+    this.backgroundBytes,
+    this.backgroundFileName,
+  });
+}
+
+class _DirectionsEditSheet extends StatefulWidget {
+  final List<String> directions;
+  const _DirectionsEditSheet({required this.directions});
+
+  @override
+  State<_DirectionsEditSheet> createState() => _DirectionsEditSheetState();
+}
+
+class _DirectionsEditSheetState extends State<_DirectionsEditSheet> {
+  final TextEditingController _controller = TextEditingController();
+  late List<String> _directions;
+
+  @override
+  void initState() {
+    super.initState();
+    _directions = [...widget.directions];
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _addDirection() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    if (_directions.contains(text)) {
+      _controller.clear();
+      return;
+    }
+    setState(() {
+      _directions.add(text);
+      _controller.clear();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: bottomInset + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                '管理研究方向',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _directions
+                .map(
+                  (e) => Chip(
+                    label: Text(e),
+                    onDeleted: () => setState(() {
+                      _directions.remove(e);
+                    }),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  decoration: const InputDecoration(
+                    hintText: '新增方向',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (_) => _addDirection(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(onPressed: _addDirection, child: const Text('添加')),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop(_directions);
+              },
+              child: const Text('保存标签'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FollowListSheet extends StatefulWidget {
+  final String userId;
+  final bool showFollowers;
+
+  const _FollowListSheet({required this.userId, required this.showFollowers});
+
+  @override
+  State<_FollowListSheet> createState() => _FollowListSheetState();
+}
+
+class _FollowListSheetState extends State<_FollowListSheet> {
+  List<UserSummary> _users = [];
+  bool _loading = false;
+  bool _hasMore = true;
+  int _page = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPage(refresh: true);
+  }
+
+  Future<void> _loadPage({bool refresh = false}) async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      if (refresh) {
+        _page = 0;
+        _users = [];
+        _hasMore = true;
+      }
+    });
+    try {
+      final resp = widget.showFollowers
+          ? await ApiService.getFollowers(
+              widget.userId,
+              page: _page,
+              pageSize: 20,
+            )
+          : await ApiService.getFollowing(
+              widget.userId,
+              page: _page,
+              pageSize: 20,
+            );
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>?;
+        final data = (body?['users'] as List<dynamic>?) ?? [];
+        final total = body?['total'] as int? ?? data.length;
+        final newUsers = data
+            .map((item) => UserSummary.fromJson(item as Map<String, dynamic>))
+            .toList();
+        setState(() {
+          _users.addAll(newUsers);
+          _hasMore = _users.length < total;
+          _page += 1;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('加载失败：$e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.showFollowers ? '粉丝列表' : '关注列表';
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.6,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _users.isEmpty && !_hasMore && !_loading
+                  ? const Center(child: Text('暂无数据'))
+                  : ListView.separated(
+                      itemCount: _users.length + (_hasMore ? 1 : 0),
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        if (index == _users.length) {
+                          if (_loading) {
+                            return const Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            );
+                          }
+                          return TextButton.icon(
+                            onPressed: _loadPage,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('加载更多'),
+                          );
+                        }
+                        final user = _users[index];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundImage: user.avatar.startsWith('http')
+                                ? NetworkImage(user.avatar)
+                                : AssetImage(user.avatar) as ImageProvider,
+                          ),
+                          title: Text(user.displayName),
+                          subtitle: user.bio != null
+                              ? Text(
+                                  user.bio!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                )
+                              : null,
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            Navigator.of(context).pushNamed('/user/${user.id}');
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileEditSheet extends StatefulWidget {
+  final UserProfile profile;
+  const _ProfileEditSheet({required this.profile});
+
+  @override
+  State<_ProfileEditSheet> createState() => _ProfileEditSheetState();
+}
+
+class _ProfileEditSheetState extends State<_ProfileEditSheet> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _bioController;
+  final TextEditingController _directionController = TextEditingController();
+  final FocusNode _directionFocus = FocusNode();
+  late List<String> _directions;
+  Uint8List? _avatarPreview;
+  String? _avatarFileName;
+  Uint8List? _backgroundPreview;
+  String? _backgroundFileName;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.profile.displayName);
+    _bioController = TextEditingController(text: widget.profile.bio ?? '');
+    _directions = [...widget.profile.researchDirections];
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _bioController.dispose();
+    _directionController.dispose();
+    _directionFocus.dispose();
+    super.dispose();
+  }
+
+  ImageProvider<Object> _initialAvatar() {
+    final avatar = widget.profile.avatar;
+    if (avatar.startsWith('http')) return NetworkImage(avatar);
+    if (avatar.startsWith('assets/')) return AssetImage(avatar);
+    return AssetImage(avatar);
+  }
+
+  ImageProvider<Object> _initialBackground() {
+    final bg = widget.profile.backgroundImage;
+    if (bg.startsWith('http')) return NetworkImage(bg);
+    if (bg.startsWith('assets/')) return AssetImage(bg);
+    return AssetImage(bg);
+  }
+
+  Future<void> _pickAvatar() async {
+    final picker = ImagePicker();
+    final XFile? picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 1024,
+    );
+    if (picked == null) return;
+
+    final ext = picked.name.split('.').last.toLowerCase();
+    const allowed = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+    if (!allowed.contains(ext)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('仅支持 png/jpg/jpeg/gif/webp 格式')),
+      );
+      return;
+    }
+
+    final bytes = await picked.readAsBytes();
+    setState(() {
+      _avatarPreview = bytes;
+      _avatarFileName = picked.name;
+    });
+  }
+
+  Future<void> _pickBackground() async {
+    final picker = ImagePicker();
+    final XFile? picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 1920,
+    );
+    if (picked == null) return;
+    final ext = picked.name.split('.').last.toLowerCase();
+    const allowed = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+    if (!allowed.contains(ext)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('仅支持 png/jpg/jpeg/gif/webp 格式')),
+      );
+      return;
+    }
+    final bytes = await picked.readAsBytes();
+    setState(() {
+      _backgroundPreview = bytes;
+      _backgroundFileName = picked.name;
+    });
+  }
+
+  void _addDirection() {
+    final value = _directionController.text.trim();
+    if (value.isEmpty) return;
+    if (_directions.contains(value)) {
+      _directionController.clear();
+      return;
+    }
+    setState(() {
+      _directions.add(value);
+      _directionController.clear();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: bottomInset + 20,
+        ),
+        child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Stack(
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 7 / 3,
+                      child: _backgroundPreview != null
+                          ? Image.memory(_backgroundPreview!, fit: BoxFit.cover)
+                          : Image(
+                              image: _initialBackground(),
+                              fit: BoxFit.cover,
+                            ),
+                    ),
+                    Positioned(
+                      right: 12,
+                      bottom: 12,
+                      child: ElevatedButton.icon(
+                        onPressed: _pickBackground,
+                        icon: const Icon(Icons.image),
+                        label: const Text('更换背景'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Text(
+                    '编辑个人资料',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 48,
+                      backgroundImage: _avatarPreview != null
+                          ? MemoryImage(_avatarPreview!)
+                          : _initialAvatar(),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: InkWell(
+                        onTap: _pickAvatar,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: Colors.black87,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: '昵称',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _bioController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: '一句话简介',
+                  hintText: '介绍一下自己吧',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('研究方向', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _directions
+                    .map(
+                      (e) => Chip(
+                        label: Text(e),
+                        onDeleted: () => setState(() => _directions.remove(e)),
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _directionController,
+                      focusNode: _directionFocus,
+                      decoration: const InputDecoration(
+                        hintText: '新增方向',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: (_) => _addDirection(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _addDirection,
+                    child: const Text('添加'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    final name = _nameController.text.trim();
+                    if (name.isEmpty) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(const SnackBar(content: Text('昵称不能为空')));
+                      return;
+                    }
+                    Navigator.of(context).pop(
+                      _ProfileEditResult(
+                        displayName: name,
+                        bio: _bioController.text.trim().isEmpty
+                            ? null
+                            : _bioController.text.trim(),
+                        researchDirections: _directions,
+                        avatarBytes: _avatarPreview,
+                        avatarFileName: _avatarFileName,
+                        backgroundBytes: _backgroundPreview,
+                        backgroundFileName: _backgroundFileName,
+                      ),
+                    );
+                  },
+                  child: const Text('保存修改'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

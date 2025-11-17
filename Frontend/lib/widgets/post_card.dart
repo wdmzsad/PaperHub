@@ -27,16 +27,22 @@ import '../models/post_model.dart';
 class PostCard extends StatelessWidget {
   /// 业务数据：包含标题、作者、媒体列表、标签等
   final Post post;
+
   /// 点击整卡时的回调（通常用于导航）
   final VoidCallback onTap;
+
   /// 图片展示高度上限（避免极端长图影响瀑布流体验）
   final double maxImageHeight;
+
+  /// 点击作者时的回调
+  final VoidCallback? onAuthorTap;
 
   const PostCard({
     Key? key,
     required this.post,
     required this.onTap,
     this.maxImageHeight = 250,
+    this.onAuthorTap,
   }) : super(key: key);
 
   @override
@@ -46,9 +52,13 @@ class PostCard extends StatelessWidget {
       builder: (context, constraints) {
         final cardWidth = constraints.maxWidth;
         // 如果 media 非空则使用第一张图的 aspect ratio，否则默认 1.0
-        final double aspect = post.media.isNotEmpty ? post.imageAspectRatio : 1.0;
+        final double aspect = post.media.isNotEmpty
+            ? post.imageAspectRatio
+            : 1.0;
         final calculatedHeight = cardWidth / aspect;
-        final containerHeight = calculatedHeight > maxImageHeight ? maxImageHeight : calculatedHeight;
+        final containerHeight = calculatedHeight > maxImageHeight
+            ? maxImageHeight
+            : calculatedHeight;
 
         return Card(
           margin: const EdgeInsets.all(8),
@@ -98,58 +108,67 @@ class PostCard extends StatelessWidget {
                 // 用户信息 + tags 区域
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 12,
-                        backgroundColor: Colors.grey[300],
-                        child: ClipOval(
-                          child: Image.network(
-                            post.author.avatar,
-                            width: 24,
-                            height: 24,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              // 头像加载失败时的兜底图标
-                              return const Icon(
-                                Icons.person,
-                                size: 16,
-                                color: Colors.grey,
-                              );
-                            },
+                  child: GestureDetector(
+                    onTap: onAuthorTap,
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 12,
+                          backgroundColor: Colors.grey[300],
+                          child: ClipOval(
+                            child: Image.network(
+                              post.author.avatar,
+                              width: 24,
+                              height: 24,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                // 头像加载失败时的兜底图标
+                                return const Icon(
+                                  Icons.person,
+                                  size: 16,
+                                  color: Colors.grey,
+                                );
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              post.author.name,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                post.author.name,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              post.tags.isNotEmpty ? '#${post.tags.first}' : '',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey,
+                              const SizedBox(height: 2),
+                              Text(
+                                post.tags.isNotEmpty
+                                    ? '#${post.tags.first}'
+                                    : '',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(Icons.more_horiz, size: 18, color: Colors.grey[500]),
-                    ],
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.more_horiz,
+                          size: 18,
+                          color: Colors.grey[500],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],

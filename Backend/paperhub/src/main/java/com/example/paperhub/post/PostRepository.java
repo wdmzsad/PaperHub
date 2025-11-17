@@ -7,7 +7,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface PostRepository extends JpaRepository<Post, Long> {
-    // 按创建时间倒序分页查询
     Page<Post> findAllByOrderByCreatedAtDesc(Pageable pageable);
+    Page<Post> findByAuthorIdOrderByCreatedAtDesc(Long authorId, Pageable pageable);
+    long countByAuthorId(Long authorId);
 }
 

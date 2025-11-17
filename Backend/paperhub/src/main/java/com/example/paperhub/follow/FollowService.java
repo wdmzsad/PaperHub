@@ -1,0 +1,68 @@
+package com.example.paperhub.follow;
+
+import com.example.paperhub.auth.User;
+import com.example.paperhub.auth.UserRepository;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 关注/粉丝业务封装。
+ */
+@Service
+public class FollowService {
+    private final UserFollowRepository followRepository;
+    private final UserRepository userRepository;
+
+    public FollowService(UserFollowRepository followRepository, UserRepository userRepository) {
+        this.followRepository = followRepository;
+        this.userRepository = userRepository;
+    }
+
+    @Transactional
+    public void follow(User follower, Long targetUserId) {
+        if (follower.getId().equals(targetUserId)) {
+            throw new IllegalArgumentException("不能关注自己");
+        }
+        User target = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        if (followRepository.existsByFollowerIdAndFollowingId(follower.getId(), target.getId())) {
+            return;
+        }
+        UserFollow follow = new UserFollow();
+        follow.setFollower(follower);
+        follow.setFollowing(target);
+        followRepository.save(follow);
+    }
+
+    @Transactional
+    public void unfollow(User follower, Long targetUserId) {
+        followRepository.deleteByFollowerIdAndFollowingId(follower.getId(), targetUserId);
+    }
+
+    public boolean isFollowing(Long followerId, Long targetUserId) {
+        if (followerId == null || targetUserId == null) return false;
+        return followRepository.existsByFollowerIdAndFollowingId(followerId, targetUserId);
+    }
+
+    public long countFollowing(Long userId) {
+        return followRepository.countByFollowerId(userId);
+    }
+
+    public long countFollowers(Long userId) {
+        return followRepository.countByFollowingId(userId);
+    }
+
+    public Page<UserFollow> getFollowing(Long userId, Pageable pageable) {
+        return followRepository.findByFollowerId(userId, pageable);
+    }
+
+    public Page<UserFollow> getFollowers(Long userId, Pageable pageable) {
+        return followRepository.findByFollowingId(userId, pageable);
+    }
+}
+
