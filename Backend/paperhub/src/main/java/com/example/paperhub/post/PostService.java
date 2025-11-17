@@ -34,6 +34,11 @@ public class PostService {
         return postRepository.findAllByOrderByCreatedAtDesc(pageable);
     }
 
+    public Page<Post> getPostsByAuthor(Long authorId, int page, int pageSize) {
+        Pageable pageable = PageRequest.of(page - 1, pageSize);
+        return postRepository.findByAuthorIdOrderByCreatedAtDesc(authorId, pageable);
+    }
+
     /**
      * 创建帖子
      */

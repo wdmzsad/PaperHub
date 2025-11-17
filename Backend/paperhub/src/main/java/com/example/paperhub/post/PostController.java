@@ -1,5 +1,6 @@
 package com.example.paperhub.post;
 import com.example.paperhub.auth.User;
+import com.example.paperhub.favorite.FavoriteService;
 import com.example.paperhub.like.LikeService;
 import com.example.paperhub.post.dto.PostDtos;
 import com.example.paperhub.websocket.WebSocketService;
@@ -16,12 +17,12 @@ import com.obs.services.model.PutObjectResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 // 屈越-11.4
 import com.obs.services.exception.ObsException;
-import java.util.HashMap;
 
 
 @RestController
@@ -31,6 +32,8 @@ public class PostController {
     private final PostService postService;
     private final LikeService likeService;
     private final WebSocketService webSocketService;
+    private final FavoriteService favoriteService;
+    private final PostMapper postMapper;
 
     @Autowired
     private ObsClient obsClient;
@@ -38,10 +41,16 @@ public class PostController {
     @Autowired
     private ObsConfig obsConfig;
 
-    public PostController(PostService postService, LikeService likeService, WebSocketService webSocketService) {
+    public PostController(PostService postService,
+                          LikeService likeService,
+                          WebSocketService webSocketService,
+                          FavoriteService favoriteService,
+                          PostMapper postMapper) {
         this.postService = postService;
         this.likeService = likeService;
         this.webSocketService = webSocketService;
+        this.favoriteService = favoriteService;
+        this.postMapper = postMapper;
     }
 
     /**
@@ -72,7 +81,7 @@ public class PostController {
             Long userId = (user != null) ? user.getId() : null;
             
             List<PostDtos.PostResp> posts = postPage.getContent().stream()
-                .map(post -> convertToPostResp(post, userId))
+                .map(post -> postMapper.toPostResp(post, userId))
                 .toList();
             
             return ResponseEntity.ok(new PostDtos.PostListResp(
@@ -105,7 +114,7 @@ public class PostController {
         postService.incrementViewsCount(postId);
         
         Long userId = (user != null) ? user.getId() : null;
-        PostDtos.PostResp resp = convertToPostResp(post, userId);
+        PostDtos.PostResp resp = postMapper.toPostResp(post, userId);
         
         return ResponseEntity.ok(resp);
     }
@@ -138,7 +147,7 @@ public class PostController {
                 req.year()
             );
             
-            PostDtos.PostResp resp = convertToPostResp(post, user.getId());
+            PostDtos.PostResp resp = postMapper.toPostResp(post, user.getId());
             return ResponseEntity.status(201).body(resp);
         } catch (Exception e) {
             // 记录错误日志
@@ -292,64 +301,35 @@ public class PostController {
     }
 
     /**
-     * 将Post实体转换为PostResp DTO
+     * 收藏帖子
      */
-    private PostDtos.PostResp convertToPostResp(Post post, Long userId) {
-        User author = post.getAuthor();
-        String authorName = author.getName() != null && !author.getName().isEmpty()
-            ? author.getName()
-            : (author.getEmail().contains("@")
-                ? author.getEmail().substring(0, author.getEmail().indexOf("@"))
-                : author.getEmail());
-        
-        PostDtos.AuthorInfo authorInfo = new PostDtos.AuthorInfo(
-            author.getId(),
-            author.getEmail(),
-            authorName,
-            resolveAvatar(author.getAvatar()),
-            author.getAffiliation()
-        );
-
-        boolean isLiked = userId != null && likeService.isPostLiked(post.getId(), userId);
-        
-        // 计算图片宽高比（如果有图片）
-        double aspectRatio = 1.5; // 默认值
-        double naturalWidth = 800.0;
-        double naturalHeight = 600.0;
-        if (post.getMedia() != null && !post.getMedia().isEmpty()) {
-            // 这里可以根据实际情况计算，暂时使用默认值
-            // 实际项目中可以从图片URL获取真实尺寸
+    @PostMapping("/{postId}/favorite")
+    public ResponseEntity<?> favoritePost(
+            @PathVariable Long postId,
+            @AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "未认证，请先登录"));
         }
-
-        return new PostDtos.PostResp(
-            post.getId().toString(),
-            post.getTitle(),
-            post.getContent() != null ? post.getContent() : "",
-            post.getMedia() != null ? post.getMedia() : new ArrayList<>(),
-            post.getTags() != null ? post.getTags() : new ArrayList<>(),
-            authorInfo,
-            post.getLikesCount(),
-            post.getCommentsCount(),
-            post.getViewsCount(),
-            isLiked,
-            false, // isSaved 需要单独实现收藏功能
-            post.getDoi(),
-            post.getJournal(),
-            post.getYear(),
-            post.getCreatedAt().atOffset(ZoneOffset.UTC).toString(),
-            aspectRatio,
-            naturalWidth,
-            naturalHeight
-        );
+        try {
+            favoriteService.favoritePost(postId, user);
+            return ResponseEntity.ok(Map.of("isSaved", true));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(404).body(Map.of("message", ex.getMessage()));
+        }
     }
-    private String resolveAvatar(String avatar) {
-        if (avatar == null || avatar.trim().isEmpty()) {
-            return "images/DefaultAvatar.png";
+
+    /**
+     * 取消收藏帖子
+     */
+    @DeleteMapping("/{postId}/favorite")
+    public ResponseEntity<?> unfavoritePost(
+            @PathVariable Long postId,
+            @AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "未认证，请先登录"));
         }
-        // 如果数据库中存储的是带 assets/ 前缀的路径，去掉前缀
-        if (avatar.equals("assets/images/DefaultAvatar.png")) {
-            return "images/DefaultAvatar.png";
-        }
-        return avatar;
+        favoriteService.unfavoritePost(postId, user);
+        return ResponseEntity.ok(Map.of("isSaved", false));
     }
+
 }
