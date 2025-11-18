@@ -6,6 +6,8 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
 import 'dart:io';
+import 'package:url_launcher/url_launcher.dart';
+
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -143,7 +145,36 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   late Animation<double> _heartScale;
   bool _showBigHeart = false;
   bool _saveInFlight = false;
+  // ========= 外部链接跳转方法=========
+  Future<void> _openExternalLink(String url) async {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('链接为空')),
+      );
+      return;
+    }
 
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null || !(uri.isScheme('http') || uri.isScheme('https'))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('无法识别的链接：$trimmed')),
+      );
+      return;
+    }
+
+    if (!await canLaunchUrl(uri)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('当前环境无法打开链接：$trimmed')),
+      );
+      return;
+    }
+
+    await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+  }
   @override
   void initState() {
     super.initState();
@@ -375,6 +406,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       },
     );
   }
+ 
 
   void _handleCommentCreated(Map<String, dynamic> data) {
     // 期望 payload 在 data['comment'] 或 data['payload'] 中
@@ -908,17 +940,17 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          Text(//标题
             widget.post.title,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          Text(
+          Text(//内容
             widget.post.content,
             style: const TextStyle(fontSize: 14, height: 1.6),
           ),
           const SizedBox(height: 12),
-          Wrap(
+          Wrap(//标签
             spacing: 8,
             children: widget.post.tags
                 .map(
@@ -957,6 +989,44 @@ class _PostDetailScreenState extends State<PostDetailScreen>
               }).toList(),
             ),
           const SizedBox(height: 8),
+
+          //外部链接列表
+          if (widget.post.externalLinks.isNotEmpty)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '外部链接',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: widget.post.externalLinks.map((link) {
+                  return InkWell(
+                    onTap: () {
+                      _openExternalLink(link); 
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        link,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.blue,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+
           if (widget.post.doi != null)
             Text(
               'DOI: ${widget.post.doi}',

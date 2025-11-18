@@ -32,6 +32,13 @@ public class Post {
     @CollectionTable(name = "post_tags", joinColumns = @JoinColumn(name = "post_id"))
     @Column(name = "tag")
     private List<String> tags = new ArrayList<>();
+    
+    //外部链接列表
+    @ElementCollection
+    @CollectionTable(name = "post_external_links", joinColumns = @JoinColumn(name = "post_id"))
+    @Column(name = "external_link")
+    private List<String> externalLinks = new ArrayList<>();
+
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "author_id", nullable = false)
@@ -134,6 +141,14 @@ public class Post {
 
     public void setYear(Integer year) {
         this.year = year;
+    }
+
+    public List<String> getExternalLinks() {
+        return externalLinks;
+    }
+
+    public void setExternalLinks(List<String> externalLinks) {
+        this.externalLinks = externalLinks;
     }
 
     public Integer getLikesCount() {
