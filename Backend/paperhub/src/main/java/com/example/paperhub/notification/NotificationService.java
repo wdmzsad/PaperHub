@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -201,6 +202,19 @@ public class NotificationService {
         } else {
             // 标记所有通知为已读
             notifications = notificationRepository.findByRecipientAndReadFalse(recipient);
+        }
+        notifications.forEach(n -> n.setRead(true));
+        notificationRepository.saveAll(notifications);
+    }
+
+    /**
+     * 批量标记指定类型列表的所有未读通知为已读
+     */
+    @Transactional
+    public void markAllAsReadByTypes(User recipient, List<NotificationType> types) {
+        List<Notification> notifications = new ArrayList<>();
+        for (NotificationType type : types) {
+            notifications.addAll(notificationRepository.findByRecipientAndTypeAndReadFalse(recipient, type));
         }
         notifications.forEach(n -> n.setRead(true));
         notificationRepository.saveAll(notifications);
