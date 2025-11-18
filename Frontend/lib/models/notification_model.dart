@@ -68,20 +68,53 @@ class ActorInfo {
   final String id;
   final String name;
   final String? avatar;
+  final bool? isFollowed;
 
   ActorInfo({
     required this.id,
     required this.name,
     this.avatar,
+    this.isFollowed,
   });
 
   factory ActorInfo.fromJson(Map<String, dynamic> json) {
+    final dynamic followedValue = _extractFollowFlag(json);
     return ActorInfo(
       id: json['id']?.toString() ?? '',
       name: json['name'] ?? '',
       avatar: json['avatar'],
+      isFollowed: _parseBool(followedValue),
     );
   }
+}
+
+dynamic _extractFollowFlag(Map<String, dynamic> json) {
+  const candidateKeys = [
+    'isFollowed',
+    'is_followed',
+    'isFollowing',
+    'is_following',
+    'isFollowedByMe',
+    'is_followed_by_me',
+    'hasFollowedBack',
+    'has_followed_back',
+  ];
+  for (final key in candidateKeys) {
+    if (json.containsKey(key) && json[key] != null) {
+      return json[key];
+    }
+  }
+  return null;
+}
+
+bool? _parseBool(dynamic value) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  if (value is String) {
+    final normalized = value.toLowerCase();
+    return normalized == 'true' || normalized == '1';
+  }
+  return null;
 }
 
 /// 帖子信息

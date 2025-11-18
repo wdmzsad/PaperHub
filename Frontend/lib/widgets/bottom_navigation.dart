@@ -16,6 +16,8 @@
 ///   如无需要也可在不影响兼容性的前提下考虑移除（本次仅注释，不改动代码）。
 import 'package:flutter/material.dart';
 
+import '../services/unread_service.dart';
+
 /// 简单、可复用的底部导航无状态组件
 class BottomNavigation extends StatelessWidget {
   /// 当前激活的导航索引（0~3），用于高亮对应的 tab。
@@ -34,64 +36,97 @@ class BottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 外层容器：负责投影与圆角；底部吸附由上层 Scaffold 的 bottomNavigationBar 承载。
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(12),
-          topRight: Radius.circular(12),
-        ),
-        boxShadow: [
-          // 向上的轻微阴影以强调分层（offset y 为负数）
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
+    return AnimatedBuilder(
+      animation: UnreadService.instance,
+      builder: (_, __) {
+        final badge = UnreadService.instance.totalMessageBadge;
+        // 外层容器：负责投影与圆角；底部吸附由上层 Scaffold 的 bottomNavigationBar 承载。
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(12),
+              topRight: Radius.circular(12),
+            ),
+            boxShadow: [
+              // 向上的轻微阴影以强调分层（offset y 为负数）
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(12),
-          topRight: Radius.circular(12),
-        ),
-        // 使用裁剪保证 BottomNavigationBar 本身也遵循顶部圆角
-        child: BottomNavigationBar(
-          // 高亮索引与点击事件均由上层传入，组件仅做展示
-          currentIndex: currentIndex,
-          onTap: onTap,
-          // 固定类型：展示四个均分的 tab
-          type: BottomNavigationBarType.fixed,
-          // 配色与字号
-          selectedItemColor: const Color(0xFF1976D2),
-          unselectedItemColor: Colors.grey,
-          selectedFontSize: 12,
-          unselectedFontSize: 12,
-          // 四个固定入口：图标采用 outlined/filled 形态分别对应未选中/选中
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: '首页',
+          child: ClipRRect(
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(12),
+              topRight: Radius.circular(12),
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.message_outlined),
-              activeIcon: Icon(Icons.message),
-              label: '消息',
+            // 使用裁剪保证 BottomNavigationBar 本身也遵循顶部圆角
+            child: BottomNavigationBar(
+              currentIndex: currentIndex,
+              onTap: onTap,
+              type: BottomNavigationBarType.fixed,
+              selectedItemColor: const Color(0xFF1976D2),
+              unselectedItemColor: Colors.grey,
+              selectedFontSize: 12,
+              unselectedFontSize: 12,
+              items: [
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.home_outlined),
+                  activeIcon: Icon(Icons.home),
+                  label: '首页',
+                ),
+                BottomNavigationBarItem(
+                  icon: _buildMessageIcon(false, badge),
+                  activeIcon: _buildMessageIcon(true, badge),
+                  label: '消息',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.add_circle_outline),
+                  activeIcon: Icon(Icons.add_circle),
+                  label: '发布',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.person_outlined),
+                  activeIcon: Icon(Icons.person),
+                  label: '我的',
+                ),
+              ],
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.add_circle_outline),
-              activeIcon: Icon(Icons.add_circle),
-              label: '发布',
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMessageIcon(bool active, int badgeCount) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(active ? Icons.message : Icons.message_outlined),
+        if (badgeCount > 0)
+          Positioned(
+            right: -4,
+            top: -4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: const BoxDecoration(
+                color: Colors.redAccent,
+                borderRadius: BorderRadius.all(Radius.circular(8)),
+              ),
+              constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
+              child: Text(
+                badgeCount > 99 ? '99+' : badgeCount.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 8,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outlined),
-              activeIcon: Icon(Icons.person),
-              label: '我的',
-            ),
-          ],
-        ),
-      ),
+          ),
+      ],
     );
   }
 }

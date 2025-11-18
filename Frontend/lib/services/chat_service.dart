@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
 import 'api_service.dart';
+import 'unread_service.dart';
 
 /// 聊天服务类
 ///
@@ -132,6 +133,7 @@ class ChatService extends ChangeNotifier {
         isOnline: false,
       ),
     ];
+    _syncUnreadBadges();
   }
 
   /// 获取会话列表
@@ -145,6 +147,7 @@ class ChatService extends ChangeNotifier {
       _initMockData();
 
       _conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      _syncUnreadBadges();
     } catch (e) {
       debugPrint('加载会话列表失败: $e');
     } finally {
@@ -269,6 +272,7 @@ class ChatService extends ChangeNotifier {
       // 重新排序
       _conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       notifyListeners();
+      _syncUnreadBadges();
     }
   }
 
@@ -282,10 +286,17 @@ class ChatService extends ChangeNotifier {
       if (index != -1 && _conversations[index].unreadCount > 0) {
         _conversations[index] = _conversations[index].copyWith(unreadCount: 0);
         notifyListeners();
+        _syncUnreadBadges();
       }
     } catch (e) {
       debugPrint('标记已读失败: $e');
     }
+  }
+
+  void _syncUnreadBadges() {
+    final total =
+        _conversations.fold<int>(0, (sum, c) => sum + c.unreadCount);
+    UnreadService.instance.updateChatUnread(total);
   }
 
   /// 搜索会话

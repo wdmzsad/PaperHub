@@ -524,6 +524,18 @@ class _ProfilePageState extends State<ProfilePage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_isViewingSelf)
+              Row(
+                children: [
+                  Builder(
+                    builder: (ctx) => IconButton(
+                      icon: const Icon(Icons.menu, color: Colors.white),
+                      onPressed: () => Scaffold.of(ctx).openDrawer(),
+                    ),
+                  ),
+                ],
+              ),
+            if (_isViewingSelf) const SizedBox(height: 8),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

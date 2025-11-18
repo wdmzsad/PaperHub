@@ -16,6 +16,8 @@ import '../models/notification_model.dart';
 import '../models/post_model.dart';
 import '../services/chat_service.dart';
 import '../services/api_service.dart';
+import '../services/local_storage.dart';
+import '../services/unread_service.dart';
 import '../widgets/conversation_item.dart';
 import 'chat_screen.dart';
 import 'home_screen.dart';
@@ -144,6 +146,28 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
     }
   }
 
+  void _openUserProfile(String userId) {
+    if (userId.isEmpty) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProfilePage(userId: userId),
+      ),
+    );
+  }
+
+  Widget _buildIconBadge(IconData icon, Color color) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, color: color, size: 16),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -227,16 +251,24 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundImage: notification.actor.avatar != null
-                  ? NetworkImage(notification.actor.avatar!)
-                  : null,
-              child: notification.actor.avatar == null
-                  ? Text(notification.actor.name.isNotEmpty
-                      ? notification.actor.name[0].toUpperCase()
-                      : '?')
-                  : null,
+            GestureDetector(
+              onTap: () {
+                if (!notification.read) {
+                  ApiService.markNotificationAsRead(notification.id);
+                }
+                _openUserProfile(notification.actor.id);
+              },
+              child: CircleAvatar(
+                radius: 20,
+                backgroundImage: notification.actor.avatar != null
+                    ? NetworkImage(notification.actor.avatar!)
+                    : null,
+                child: notification.actor.avatar == null
+                    ? Text(notification.actor.name.isNotEmpty
+                        ? notification.actor.name[0].toUpperCase()
+                        : '?')
+                    : null,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -275,7 +307,7 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Icon(icon, color: iconColor, size: 16),
+                _buildIconBadge(icon, iconColor),
               ],
             ),
           ],
@@ -299,10 +331,15 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
   int _page = 0;
   final int _pageSize = 20;
   bool _hasMore = true;
+  final Set<String> _followedUserIds = {};
+  final Set<String> _followLoadingUserIds = {};
+  final Map<String, bool> _followStatusCache = {};
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
+    _currentUserId = LocalStorage.instance.read('userId');
     _loadNotifications();
   }
 
@@ -321,12 +358,17 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
         final notifications = (body['notifications'] as List)
             .map((json) => NotificationItem.fromJson(json))
             .toList();
+        final resolvedFollowBackIds = await _determineFollowBackIds(notifications);
 
         setState(() {
           if (loadMore) {
             _notifications.addAll(notifications);
+            _followedUserIds.addAll(resolvedFollowBackIds);
           } else {
             _notifications = notifications;
+            _followedUserIds
+              ..clear()
+              ..addAll(resolvedFollowBackIds);
           }
           _hasMore = notifications.length == _pageSize;
           _page++;
@@ -383,6 +425,116 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
     }
   }
 
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  void _openUserProfile(String userId) {
+    if (userId.isEmpty) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProfilePage(userId: userId),
+      ),
+    );
+  }
+
+  Future<void> _handleFollowBack(NotificationItem notification) async {
+    final userId = notification.actor.id;
+    if (userId.isEmpty || _followedUserIds.contains(userId)) return;
+    setState(() {
+      _followLoadingUserIds.add(userId);
+    });
+
+    try {
+      final resp = await ApiService.followUser(userId);
+      if (resp['statusCode'] != 200) {
+        final message = (resp['body'] as Map<String, dynamic>?)?['message'] ?? '回关失败';
+        throw Exception(message);
+      }
+      setState(() {
+        _followedUserIds.add(userId);
+        _followStatusCache[userId] = true;
+      });
+      _showSnack('已回关 ${notification.actor.name}');
+    } catch (e) {
+      _showSnack('回关失败：$e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _followLoadingUserIds.remove(userId);
+        });
+      }
+    }
+  }
+
+  Future<Set<String>> _determineFollowBackIds(
+    List<NotificationItem> notifications,
+  ) async {
+    final currentUserId = _currentUserId ??= LocalStorage.instance.read('userId');
+    if (currentUserId == null || currentUserId.isEmpty) {
+      return {};
+    }
+
+    final actorIds = notifications
+        .map((n) => n.actor.id)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (actorIds.isEmpty) return {};
+
+    final futures = actorIds.map((actorId) async {
+      final cached = _followStatusCache[actorId];
+      if (cached != null) {
+        return MapEntry(actorId, cached);
+      }
+      final isFollowed = await _isCurrentUserInFollowers(actorId, currentUserId);
+      _followStatusCache[actorId] = isFollowed;
+      return MapEntry(actorId, isFollowed);
+    });
+
+    final results = await Future.wait(futures);
+    final followedIds = <String>{};
+    for (final entry in results) {
+      if (entry.value) {
+        followedIds.add(entry.key);
+      }
+    }
+    return followedIds;
+  }
+
+  Future<bool> _isCurrentUserInFollowers(String targetUserId, String currentUserId) async {
+    int page = 0;
+    const int pageSize = 50;
+    while (true) {
+      try {
+        final resp = await ApiService.getFollowers(
+          targetUserId,
+          page: page,
+          pageSize: pageSize,
+        );
+        if (resp['statusCode'] != 200) {
+          return false;
+        }
+        final body = resp['body'] as Map<String, dynamic>? ?? {};
+        final users = (body['users'] as List?) ?? const [];
+        final found = users.any((userJson) {
+          final id = (userJson['id'] ?? userJson['userId'])?.toString() ?? '';
+          return id == currentUserId;
+        });
+        if (found) return true;
+        if (users.length < pageSize) {
+          return false;
+        }
+        page++;
+      } catch (_) {
+        return false;
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -419,14 +571,35 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
                         return const Center(child: CircularProgressIndicator());
                       }
                       final notification = _notifications[index];
-                      return _buildFollowerItem(notification: notification);
+                      final actorId = notification.actor.id;
+                      final isAlreadyFollowed =
+                          _followedUserIds.contains(actorId) ||
+                              (notification.actor.isFollowed ?? false);
+                      return _buildFollowerItem(
+                        notification: notification,
+                        isFollowed: isAlreadyFollowed,
+                        isLoading: _followLoadingUserIds.contains(actorId),
+                        onFollow: () => _handleFollowBack(notification),
+                        onAvatarTap: () {
+                          if (!notification.read) {
+                            ApiService.markNotificationAsRead(notification.id);
+                          }
+                          _openUserProfile(actorId);
+                        },
+                      );
                     },
                   ),
                 ),
     );
   }
 
-  Widget _buildFollowerItem({required NotificationItem notification}) {
+  Widget _buildFollowerItem({
+    required NotificationItem notification,
+    required bool isFollowed,
+    required bool isLoading,
+    required VoidCallback onFollow,
+    required VoidCallback onAvatarTap,
+  }) {
     return GestureDetector(
       onTap: () async {
         // 标记为已读
@@ -437,7 +610,7 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
             // 忽略错误
           }
         }
-        // 可以跳转到用户主页
+        _openUserProfile(notification.actor.id);
       },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -455,16 +628,19 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundImage: notification.actor.avatar != null
-                  ? NetworkImage(notification.actor.avatar!)
-                  : null,
-              child: notification.actor.avatar == null
-                  ? Text(notification.actor.name.isNotEmpty
-                      ? notification.actor.name[0].toUpperCase()
-                      : '?')
-                  : null,
+            GestureDetector(
+              onTap: onAvatarTap,
+              child: CircleAvatar(
+                radius: 24,
+                backgroundImage: notification.actor.avatar != null
+                    ? NetworkImage(notification.actor.avatar!)
+                    : null,
+                child: notification.actor.avatar == null
+                    ? Text(notification.actor.name.isNotEmpty
+                        ? notification.actor.name[0].toUpperCase()
+                        : '?')
+                    : null,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -502,20 +678,41 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1976D2),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Text(
-                    '回关',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+                ElevatedButton(
+                  onPressed: isFollowed || isLoading ? null : onFollow,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        isFollowed ? Colors.grey[200] : const Color(0xFF1976D2),
+                    foregroundColor:
+                        isFollowed ? Colors.grey[700] : Colors.white,
+                    disabledBackgroundColor: isFollowed
+                        ? Colors.grey[200]
+                        : const Color(0xFF1976D2),
+                    disabledForegroundColor:
+                        isFollowed ? Colors.grey[600] : Colors.white,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
                     ),
+                    elevation: 0,
                   ),
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          isFollowed ? '已回关' : '回关',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ],
             ),
@@ -624,6 +821,16 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
     }
   }
 
+  void _openUserProfile(String userId) {
+    if (userId.isEmpty) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProfilePage(userId: userId),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -704,16 +911,24 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundImage: notification.actor.avatar != null
-                      ? NetworkImage(notification.actor.avatar!)
-                      : null,
-                  child: notification.actor.avatar == null
-                      ? Text(notification.actor.name.isNotEmpty
-                          ? notification.actor.name[0].toUpperCase()
-                          : '?')
-                      : null,
+                GestureDetector(
+                  onTap: () {
+                    if (!notification.read) {
+                      ApiService.markNotificationAsRead(notification.id);
+                    }
+                    _openUserProfile(notification.actor.id);
+                  },
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundImage: notification.actor.avatar != null
+                        ? NetworkImage(notification.actor.avatar!)
+                        : null,
+                    child: notification.actor.avatar == null
+                        ? Text(notification.actor.name.isNotEmpty
+                            ? notification.actor.name[0].toUpperCase()
+                            : '?')
+                        : null,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -811,6 +1026,7 @@ class _MessageScreenState extends State<MessageScreen> {
   bool _isSearching = false;
   int _currentIndex = 1; // 默认选中消息页面
   UnreadCount _unreadCount = UnreadCount(likes: 0, follows: 0, comments: 0);
+  int _totalUnreadMessages = 0;
 
   @override
   void initState() {
@@ -828,6 +1044,7 @@ class _MessageScreenState extends State<MessageScreen> {
         setState(() {
           _unreadCount = UnreadCount.fromJson(body);
         });
+        UnreadService.instance.updateNotificationUnread(_unreadCount);
       }
     } catch (e) {
       // 忽略错误
@@ -844,9 +1061,19 @@ class _MessageScreenState extends State<MessageScreen> {
   Future<void> _loadData() async {
     await _chatService.loadConversations();
     if (!mounted) return;
+    _updateConversationState();
+  }
+
+  void _updateConversationState() {
+    if (!mounted) return;
     setState(() {
       _filteredConversations = _chatService.conversations;
+      _totalUnreadMessages = _chatService.conversations.fold<int>(
+        0,
+        (sum, c) => sum + c.unreadCount,
+      );
     });
+    UnreadService.instance.updateChatUnread(_totalUnreadMessages);
   }
 
   void _onSearchChanged() {
@@ -860,6 +1087,7 @@ class _MessageScreenState extends State<MessageScreen> {
   void _onConversationTap(Conversation conversation) async {
     // 标记为已读
     await _chatService.markAsRead(conversation.id);
+    _updateConversationState();
 
     // 导航到聊天页面
     Navigator.push(
@@ -929,30 +1157,36 @@ class _MessageScreenState extends State<MessageScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _buildTopNavItem(
-            icon: Icons.favorite_border,
+            icon: Icons.favorite,
             activeIcon: Icons.favorite,
             label: '赞和收藏',
             badgeCount: _unreadCount.likes,
+            backgroundColor: const Color(0xFFFFEBEE),
+            iconColor: Colors.redAccent,
             onTap: () {
               _navigateToLikesAndFavorites();
               _loadUnreadCount(); // 刷新未读数量
             },
           ),
           _buildTopNavItem(
-            icon: Icons.person_add_outlined,
+            icon: Icons.person_add,
             activeIcon: Icons.person_add,
             label: '新增关注',
             badgeCount: _unreadCount.follows,
+            backgroundColor: const Color(0xFFE8F4FF),
+            iconColor: const Color(0xFF1976D2),
             onTap: () {
               _navigateToNewFollowers();
               _loadUnreadCount(); // 刷新未读数量
             },
           ),
           _buildTopNavItem(
-            icon: Icons.chat_bubble_outline,
+            icon: Icons.chat_bubble,
             activeIcon: Icons.chat_bubble,
             label: '评论和@',
             badgeCount: _unreadCount.comments,
+            backgroundColor: const Color(0xFFE8F5E9),
+            iconColor: const Color(0xFF43A047),
             onTap: () {
               _navigateToCommentsAndMentions();
               _loadUnreadCount(); // 刷新未读数量
@@ -969,6 +1203,8 @@ class _MessageScreenState extends State<MessageScreen> {
     required String label,
     required VoidCallback onTap,
     int badgeCount = 0,
+    Color? backgroundColor,
+    Color? iconColor,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -981,12 +1217,12 @@ class _MessageScreenState extends State<MessageScreen> {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: backgroundColor ?? Colors.grey[100],
                   borderRadius: BorderRadius.circular(25),
                 ),
                 child: Icon(
                   icon,
-                  color: Colors.black87,
+                  color: iconColor ?? Colors.black87,
                   size: 24,
                 ),
               ),
@@ -1032,36 +1268,42 @@ class _MessageScreenState extends State<MessageScreen> {
 
   // 底部导航栏 - 根据home_screen的逻辑重写
   Widget _buildBottomNavigationBar() {
-    return BottomNavigationBar(
-      currentIndex: _currentIndex,
-      onTap: _onBottomNavItemTapped,
-      type: BottomNavigationBarType.fixed,
-      selectedItemColor: const Color(0xFF1976D2),
-      unselectedItemColor: Colors.grey[600],
-      selectedLabelStyle: const TextStyle(fontSize: 12),
-      unselectedLabelStyle: const TextStyle(fontSize: 12),
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined),
-          activeIcon: Icon(Icons.home),
-          label: '首页',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.chat_bubble_outline),
-          activeIcon: Icon(Icons.chat_bubble),
-          label: '消息',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.explore_outlined),
-          activeIcon: Icon(Icons.explore),
-          label: '发现',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          activeIcon: Icon(Icons.person),
-          label: '我的',
-        ),
-      ],
+    return AnimatedBuilder(
+      animation: UnreadService.instance,
+      builder: (context, _) {
+        final badge = UnreadService.instance.totalMessageBadge;
+        return BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: _onBottomNavItemTapped,
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: const Color(0xFF1976D2),
+          unselectedItemColor: Colors.grey[600],
+          selectedLabelStyle: const TextStyle(fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontSize: 12),
+          items: [
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: '首页',
+            ),
+            BottomNavigationBarItem(
+              icon: _buildMessageNavIcon(false, badge),
+              activeIcon: _buildMessageNavIcon(true, badge),
+              label: '消息',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.explore_outlined),
+              activeIcon: Icon(Icons.explore),
+              label: '发现',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              activeIcon: Icon(Icons.person),
+              label: '我的',
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1106,6 +1348,37 @@ class _MessageScreenState extends State<MessageScreen> {
       });
     }
     // index == 1 是当前消息页面，不需要处理
+  }
+
+  Widget _buildMessageNavIcon(bool active, int badgeCount) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(active ? Icons.chat_bubble : Icons.chat_bubble_outline),
+        if (badgeCount > 0)
+          Positioned(
+            right: -4,
+            top: -4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: const BoxDecoration(
+                color: Colors.redAccent,
+                borderRadius: BorderRadius.all(Radius.circular(8)),
+              ),
+              constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
+              child: Text(
+                badgeCount > 99 ? '99+' : badgeCount.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 8,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _buildConversationList() {
