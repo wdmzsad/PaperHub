@@ -135,7 +135,14 @@ public class PostController {
                 error.put("message", "未认证，请先登录");
                 return ResponseEntity.status(401).body(error);
             }
-            
+            // 校验所有外链格式，仅允许http/https，禁止javascript:, data:
+            if (req.externalLinks() != null) {
+                for (String url : req.externalLinks()) {
+                    if (!isValidUrl(url)) {
+                        return ResponseEntity.badRequest().body(Map.of("message", "外部链接格式非法: " + url));
+                    }
+                }
+            }
             Post post = postService.createPost(
                 req.title(),
                 req.content(),
@@ -144,7 +151,8 @@ public class PostController {
                 req.tags() != null ? req.tags() : new ArrayList<>(),
                 req.doi(),
                 req.journal(),
-                req.year()
+                req.year(),
+                req.externalLinks() != null ? req.externalLinks() : new ArrayList<>()
             );
             
             PostDtos.PostResp resp = postMapper.toPostResp(post, user.getId());
@@ -158,6 +166,14 @@ public class PostController {
             error.put("message", "创建帖子失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
             return ResponseEntity.status(500).body(error);
         }
+    }
+    //判断链接是否合法，允许 http(s)，禁止危险协议
+    private boolean isValidUrl(String url) {
+        if (url == null) return false;
+        String pattern = "^(https?://)[^\\s]+$";
+        if (!url.matches(pattern)) return false;
+        String lower = url.toLowerCase();
+        return !(lower.startsWith("javascript:") || lower.startsWith("data:"));
     }
 
     // 上传图片接口

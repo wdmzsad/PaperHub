@@ -44,7 +44,7 @@ public class PostService {
      */
     @Transactional
     public Post createPost(String title, String content, User author, List<String> media, 
-                          List<String> tags, String doi, String journal, Integer year) {
+                          List<String> tags, String doi, String journal, Integer year, List<String> externalLinks) {
         Post post = new Post();
         post.setTitle(title);
         post.setContent(content != null ? content : "");
@@ -54,6 +54,8 @@ public class PostService {
         post.setDoi(doi);
         post.setJournal(journal);
         post.setYear(year);
+        // 外部链接列表（可为空）
+        post.setExternalLinks(externalLinks != null ? externalLinks : List.of());
         post.setLikesCount(0);
         post.setCommentsCount(0);
         post.setViewsCount(0);

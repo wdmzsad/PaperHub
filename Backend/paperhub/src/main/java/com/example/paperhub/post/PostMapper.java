@@ -5,7 +5,7 @@ import com.example.paperhub.favorite.FavoriteService;
 import com.example.paperhub.like.LikeService;
 import com.example.paperhub.post.dto.PostDtos;
 import org.springframework.stereotype.Component;
-
+import java.util.List;
 /**
  * 统一的 Post -> PostResp 映射器，避免不同控制器重复构建响应。
  */
@@ -48,6 +48,7 @@ public class PostMapper {
                 post.getContent() != null ? post.getContent() : "",
                 post.getMedia() != null ? post.getMedia() : java.util.List.of(),
                 post.getTags() != null ? post.getTags() : java.util.List.of(),
+                post.getExternalLinks() != null ? post.getExternalLinks() : List.of(),
                 authorInfo,
                 post.getLikesCount(),
                 post.getCommentsCount(),

@@ -16,6 +16,7 @@ import '../models/notification_model.dart';
 import '../models/post_model.dart';
 import '../services/chat_service.dart';
 import '../services/api_service.dart';
+import '../services/local_storage.dart';
 import '../services/unread_service.dart';
 import '../widgets/conversation_item.dart';
 import 'chat_screen.dart';
@@ -332,10 +333,13 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
   bool _hasMore = true;
   final Set<String> _followedUserIds = {};
   final Set<String> _followLoadingUserIds = {};
+  final Map<String, bool> _followStatusCache = {};
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
+    _currentUserId = LocalStorage.instance.read('userId');
     _loadNotifications();
   }
 
@@ -354,12 +358,17 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
         final notifications = (body['notifications'] as List)
             .map((json) => NotificationItem.fromJson(json))
             .toList();
+        final resolvedFollowBackIds = await _determineFollowBackIds(notifications);
 
         setState(() {
           if (loadMore) {
             _notifications.addAll(notifications);
+            _followedUserIds.addAll(resolvedFollowBackIds);
           } else {
             _notifications = notifications;
+            _followedUserIds
+              ..clear()
+              ..addAll(resolvedFollowBackIds);
           }
           _hasMore = notifications.length == _pageSize;
           _page++;
@@ -448,6 +457,7 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
       }
       setState(() {
         _followedUserIds.add(userId);
+        _followStatusCache[userId] = true;
       });
       _showSnack('已回关 ${notification.actor.name}');
     } catch (e) {
@@ -457,6 +467,70 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
         setState(() {
           _followLoadingUserIds.remove(userId);
         });
+      }
+    }
+  }
+
+  Future<Set<String>> _determineFollowBackIds(
+    List<NotificationItem> notifications,
+  ) async {
+    final currentUserId = _currentUserId ??= LocalStorage.instance.read('userId');
+    if (currentUserId == null || currentUserId.isEmpty) {
+      return {};
+    }
+
+    final actorIds = notifications
+        .map((n) => n.actor.id)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (actorIds.isEmpty) return {};
+
+    final futures = actorIds.map((actorId) async {
+      final cached = _followStatusCache[actorId];
+      if (cached != null) {
+        return MapEntry(actorId, cached);
+      }
+      final isFollowed = await _isCurrentUserInFollowers(actorId, currentUserId);
+      _followStatusCache[actorId] = isFollowed;
+      return MapEntry(actorId, isFollowed);
+    });
+
+    final results = await Future.wait(futures);
+    final followedIds = <String>{};
+    for (final entry in results) {
+      if (entry.value) {
+        followedIds.add(entry.key);
+      }
+    }
+    return followedIds;
+  }
+
+  Future<bool> _isCurrentUserInFollowers(String targetUserId, String currentUserId) async {
+    int page = 0;
+    const int pageSize = 50;
+    while (true) {
+      try {
+        final resp = await ApiService.getFollowers(
+          targetUserId,
+          page: page,
+          pageSize: pageSize,
+        );
+        if (resp['statusCode'] != 200) {
+          return false;
+        }
+        final body = resp['body'] as Map<String, dynamic>? ?? {};
+        final users = (body['users'] as List?) ?? const [];
+        final found = users.any((userJson) {
+          final id = (userJson['id'] ?? userJson['userId'])?.toString() ?? '';
+          return id == currentUserId;
+        });
+        if (found) return true;
+        if (users.length < pageSize) {
+          return false;
+        }
+        page++;
+      } catch (_) {
+        return false;
       }
     }
   }
@@ -498,9 +572,12 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
                       }
                       final notification = _notifications[index];
                       final actorId = notification.actor.id;
+                      final isAlreadyFollowed =
+                          _followedUserIds.contains(actorId) ||
+                              (notification.actor.isFollowed ?? false);
                       return _buildFollowerItem(
                         notification: notification,
-                        isFollowed: _followedUserIds.contains(actorId),
+                        isFollowed: isAlreadyFollowed,
                         isLoading: _followLoadingUserIds.contains(actorId),
                         onFollow: () => _handleFollowBack(notification),
                         onAvatarTap: () {
