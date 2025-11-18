@@ -541,6 +541,84 @@ class ApiService {
   }
 
   /// 可选：请求后端创建/触发通知（多数后端会在 like 接口内部处理通知，这里提供独立接口以备后端需要前端主动调用）
+  /// 获取未读通知数量
+  /// GET /notifications/unread-count
+  static Future<Map<String, dynamic>> getUnreadNotificationCount() async {
+    return await _makeRequest(
+      () => http.get(
+        Uri.parse('$baseUrl/notifications/unread-count'),
+        headers: _buildHeaders(),
+      ),
+      '/notifications/unread-count',
+    );
+  }
+
+  /// 获取赞和收藏通知
+  /// GET /notifications/likes?page=0&pageSize=20
+  static Future<Map<String, dynamic>> getLikesAndFavorites({
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/notifications/likes').replace(
+      queryParameters: {
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/notifications/likes',
+    );
+  }
+
+  /// 获取关注通知
+  /// GET /notifications/follows?page=0&pageSize=20
+  static Future<Map<String, dynamic>> getFollows({
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/notifications/follows').replace(
+      queryParameters: {
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/notifications/follows',
+    );
+  }
+
+  /// 获取评论和@通知
+  /// GET /notifications/comments?page=0&pageSize=20
+  static Future<Map<String, dynamic>> getCommentsAndMentions({
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/notifications/comments').replace(
+      queryParameters: {
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/notifications/comments',
+    );
+  }
+
+  /// 标记通知为已读
+  /// PUT /notifications/{id}/read
+  static Future<Map<String, dynamic>> markNotificationAsRead(String notificationId) async {
+    return await _makeRequest(
+      () => http.put(
+        Uri.parse('$baseUrl/notifications/$notificationId/read'),
+        headers: _buildHeaders(),
+      ),
+      '/notifications/$notificationId/read',
+    );
+  }
+
   static Future<Map<String, dynamic>> createNotification(
     Map<String, dynamic> payload, {
     String? authToken,

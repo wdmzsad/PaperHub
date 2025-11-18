@@ -1,6 +1,7 @@
 package com.example.paperhub.favorite;
 
 import com.example.paperhub.auth.User;
+import com.example.paperhub.notification.NotificationService;
 import com.example.paperhub.post.Post;
 import com.example.paperhub.post.PostRepository;
 import com.example.paperhub.post.dto.PostDtos;
@@ -20,10 +21,15 @@ public class FavoriteService {
 
     private final FavoritePostRepository favoriteRepository;
     private final PostRepository postRepository;
+    private final NotificationService notificationService;
 
-    public FavoriteService(FavoritePostRepository favoriteRepository, PostRepository postRepository) {
+    public FavoriteService(
+            FavoritePostRepository favoriteRepository, 
+            PostRepository postRepository,
+            NotificationService notificationService) {
         this.favoriteRepository = favoriteRepository;
         this.postRepository = postRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -37,6 +43,14 @@ public class FavoriteService {
         favoritePost.setUser(user);
         favoritePost.setPost(post);
         favoriteRepository.save(favoritePost);
+        
+        // 创建通知
+        try {
+            notificationService.createPostFavoriteNotification(user, postId);
+        } catch (Exception e) {
+            // 通知创建失败不影响收藏操作
+            System.err.println("创建收藏通知失败: " + e.getMessage());
+        }
     }
 
     @Transactional
