@@ -387,9 +387,27 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       final newComment = Comment.fromJson(commentJson);
 
       setState(() {
-        // 防止重复插入：如果已有同 id，忽略
-        final existsTop = _comments.any((c) => c.id == newComment.id);
-        if (existsTop) return;
+        // 防止重复插入：检查顶层评论和所有子回复
+        bool exists = false;
+        
+        // 检查顶层评论
+        if (_comments.any((c) => c.id == newComment.id)) {
+          exists = true;
+        }
+        
+        // 检查所有子回复
+        if (!exists) {
+          for (var comment in _comments) {
+            if (comment.replies.any((r) => r.id == newComment.id)) {
+              exists = true;
+              break;
+            }
+          }
+        }
+        
+        if (exists) {
+          return; // 已存在，忽略
+        }
 
         if (newComment.parentId == null) {
           // 顶层评论，插入到顶部
@@ -681,27 +699,20 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       print('创建评论响应: status=$status, body=$body'); // 调试日志
 
       if (status >= 200 && status < 300 && body != null) {
-        // 期望后端返回 {'comment': {...}} 或直接返回评论对象
-        final commentJson = (body['comment'] as Map<String, dynamic>?) ?? body;
-        final newComment = Comment.fromJson(commentJson);
-        setState(() {
-          if (parentId == null) {
-            // 顶层评论
-            _comments.insert(0, newComment);
-            commentCount += 1;
-            widget.post.commentsCount = commentCount;
-          } else {
-            // 回复评论：尝试找到父评论并追加
-            final parentIndex = _comments.indexWhere((c) => c.id == parentId);
-            if (parentIndex != -1) {
-              _comments[parentIndex].replies.add(newComment);
-            }
-          }
-          _commentController.clear();
-          if (_currentReplyTo != null) {
-            _cancelReply(); // 清除回复状态
+        // 评论创建成功，等待 WebSocket 推送来更新列表（避免重复添加）
+        // 如果 WebSocket 没有推送，则手动刷新评论列表
+        _commentController.clear();
+        if (_currentReplyTo != null) {
+          _cancelReply(); // 清除回复状态
+        }
+        
+        // 延迟刷新评论列表，给 WebSocket 推送一些时间
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            _loadComments(refresh: true);
           }
         });
+        
         if (mounted) {
           ScaffoldMessenger.of(
             context,

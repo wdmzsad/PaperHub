@@ -2,6 +2,7 @@ package com.example.paperhub.comment;
 
 import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
+import com.example.paperhub.notification.NotificationService;
 import com.example.paperhub.post.Post;
 import com.example.paperhub.post.PostRepository;
 import com.example.paperhub.post.PostService;
@@ -22,16 +23,19 @@ public class CommentService {
     private final PostRepository postRepository;
     private final UserRepository userRepository;
     private final PostService postService;
+    private final NotificationService notificationService;
 
     public CommentService(
             CommentRepository commentRepository,
             PostRepository postRepository,
             UserRepository userRepository,
-            PostService postService) {
+            PostService postService,
+            NotificationService notificationService) {
         this.commentRepository = commentRepository;
         this.postRepository = postRepository;
         this.userRepository = userRepository;
         this.postService = postService;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -80,6 +84,14 @@ public class CommentService {
         
         // 更新帖子的评论数
         postService.incrementCommentsCount(postId);
+        
+        // 创建通知
+        try {
+            notificationService.createCommentNotification(author, postId, saved.getId(), replyToId != null ? userRepository.findById(replyToId).orElse(null) : null);
+        } catch (Exception e) {
+            // 通知创建失败不影响评论操作
+            System.err.println("创建评论通知失败: " + e.getMessage());
+        }
         
         return saved;
     }

@@ -2,6 +2,7 @@ package com.example.paperhub.follow;
 
 import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
+import com.example.paperhub.notification.NotificationService;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
@@ -17,10 +18,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class FollowService {
     private final UserFollowRepository followRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
-    public FollowService(UserFollowRepository followRepository, UserRepository userRepository) {
+    public FollowService(
+            UserFollowRepository followRepository, 
+            UserRepository userRepository,
+            NotificationService notificationService) {
         this.followRepository = followRepository;
         this.userRepository = userRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -37,6 +43,14 @@ public class FollowService {
         follow.setFollower(follower);
         follow.setFollowing(target);
         followRepository.save(follow);
+        
+        // 创建通知
+        try {
+            notificationService.createFollowNotification(follower, targetUserId);
+        } catch (Exception e) {
+            // 通知创建失败不影响关注操作
+            System.err.println("创建关注通知失败: " + e.getMessage());
+        }
     }
 
     @Transactional
