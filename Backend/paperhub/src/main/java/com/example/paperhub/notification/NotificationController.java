@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -143,6 +144,30 @@ public class NotificationController {
             return ResponseEntity.ok(Map.of("message", "已标记为已读"));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(404).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * 批量标记指定类型的所有未读通知为已读
+     * PUT /notifications/mark-all-read?types=POST_LIKE,POST_FAVORITE
+     */
+    @PutMapping("/mark-all-read")
+    public ResponseEntity<Map<String, String>> markAllAsReadByTypes(
+            @RequestParam List<String> types,
+            @AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(401).build();
+        }
+
+        try {
+            List<NotificationType> notificationTypes = types.stream()
+                    .map(String::toUpperCase)
+                    .map(NotificationType::valueOf)
+                    .toList();
+            notificationService.markAllAsReadByTypes(user, notificationTypes);
+            return ResponseEntity.ok(Map.of("message", "已标记为已读"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(400).body(Map.of("message", "无效的通知类型"));
         }
     }
 }

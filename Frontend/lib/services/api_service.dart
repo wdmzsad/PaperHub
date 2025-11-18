@@ -619,6 +619,19 @@ class ApiService {
     );
   }
 
+  /// 批量标记指定类型的所有未读通知为已读
+  /// PUT /notifications/mark-all-read?types=POST_LIKE,POST_FAVORITE
+  static Future<Map<String, dynamic>> markAllNotificationsAsReadByTypes(List<String> types) async {
+    final typesParam = types.join(',');
+    return await _makeRequest(
+      () => http.put(
+        Uri.parse('$baseUrl/notifications/mark-all-read?types=$typesParam'),
+        headers: _buildHeaders(),
+      ),
+      '/notifications/mark-all-read',
+    );
+  }
+
   static Future<Map<String, dynamic>> createNotification(
     Map<String, dynamic> payload, {
     String? authToken,

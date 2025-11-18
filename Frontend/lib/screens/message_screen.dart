@@ -1192,21 +1192,54 @@ class _MessageScreenState extends State<MessageScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const LikesAndFavoritesScreen()),
-    );
+    ).then((_) async {
+      // 返回时批量标记为已读并刷新未读数量
+      try {
+        await ApiService.markAllNotificationsAsReadByTypes([
+          'POST_LIKE',
+          'POST_FAVORITE',
+          'COMMENT_LIKE',
+        ]);
+      } catch (e) {
+        // 忽略错误
+      }
+      _loadUnreadCount();
+    });
   }
 
   void _navigateToNewFollowers() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const NewFollowersScreen()),
-    );
+    ).then((_) async {
+      // 返回时批量标记为已读并刷新未读数量
+      try {
+        await ApiService.markAllNotificationsAsReadByTypes([
+          'FOLLOW',
+        ]);
+      } catch (e) {
+        // 忽略错误
+      }
+      _loadUnreadCount();
+    });
   }
 
   void _navigateToCommentsAndMentions() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const CommentsAndMentionsScreen()),
-    );
+    ).then((_) async {
+      // 返回时批量标记为已读并刷新未读数量
+      try {
+        await ApiService.markAllNotificationsAsReadByTypes([
+          'COMMENT',
+          'MENTION',
+        ]);
+      } catch (e) {
+        // 忽略错误
+      }
+      _loadUnreadCount();
+    });
   }
 
   void _showSearch() {

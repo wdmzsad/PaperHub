@@ -11,7 +11,7 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "notifications", indexes = {
-    @Index(name = "idx_recipient_read", columnList = "recipient_id,read"),
+    @Index(name = "idx_recipient_read", columnList = "recipient_id,is_read"),
     @Index(name = "idx_recipient_type", columnList = "recipient_id,type")
 })
 public class Notification {
@@ -46,7 +46,7 @@ public class Notification {
     private Comment comment;
 
     // 是否已读
-    @Column(name = "read", nullable = false)
+    @Column(name = "is_read", nullable = false)
     private boolean read = false;
 
     // 创建时间
