@@ -12,15 +12,137 @@
 /// - 清晰的信息层次和足够的留白
 import 'package:flutter/material.dart';
 import '../models/conversation_model.dart';
+import '../models/notification_model.dart';
+import '../models/post_model.dart';
 import '../services/chat_service.dart';
+import '../services/api_service.dart';
 import '../widgets/conversation_item.dart';
 import 'chat_screen.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
+import 'post_detail_screen.dart';
 
 // 赞和收藏页面
-class LikesAndFavoritesScreen extends StatelessWidget {
+class LikesAndFavoritesScreen extends StatefulWidget {
   const LikesAndFavoritesScreen({Key? key}) : super(key: key);
+
+  @override
+  State<LikesAndFavoritesScreen> createState() => _LikesAndFavoritesScreenState();
+}
+
+class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
+  List<NotificationItem> _notifications = [];
+  bool _isLoading = true;
+  int _page = 0;
+  final int _pageSize = 20;
+  bool _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications({bool loadMore = false}) async {
+    if (!loadMore) {
+      setState(() {
+        _isLoading = true;
+        _page = 0;
+      });
+    }
+
+    try {
+      final resp = await ApiService.getLikesAndFavorites(page: _page, pageSize: _pageSize);
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>;
+        final notifications = (body['notifications'] as List)
+            .map((json) => NotificationItem.fromJson(json))
+            .toList();
+
+        setState(() {
+          if (loadMore) {
+            _notifications.addAll(notifications);
+          } else {
+            _notifications = notifications;
+          }
+          _hasMore = notifications.length == _pageSize;
+          _page++;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载失败: $e')),
+        );
+      }
+    }
+  }
+
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final diff = now.difference(time);
+    if (diff.inDays > 0) {
+      return '${diff.inDays}天前';
+    } else if (diff.inHours > 0) {
+      return '${diff.inHours}小时前';
+    } else if (diff.inMinutes > 0) {
+      return '${diff.inMinutes}分钟前';
+    } else {
+      return '刚刚';
+    }
+  }
+
+  IconData _getIcon(NotificationType type) {
+    switch (type) {
+      case NotificationType.postLike:
+      case NotificationType.commentLike:
+        return Icons.favorite;
+      case NotificationType.postFavorite:
+        return Icons.bookmark;
+      default:
+        return Icons.favorite;
+    }
+  }
+
+  Color _getIconColor(NotificationType type) {
+    switch (type) {
+      case NotificationType.postLike:
+      case NotificationType.commentLike:
+        return Colors.red;
+      case NotificationType.postFavorite:
+        return Colors.blue;
+      default:
+        return Colors.red;
+    }
+  }
+
+  Future<void> _navigateToPostDetail(String postId) async {
+    try {
+      final resp = await ApiService.getPost(postId);
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>;
+        final post = Post.fromJson(body);
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PostDetailScreen(post: post),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载帖子失败: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,131 +165,223 @@ class LikesAndFavoritesScreen extends StatelessWidget {
         ),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        children: [
-          _buildNotificationItem(
-            avatar: 'https://via.placeholder.com/40',
-            title: '张三',
-            subtitle: '赞了你的笔记《机器学习入门指南》',
-            time: '2小时前',
-            icon: Icons.favorite,
-            iconColor: Colors.red,
-          ),
-          _buildNotificationItem(
-            avatar: 'https://via.placeholder.com/40',
-            title: '李四',
-            subtitle: '收藏了你的笔记《Flutter开发技巧》',
-            time: '5小时前',
-            icon: Icons.bookmark,
-            iconColor: Colors.blue,
-          ),
-          _buildNotificationItem(
-            avatar: 'https://via.placeholder.com/40',
-            title: '王五',
-            subtitle: '赞了你的评论',
-            time: '昨天',
-            icon: Icons.favorite,
-            iconColor: Colors.red,
-          ),
-          _buildNotificationItem(
-            avatar: 'https://via.placeholder.com/40',
-            title: '赵六',
-            subtitle: '收藏了你的笔记《Dart编程语言》',
-            time: '2天前',
-            icon: Icons.bookmark,
-            iconColor: Colors.blue,
-          ),
-          _buildNotificationItem(
-            avatar: 'https://via.placeholder.com/40',
-            title: '陈七',
-            subtitle: '赞了你的笔记《算法与数据结构》',
-            time: '3天前',
-            icon: Icons.favorite,
-            iconColor: Colors.red,
-          ),
-        ],
-      ),
+      body: _isLoading && _notifications.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : _notifications.isEmpty
+              ? const Center(child: Text('暂无通知'))
+              : RefreshIndicator(
+                  onRefresh: () => _loadNotifications(),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    itemCount: _notifications.length + (_hasMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _notifications.length) {
+                        _loadNotifications(loadMore: true);
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final notification = _notifications[index];
+                      return _buildNotificationItem(
+                        notification: notification,
+                        icon: _getIcon(notification.type),
+                        iconColor: _getIconColor(notification.type),
+                      );
+                    },
+                  ),
+                ),
     );
   }
 
   Widget _buildNotificationItem({
-    required String avatar,
-    required String title,
-    required String subtitle,
-    required String time,
+    required NotificationItem notification,
     required IconData icon,
     required Color iconColor,
   }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 3,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundImage: NetworkImage(avatar),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return GestureDetector(
+      onTap: () async {
+        // 标记为已读
+        if (!notification.read) {
+          try {
+            await ApiService.markNotificationAsRead(notification.id);
+          } catch (e) {
+            // 忽略错误
+          }
+        }
+        // 跳转到帖子详情
+        if (notification.post != null) {
+          _navigateToPostDetail(notification.post!.id);
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: notification.read ? Colors.white : Colors.blue[50],
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 3,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundImage: notification.actor.avatar != null
+                  ? NetworkImage(notification.actor.avatar!)
+                  : null,
+              child: notification.actor.avatar == null
+                  ? Text(notification.actor.name.isNotEmpty
+                      ? notification.actor.name[0].toUpperCase()
+                      : '?')
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    notification.actor.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    notification.content,
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
+                  _formatTime(notification.createdAt),
                   style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 13,
+                    color: Colors.grey[500],
+                    fontSize: 12,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 8),
+                Icon(icon, color: iconColor, size: 16),
               ],
             ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                time,
-                style: TextStyle(
-                  color: Colors.grey[500],
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Icon(icon, color: iconColor, size: 16),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
 // 新增关注页面
-class NewFollowersScreen extends StatelessWidget {
+class NewFollowersScreen extends StatefulWidget {
   const NewFollowersScreen({Key? key}) : super(key: key);
+
+  @override
+  State<NewFollowersScreen> createState() => _NewFollowersScreenState();
+}
+
+class _NewFollowersScreenState extends State<NewFollowersScreen> {
+  List<NotificationItem> _notifications = [];
+  bool _isLoading = true;
+  int _page = 0;
+  final int _pageSize = 20;
+  bool _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications({bool loadMore = false}) async {
+    if (!loadMore) {
+      setState(() {
+        _isLoading = true;
+        _page = 0;
+      });
+    }
+
+    try {
+      final resp = await ApiService.getFollows(page: _page, pageSize: _pageSize);
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>;
+        final notifications = (body['notifications'] as List)
+            .map((json) => NotificationItem.fromJson(json))
+            .toList();
+
+        setState(() {
+          if (loadMore) {
+            _notifications.addAll(notifications);
+          } else {
+            _notifications = notifications;
+          }
+          _hasMore = notifications.length == _pageSize;
+          _page++;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载失败: $e')),
+        );
+      }
+    }
+  }
+
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final diff = now.difference(time);
+    if (diff.inDays > 0) {
+      return '${diff.inDays}天前';
+    } else if (diff.inHours > 0) {
+      return '${diff.inHours}小时前';
+    } else if (diff.inMinutes > 0) {
+      return '${diff.inMinutes}分钟前';
+    } else {
+      return '刚刚';
+    }
+  }
+
+  Future<void> _navigateToPostDetail(String postId) async {
+    try {
+      final resp = await ApiService.getPost(postId);
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>;
+        final post = Post.fromJson(body);
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PostDetailScreen(post: post),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载帖子失败: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -190,148 +404,225 @@ class NewFollowersScreen extends StatelessWidget {
         ),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        children: [
-          _buildFollowerItem(
-            avatar: 'https://via.placeholder.com/40',
-            name: '张三',
-            bio: '机器学习爱好者 | 分享AI技术',
-            time: '刚刚',
-            isMutual: true,
-          ),
-          _buildFollowerItem(
-            avatar: 'https://via.placeholder.com/40',
-            name: '李四',
-            bio: 'Flutter开发者 | 移动端架构师',
-            time: '1小时前',
-            isMutual: false,
-          ),
-          _buildFollowerItem(
-            avatar: 'https://via.placeholder.com/40',
-            name: '王五',
-            bio: '产品设计师 | 用户体验研究者',
-            time: '3小时前',
-            isMutual: true,
-          ),
-          _buildFollowerItem(
-            avatar: 'https://via.placeholder.com/40',
-            name: '赵六',
-            bio: '全栈工程师 | 技术博客作者',
-            time: '昨天',
-            isMutual: false,
-          ),
-          _buildFollowerItem(
-            avatar: 'https://via.placeholder.com/40',
-            name: '陈七',
-            bio: '算法工程师 | 数据科学家',
-            time: '2天前',
-            isMutual: true,
-          ),
-        ],
-      ),
+      body: _isLoading && _notifications.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : _notifications.isEmpty
+              ? const Center(child: Text('暂无通知'))
+              : RefreshIndicator(
+                  onRefresh: () => _loadNotifications(),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    itemCount: _notifications.length + (_hasMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _notifications.length) {
+                        _loadNotifications(loadMore: true);
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final notification = _notifications[index];
+                      return _buildFollowerItem(notification: notification);
+                    },
+                  ),
+                ),
     );
   }
 
-  Widget _buildFollowerItem({
-    required String avatar,
-    required String name,
-    required String bio,
-    required String time,
-    required bool isMutual,
-  }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 3,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundImage: NetworkImage(avatar),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  bio,
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 13,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (isMutual) ...[
-                  const SizedBox(height: 4),
+  Widget _buildFollowerItem({required NotificationItem notification}) {
+    return GestureDetector(
+      onTap: () async {
+        // 标记为已读
+        if (!notification.read) {
+          try {
+            await ApiService.markNotificationAsRead(notification.id);
+          } catch (e) {
+            // 忽略错误
+          }
+        }
+        // 可以跳转到用户主页
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: notification.read ? Colors.white : Colors.blue[50],
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 3,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundImage: notification.actor.avatar != null
+                  ? NetworkImage(notification.actor.avatar!)
+                  : null,
+              child: notification.actor.avatar == null
+                  ? Text(notification.actor.name.isNotEmpty
+                      ? notification.actor.name[0].toUpperCase()
+                      : '?')
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    '互相关注',
-                    style: TextStyle(
-                      color: Colors.green[600],
-                      fontSize: 12,
+                    notification.actor.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    notification.content,
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            children: [
-              Text(
-                time,
-                style: TextStyle(
-                  color: Colors.grey[500],
-                  fontSize: 12,
-                ),
               ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1976D2),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Text(
-                  '回关',
+            ),
+            const SizedBox(width: 12),
+            Column(
+              children: [
+                Text(
+                  _formatTime(notification.createdAt),
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Colors.grey[500],
                     fontSize: 12,
-                    fontWeight: FontWeight.w500,
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1976D2),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Text(
+                    '回关',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 // 评论和@页面
-class CommentsAndMentionsScreen extends StatelessWidget {
+class CommentsAndMentionsScreen extends StatefulWidget {
   const CommentsAndMentionsScreen({Key? key}) : super(key: key);
+
+  @override
+  State<CommentsAndMentionsScreen> createState() => _CommentsAndMentionsScreenState();
+}
+
+class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
+  List<NotificationItem> _notifications = [];
+  bool _isLoading = true;
+  int _page = 0;
+  final int _pageSize = 20;
+  bool _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications({bool loadMore = false}) async {
+    if (!loadMore) {
+      setState(() {
+        _isLoading = true;
+        _page = 0;
+      });
+    }
+
+    try {
+      final resp = await ApiService.getCommentsAndMentions(page: _page, pageSize: _pageSize);
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>;
+        final notifications = (body['notifications'] as List)
+            .map((json) => NotificationItem.fromJson(json))
+            .toList();
+
+        setState(() {
+          if (loadMore) {
+            _notifications.addAll(notifications);
+          } else {
+            _notifications = notifications;
+          }
+          _hasMore = notifications.length == _pageSize;
+          _page++;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载失败: $e')),
+        );
+      }
+    }
+  }
+
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final diff = now.difference(time);
+    if (diff.inDays > 0) {
+      return '${diff.inDays}天前';
+    } else if (diff.inHours > 0) {
+      return '${diff.inHours}小时前';
+    } else if (diff.inMinutes > 0) {
+      return '${diff.inMinutes}分钟前';
+    } else {
+      return '刚刚';
+    }
+  }
+
+  Future<void> _navigateToPostDetail(String postId) async {
+    try {
+      final resp = await ApiService.getPost(postId);
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>;
+        final post = Post.fromJson(body);
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PostDetailScreen(post: post),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载帖子失败: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -354,167 +645,135 @@ class CommentsAndMentionsScreen extends StatelessWidget {
         ),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        children: [
-          _buildCommentItem(
-            avatar: 'https://via.placeholder.com/40',
-            name: '张三',
-            content: '这篇笔记写得太好了！特别是关于机器学习基础的部分，对我帮助很大。',
-            postTitle: '机器学习入门指南',
-            time: '30分钟前',
-            isMention: false,
-          ),
-          _buildCommentItem(
-            avatar: 'https://via.placeholder.com/40',
-            name: '李四',
-            content: '@小明 你之前问的关于Flutter状态管理的问题，可以看看这个实现',
-            postTitle: 'Flutter开发技巧',
-            time: '2小时前',
-            isMention: true,
-          ),
-          _buildCommentItem(
-            avatar: 'https://via.placeholder.com/40',
-            name: '王五',
-            content: '感谢分享！请问这个项目有GitHub地址吗？想学习一下源码。',
-            postTitle: '开源项目推荐',
-            time: '5小时前',
-            isMention: false,
-          ),
-          _buildCommentItem(
-            avatar: 'https://via.placeholder.com/40',
-            name: '赵六',
-            content: '@所有人 这个周末有技术分享会，欢迎大家参加！',
-            postTitle: '技术交流活动',
-            time: '昨天',
-            isMention: true,
-          ),
-          _buildCommentItem(
-            avatar: 'https://via.placeholder.com/40',
-            name: '陈七',
-            content: '写得非常详细，解决了困扰我很久的问题，点赞！',
-            postTitle: 'Dart编程语言',
-            time: '2天前',
-            isMention: false,
-          ),
-        ],
-      ),
+      body: _isLoading && _notifications.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : _notifications.isEmpty
+              ? const Center(child: Text('暂无通知'))
+              : RefreshIndicator(
+                  onRefresh: () => _loadNotifications(),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    itemCount: _notifications.length + (_hasMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _notifications.length) {
+                        _loadNotifications(loadMore: true);
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final notification = _notifications[index];
+                      return _buildCommentItem(notification: notification);
+                    },
+                  ),
+                ),
     );
   }
 
-  Widget _buildCommentItem({
-    required String avatar,
-    required String name,
-    required String content,
-    required String postTitle,
-    required String time,
-    required bool isMention,
-  }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 3,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundImage: NetworkImage(avatar),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                time,
-                style: TextStyle(
-                  color: Colors.grey[500],
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            content,
-            style: const TextStyle(
-              fontSize: 14,
-              height: 1.4,
+  Widget _buildCommentItem({required NotificationItem notification}) {
+    final isMention = notification.type == NotificationType.mention;
+    final commentContent = notification.comment?.content ?? '';
+    return GestureDetector(
+      onTap: () async {
+        // 标记为已读
+        if (!notification.read) {
+          try {
+            await ApiService.markNotificationAsRead(notification.id);
+          } catch (e) {
+            // 忽略错误
+          }
+        }
+        // 跳转到帖子详情
+        if (notification.post != null) {
+          _navigateToPostDetail(notification.post!.id);
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: notification.read ? Colors.white : Colors.blue[50],
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 3,
+              offset: const Offset(0, 1),
             ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Icon(
-                  isMention ? Icons.alternate_email : Icons.chat_bubble_outline,
-                  color: Colors.grey[500],
-                  size: 16,
+                CircleAvatar(
+                  radius: 16,
+                  backgroundImage: notification.actor.avatar != null
+                      ? NetworkImage(notification.actor.avatar!)
+                      : null,
+                  child: notification.actor.avatar == null
+                      ? Text(notification.actor.name.isNotEmpty
+                          ? notification.actor.name[0].toUpperCase()
+                          : '?')
+                      : null,
                 ),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    postTitle,
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 13,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                Text(
+                  notification.actor.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  _formatTime(notification.createdAt),
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 12,
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: () {},
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                ),
-                child: const Text(
-                  '回复',
-                  style: TextStyle(fontSize: 12),
-                ),
+            const SizedBox(height: 8),
+            Text(
+              commentContent.isNotEmpty ? commentContent : notification.content,
+              style: const TextStyle(
+                fontSize: 14,
+                height: 1.4,
               ),
-              TextButton(
-                onPressed: () {},
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            if (notification.post != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  '删除',
-                  style: TextStyle(fontSize: 12),
+                child: Row(
+                  children: [
+                    Icon(
+                      isMention ? Icons.alternate_email : Icons.chat_bubble_outline,
+                      color: Colors.grey[500],
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        notification.post!.title,
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 13,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -551,12 +810,28 @@ class _MessageScreenState extends State<MessageScreen> {
   List<Conversation> _filteredConversations = [];
   bool _isSearching = false;
   int _currentIndex = 1; // 默认选中消息页面
+  UnreadCount _unreadCount = UnreadCount(likes: 0, follows: 0, comments: 0);
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadUnreadCount();
     _searchController.addListener(_onSearchChanged);
+  }
+
+  Future<void> _loadUnreadCount() async {
+    try {
+      final resp = await ApiService.getUnreadNotificationCount();
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>;
+        setState(() {
+          _unreadCount = UnreadCount.fromJson(body);
+        });
+      }
+    } catch (e) {
+      // 忽略错误
+    }
   }
 
   @override
@@ -600,6 +875,7 @@ class _MessageScreenState extends State<MessageScreen> {
 
   Future<void> _onRefresh() async {
     await _loadData();
+    await _loadUnreadCount();
   }
 
   @override
@@ -656,19 +932,31 @@ class _MessageScreenState extends State<MessageScreen> {
             icon: Icons.favorite_border,
             activeIcon: Icons.favorite,
             label: '赞和收藏',
-            onTap: () => _navigateToLikesAndFavorites(),
+            badgeCount: _unreadCount.likes,
+            onTap: () {
+              _navigateToLikesAndFavorites();
+              _loadUnreadCount(); // 刷新未读数量
+            },
           ),
           _buildTopNavItem(
             icon: Icons.person_add_outlined,
             activeIcon: Icons.person_add,
             label: '新增关注',
-            onTap: () => _navigateToNewFollowers(),
+            badgeCount: _unreadCount.follows,
+            onTap: () {
+              _navigateToNewFollowers();
+              _loadUnreadCount(); // 刷新未读数量
+            },
           ),
           _buildTopNavItem(
             icon: Icons.chat_bubble_outline,
             activeIcon: Icons.chat_bubble,
             label: '评论和@',
-            onTap: () => _navigateToCommentsAndMentions(),
+            badgeCount: _unreadCount.comments,
+            onTap: () {
+              _navigateToCommentsAndMentions();
+              _loadUnreadCount(); // 刷新未读数量
+            },
           ),
         ],
       ),
@@ -680,23 +968,54 @@ class _MessageScreenState extends State<MessageScreen> {
     required IconData activeIcon,
     required String label,
     required VoidCallback onTap,
+    int badgeCount = 0,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Column(
         children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(25),
-            ),
-            child: Icon(
-              icon,
-              color: Colors.black87,
-              size: 24,
-            ),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(25),
+                ),
+                child: Icon(
+                  icon,
+                  color: Colors.black87,
+                  size: 24,
+                ),
+              ),
+              if (badgeCount > 0)
+                Positioned(
+                  right: -4,
+                  top: -4,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      badgeCount > 99 ? '99+' : badgeCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           Text(
@@ -873,21 +1192,54 @@ class _MessageScreenState extends State<MessageScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const LikesAndFavoritesScreen()),
-    );
+    ).then((_) async {
+      // 返回时批量标记为已读并刷新未读数量
+      try {
+        await ApiService.markAllNotificationsAsReadByTypes([
+          'POST_LIKE',
+          'POST_FAVORITE',
+          'COMMENT_LIKE',
+        ]);
+      } catch (e) {
+        // 忽略错误
+      }
+      _loadUnreadCount();
+    });
   }
 
   void _navigateToNewFollowers() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const NewFollowersScreen()),
-    );
+    ).then((_) async {
+      // 返回时批量标记为已读并刷新未读数量
+      try {
+        await ApiService.markAllNotificationsAsReadByTypes([
+          'FOLLOW',
+        ]);
+      } catch (e) {
+        // 忽略错误
+      }
+      _loadUnreadCount();
+    });
   }
 
   void _navigateToCommentsAndMentions() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const CommentsAndMentionsScreen()),
-    );
+    ).then((_) async {
+      // 返回时批量标记为已读并刷新未读数量
+      try {
+        await ApiService.markAllNotificationsAsReadByTypes([
+          'COMMENT',
+          'MENTION',
+        ]);
+      } catch (e) {
+        // 忽略错误
+      }
+      _loadUnreadCount();
+    });
   }
 
   void _showSearch() {

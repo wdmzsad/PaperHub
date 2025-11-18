@@ -5,6 +5,7 @@ import 'pages/verify_email_page.dart';
 import 'pages/forgot_password_page.dart';
 import 'pages/reset_password_page.dart';
 import 'screens/home_screen.dart';
+import 'screens/profile_screen.dart';
 import 'services/local_storage.dart';
 
 void main() {
@@ -26,6 +27,18 @@ class PaperHubApp extends StatelessWidget {
         '/forgot': (ctx) => ForgotPasswordPage(),
         '/reset': (ctx) => ResetPasswordPage(),
         '/home': (ctx) => const HomeScreen(),
+        '/me': (ctx) => const ProfilePage(),
+      },
+      onGenerateRoute: (settings) {
+        final name = settings.name ?? '';
+        if (name.startsWith('/user/')) {
+          final userId = name.substring('/user/'.length);
+          return MaterialPageRoute(
+            builder: (_) => ProfilePage(userId: userId),
+            settings: settings,
+          );
+        }
+        return null;
       },
     );
   }
@@ -46,7 +59,7 @@ class _SplashOrLoginState extends State<SplashOrLogin> {
 
   Future<void> _checkToken() async {
     await Future.delayed(Duration(milliseconds: 400));
-    final token = LocalStorage.instance.read('auth_token');
+    final token = LocalStorage.instance.read('accessToken');
     if (token != null && token.isNotEmpty) {
       Navigator.of(context).pushReplacementNamed('/home');
     } else {

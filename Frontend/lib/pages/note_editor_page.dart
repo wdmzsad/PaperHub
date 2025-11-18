@@ -3,6 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/api_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:typed_data';              // 用于 Uint8List
+import 'package:flutter/foundation.dart' show kIsWeb;  // 用于 kIsWeb
+import 'package:http_parser/http_parser.dart';        // 用于 MediaType
+   
+   
 
 class NoteEditorPage extends StatefulWidget {
   const NoteEditorPage({Key? key}) : super(key: key);
@@ -24,7 +31,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     final XFile? file = await _picker.pickImage(source: ImageSource.gallery);
     if (file != null) {
       setState(() {
-        if (_images.length < 9) _images.add(file);
+        if (_images.length < 9) 
+          _images.add(file);
       });
     }
   }
@@ -60,6 +68,53 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     });
   }
 
+  // 上传图片方法
+  Future<String?> _uploadImageToServer(XFile image) async {
+    try {
+      final uri = Uri.parse('http://localhost:8080/posts/upload');
+      final request = http.MultipartRequest('POST', uri);
+
+      if (kIsWeb) {
+       // -------------------------------------------
+        // ✔ Web 端：使用 bytes 创建 MultipartFile
+        // -------------------------------------------
+        Uint8List bytes = await image.readAsBytes();
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            bytes,
+            filename: image.name,
+            contentType: MediaType('image', image.mimeType?.split('/').last ?? 'jpeg'),
+          ),
+        );
+      } else {
+        // -------------------------------------------
+        // ✔ 移动端/桌面端：使用文件路径上传
+        // -------------------------------------------
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'file',
+            image.path,
+        ),
+      );
+    }
+
+    final response = await request.send();
+
+    if (response.statusCode == 200) {
+      final respStr = await response.stream.bytesToString();
+      final Map<String, dynamic> data = jsonDecode(respStr);
+      return data['url'];
+    } else {
+      print("上传失败: ${response.statusCode}");
+      return null;
+    }
+  } catch (e) {
+    print('上传图片失败: $e');
+    return null;
+  }
+}
+
   // 发布逻辑
   Future<void> _publishNote() async {
     final title = _titleController.text.trim();
@@ -86,25 +141,32 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
 
+    print('1\n');
     try {
-      // TODO: 图片上传功能需要单独的文件上传API，这里暂时使用空列表
-      // 后续需要实现图片上传到服务器，获取URL后再传递
-      final List<String> mediaUrls = []; // 图片URL列表
-
+      // 先上传图片获取 URL
+      List<String> mediaUrls = [];
+      for (var img in _images) {
+        print('2\n');
+        final url = await _uploadImageToServer(img);
+        print(url);
+        print("\n");
+        if (url != null) mediaUrls.add(url);
+      }
+      print(3);
+      // 调用创建笔记接口
       final resp = await ApiService.createPost(
         title: title,
         content: content.isNotEmpty ? content : null,
         media: mediaUrls.isNotEmpty ? mediaUrls : null,
-        tags: null, // TODO: 可以添加标签输入功能
+        tags: null,
         doi: null,
         journal: null,
         year: null,
       );
-
+      print(mediaUrls);
+      print("\n");
       // 关闭加载对话框
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
+      if (mounted) Navigator.of(context).pop();
 
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
@@ -114,11 +176,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('发布成功')),
           );
-          Navigator.of(context).pop(); // 返回到上一个页面
+          Navigator.of(context).pop(); // 返回上一页
         }
       } else {
-        final msg = body != null && body['message'] != null 
-            ? body['message'].toString() 
+        final msg = body != null && body['message'] != null
+            ? body['message'].toString()
             : '发布失败';
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -127,7 +189,6 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         }
       }
     } catch (e) {
-      // 关闭加载对话框
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -136,6 +197,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       }
     }
   }
+
 
   @override
   void dispose() {

@@ -11,7 +11,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -59,28 +61,64 @@ public class CommentController {
      * POST /posts/{postId}/comments
      */
     @PostMapping
-    public ResponseEntity<CommentDtos.CommentResp> createComment(
+    public ResponseEntity<?> createComment(
             @PathVariable Long postId,
             @Valid @RequestBody CommentDtos.CreateCommentReq req,
             @AuthenticationPrincipal User user) {
-        
-        Comment comment = commentService.createComment(
-            postId,
-            req.content(),
-            user,
-            req.parentId(),
-            req.replyToId()
-        );
-        
-        // 加载子回复
-        List<Comment> replies = commentService.getReplies(comment.getId());
-        
-        CommentDtos.CommentResp resp = convertToCommentRespWithReplies(comment, user.getId(), replies);
-        
-        // 推送WebSocket消息
-        webSocketService.sendCommentCreated(postId, resp);
-        
-        return ResponseEntity.status(201).body(resp);
+        try {
+            System.out.println("=== 创建评论请求 ===");
+            System.out.println("帖子ID: " + postId);
+            System.out.println("用户: " + (user != null ? user.getId() + " (" + user.getEmail() + ")" : "null"));
+            System.out.println("评论内容: " + req.content());
+            System.out.println("父评论ID: " + req.parentId());
+            System.out.println("回复用户ID: " + req.replyToId());
+            
+            // 检查用户是否已认证
+            if (user == null) {
+                System.err.println("错误: 用户未认证");
+                Map<String, String> error = new HashMap<>();
+                error.put("message", "未认证，请先登录");
+                return ResponseEntity.status(401).body(error);
+            }
+            
+            Comment comment = commentService.createComment(
+                postId,
+                req.content(),
+                user,
+                req.parentId(),
+                req.replyToId()
+            );
+            
+            System.out.println("评论创建成功，ID: " + comment.getId());
+            
+            // 加载子回复
+            List<Comment> replies = commentService.getReplies(comment.getId());
+            
+            CommentDtos.CommentResp resp = convertToCommentRespWithReplies(comment, user.getId(), replies);
+            
+            // 推送WebSocket消息
+            try {
+                webSocketService.sendCommentCreated(postId, resp);
+            } catch (Exception wsEx) {
+                System.err.println("WebSocket推送失败（不影响主流程）: " + wsEx.getMessage());
+            }
+            
+            System.out.println("返回响应: 评论ID=" + resp.id());
+            return ResponseEntity.status(201).body(resp);
+        } catch (IllegalArgumentException e) {
+            System.err.println("创建评论失败: " + e.getMessage());
+            Map<String, Object> error = new HashMap<>();
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(400).body(error);
+        } catch (Exception e) {
+            System.err.println("创建评论失败: " + e.getMessage());
+            e.printStackTrace();
+            
+            Map<String, Object> error = new HashMap<>();
+            error.put("message", "创建评论失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            error.put("postId", postId);
+            return ResponseEntity.status(500).body(error);
+        }
     }
 
     /**
@@ -128,20 +166,52 @@ public class CommentController {
      * POST /posts/{postId}/comments/{commentId}/like
      */
     @PostMapping("/{commentId}/like")
-    public ResponseEntity<CommentDtos.LikeResp> likeComment(
+    public ResponseEntity<?> likeComment(
             @PathVariable Long postId,
             @PathVariable Long commentId,
             @AuthenticationPrincipal User user) {
-        
-        likeService.likeComment(commentId, user);
-        
-        long likesCount = likeService.getCommentLikesCount(commentId);
-        boolean isLiked = likeService.isCommentLiked(commentId, user.getId());
-        
-        // 推送WebSocket消息
-        webSocketService.sendCommentLikeUpdate(postId, commentId.toString(), (int) likesCount, isLiked);
-        
-        return ResponseEntity.ok(new CommentDtos.LikeResp((int) likesCount, isLiked));
+        try {
+            System.out.println("=== 点赞评论请求 ===");
+            System.out.println("帖子ID: " + postId + ", 评论ID: " + commentId);
+            System.out.println("用户: " + (user != null ? user.getId() + " (" + user.getEmail() + ")" : "null"));
+            
+            if (user == null) {
+                System.err.println("错误: 用户未认证");
+                Map<String, String> error = new HashMap<>();
+                error.put("message", "未认证，请先登录");
+                return ResponseEntity.status(401).body(error);
+            }
+            
+            // 执行点赞
+            boolean result = likeService.likeComment(commentId, user);
+            System.out.println("点赞操作结果: " + result);
+            
+            // 获取最新状态
+            long likesCount = likeService.getCommentLikesCount(commentId);
+            boolean isLiked = likeService.isCommentLiked(commentId, user.getId());
+            
+            System.out.println("当前点赞数: " + likesCount);
+            System.out.println("用户是否已点赞: " + isLiked);
+            
+            // 推送WebSocket消息
+            try {
+                webSocketService.sendCommentLikeUpdate(postId, commentId.toString(), (int) likesCount, isLiked);
+            } catch (Exception wsEx) {
+                System.err.println("WebSocket推送失败（不影响主流程）: " + wsEx.getMessage());
+            }
+            
+            CommentDtos.LikeResp resp = new CommentDtos.LikeResp((int) likesCount, isLiked);
+            System.out.println("返回响应: likesCount=" + resp.likesCount() + ", isLiked=" + resp.isLiked());
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            System.err.println("点赞评论失败: " + e.getMessage());
+            e.printStackTrace();
+            
+            Map<String, Object> error = new HashMap<>();
+            error.put("message", "点赞评论失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            error.put("commentId", commentId);
+            return ResponseEntity.status(500).body(error);
+        }
     }
 
     /**
@@ -149,20 +219,52 @@ public class CommentController {
      * DELETE /posts/{postId}/comments/{commentId}/like
      */
     @DeleteMapping("/{commentId}/like")
-    public ResponseEntity<CommentDtos.LikeResp> unlikeComment(
+    public ResponseEntity<?> unlikeComment(
             @PathVariable Long postId,
             @PathVariable Long commentId,
             @AuthenticationPrincipal User user) {
-        
-        likeService.unlikeComment(commentId, user);
-        
-        long likesCount = likeService.getCommentLikesCount(commentId);
-        boolean isLiked = likeService.isCommentLiked(commentId, user.getId());
-        
-        // 推送WebSocket消息
-        webSocketService.sendCommentLikeUpdate(postId, commentId.toString(), (int) likesCount, isLiked);
-        
-        return ResponseEntity.ok(new CommentDtos.LikeResp((int) likesCount, isLiked));
+        try {
+            System.out.println("=== 取消点赞评论请求 ===");
+            System.out.println("帖子ID: " + postId + ", 评论ID: " + commentId);
+            System.out.println("用户: " + (user != null ? user.getId() + " (" + user.getEmail() + ")" : "null"));
+            
+            if (user == null) {
+                System.err.println("错误: 用户未认证");
+                Map<String, String> error = new HashMap<>();
+                error.put("message", "未认证，请先登录");
+                return ResponseEntity.status(401).body(error);
+            }
+            
+            // 执行取消点赞
+            boolean result = likeService.unlikeComment(commentId, user);
+            System.out.println("取消点赞操作结果: " + result);
+            
+            // 获取最新状态
+            long likesCount = likeService.getCommentLikesCount(commentId);
+            boolean isLiked = likeService.isCommentLiked(commentId, user.getId());
+            
+            System.out.println("当前点赞数: " + likesCount);
+            System.out.println("用户是否已点赞: " + isLiked);
+            
+            // 推送WebSocket消息
+            try {
+                webSocketService.sendCommentLikeUpdate(postId, commentId.toString(), (int) likesCount, isLiked);
+            } catch (Exception wsEx) {
+                System.err.println("WebSocket推送失败（不影响主流程）: " + wsEx.getMessage());
+            }
+            
+            CommentDtos.LikeResp resp = new CommentDtos.LikeResp((int) likesCount, isLiked);
+            System.out.println("返回响应: likesCount=" + resp.likesCount() + ", isLiked=" + resp.isLiked());
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            System.err.println("取消点赞评论失败: " + e.getMessage());
+            e.printStackTrace();
+            
+            Map<String, Object> error = new HashMap<>();
+            error.put("message", "取消点赞评论失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            error.put("commentId", commentId);
+            return ResponseEntity.status(500).body(error);
+        }
     }
 
     /**
@@ -269,9 +371,14 @@ public class CommentController {
         );
     }
     private String resolveAvatar(String avatar) {
-        return (avatar != null && !avatar.trim().isEmpty())
-            ? avatar
-            : "images/DefaultAvatar.png";
+        if (avatar == null || avatar.trim().isEmpty()) {
+            return "images/DefaultAvatar.png";
+        }
+        // 如果数据库中存储的是带 assets/ 前缀的路径，去掉前缀
+        if (avatar.equals("assets/images/DefaultAvatar.png")) {
+            return "images/DefaultAvatar.png";
+        }
+        return avatar;
     }
 }
 

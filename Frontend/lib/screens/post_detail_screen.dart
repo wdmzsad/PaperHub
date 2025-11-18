@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
+import 'dart:io';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -116,7 +117,8 @@ class PostDetailScreen extends StatefulWidget {
 ================================================================================
 */
 
-class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerProviderStateMixin {
+class _PostDetailScreenState extends State<PostDetailScreen>
+    with SingleTickerProviderStateMixin {
   WebSocketChannel? _wsChannel;
   late bool isLiked;
   late bool isSaved;
@@ -140,6 +142,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
   late AnimationController _heartCtrl;
   late Animation<double> _heartScale;
   bool _showBigHeart = false;
+  bool _saveInFlight = false;
 
   @override
   void initState() {
@@ -149,8 +152,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
     likeCount = widget.post.likesCount;
     commentCount = widget.post.commentsCount;
 
-    _heartCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
-    _heartScale = Tween(begin: 0.3, end: 1.0).chain(CurveTween(curve: Curves.elasticOut)).animate(_heartCtrl);
+    _heartCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _heartScale = Tween(
+      begin: 0.3,
+      end: 1.0,
+    ).chain(CurveTween(curve: Curves.elasticOut)).animate(_heartCtrl);
     // 在动画结束后自动隐藏大爱心（避免永久显示受 isLiked 控制）
     _heartCtrl.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
@@ -164,10 +173,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
         });
       }
     });
-    
+
     // 从后端获取最新的帖子信息
     _loadPostDetail();
-    
+
     // 加载评论
     _loadComments();
 
@@ -181,7 +190,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
       final resp = await ApiService.getPost(widget.post.id);
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
-      
+
       if (status >= 200 && status < 300 && body != null) {
         final updatedPost = Post.fromJson(body);
         if (mounted) {
@@ -203,7 +212,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
 
   Future<void> _loadComments({bool refresh = false}) async {
     if (_isLoadingComments) return;
-    
+
     setState(() {
       _isLoadingComments = true;
       if (refresh) {
@@ -225,10 +234,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
       if (status >= 200 && status < 300 && body != null) {
-        final commentsData = (body['comments'] as List<dynamic>?) ?? <dynamic>[];
+        final commentsData =
+            (body['comments'] as List<dynamic>?) ?? <dynamic>[];
         final total = body['total'] as int? ?? commentsData.length;
 
-        final newComments = commentsData.map((c) => Comment.fromJson(c as Map<String, dynamic>)).toList();
+        final newComments = commentsData
+            .map((c) => Comment.fromJson(c as Map<String, dynamic>))
+            .toList();
 
         setState(() {
           if (refresh) {
@@ -244,13 +256,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
         });
       } else {
         // 可选：显示错误信息，body 可能包含 message 字段
-        final msg = body != null && body['message'] != null ? body['message'].toString() : '加载评论失败';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        final msg = body != null && body['message'] != null
+            ? body['message'].toString()
+            : '加载评论失败';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(msg)));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('加载评论失败')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('加载评论失败')));
     } finally {
       setState(() {
         _isLoadingComments = false;
@@ -289,75 +305,109 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
     // TODO: 替换为你后端实际 ws 地址
     final wsUrl = 'ws://localhost:8080/ws/posts/${widget.post.id}';
     _wsChannel = WebSocketChannel.connect(Uri.parse(wsUrl));
-    _wsChannel!.stream.listen((event) {
-      try {
-        final data = jsonDecode(event);
-        final type = data['type'] as String?;
+    _wsChannel!.stream.listen(
+      (event) {
+        try {
+          final data = jsonDecode(event);
+          final type = data['type'] as String?;
 
-        // 常见事件：
-        // - like_update: 帖子点赞变化（保持原有处理）
-        // - comment_like_update: 单条评论的点赞变化
-        // - comment_created: 新评论推送，payload 中包含 comment 对象
-        // - comment_updated: 评论被更新，payload 中包含 comment 对象
-        // - comment_deleted: 评论被删除，payload 中包含 commentId
+          // 常见事件：
+          // - like_update: 帖子点赞变化（保持原有处理）
+          // - comment_like_update: 单条评论的点赞变化
+          // - comment_created: 新评论推送，payload 中包含 comment 对象
+          // - comment_updated: 评论被更新，payload 中包含 comment 对象
+          // - comment_deleted: 评论被删除，payload 中包含 commentId
 
-        if (type == 'like_update') {
-          setState(() {
-            if (data.containsKey('likesCount')) likeCount = data['likesCount'] as int;
-            if (data.containsKey('isLiked')) isLiked = data['isLiked'] as bool;
-          });
-        } else if (type == 'comment_like_update' && data['commentId'] != null) {
-          // 评论点赞变更
-          final commentId = data['commentId'] as String;
-          final idx = _comments.indexWhere((c) => c.id == commentId);
-          if (idx != -1) {
+          if (type == 'like_update') {
             setState(() {
-              if (data.containsKey('likesCount')) _comments[idx].likesCount = data['likesCount'] as int;
-              if (data.containsKey('isLiked')) _comments[idx].isLiked = data['isLiked'] as bool;
+              if (data.containsKey('likesCount'))
+                likeCount = data['likesCount'] as int;
+              if (data.containsKey('isLiked'))
+                isLiked = data['isLiked'] as bool;
             });
-          } else {
-            // 可能是子回复的点赞变化
-            for (var parent in _comments) {
-              final ridx = parent.replies.indexWhere((r) => r.id == commentId);
-              if (ridx != -1) {
-                setState(() {
-                  if (data.containsKey('likesCount')) parent.replies[ridx].likesCount = data['likesCount'] as int;
-                  if (data.containsKey('isLiked')) parent.replies[ridx].isLiked = data['isLiked'] as bool;
-                });
-                break;
+          } else if (type == 'comment_like_update' &&
+              data['commentId'] != null) {
+            // 评论点赞变更
+            final commentId = data['commentId'] as String;
+            final idx = _comments.indexWhere((c) => c.id == commentId);
+            if (idx != -1) {
+              setState(() {
+                if (data.containsKey('likesCount'))
+                  _comments[idx].likesCount = data['likesCount'] as int;
+                if (data.containsKey('isLiked'))
+                  _comments[idx].isLiked = data['isLiked'] as bool;
+              });
+            } else {
+              // 可能是子回复的点赞变化
+              for (var parent in _comments) {
+                final ridx = parent.replies.indexWhere(
+                  (r) => r.id == commentId,
+                );
+                if (ridx != -1) {
+                  setState(() {
+                    if (data.containsKey('likesCount'))
+                      parent.replies[ridx].likesCount =
+                          data['likesCount'] as int;
+                    if (data.containsKey('isLiked'))
+                      parent.replies[ridx].isLiked = data['isLiked'] as bool;
+                  });
+                  break;
+                }
               }
             }
+          } else if (type == 'comment_created') {
+            // 服务器推送新评论
+            _handleCommentCreated(data);
+          } else if (type == 'comment_updated') {
+            _handleCommentUpdated(data);
+          } else if (type == 'comment_deleted') {
+            _handleCommentDeleted(data);
           }
-        } else if (type == 'comment_created') {
-          // 服务器推送新评论
-          _handleCommentCreated(data);
-        } else if (type == 'comment_updated') {
-          _handleCommentUpdated(data);
-        } else if (type == 'comment_deleted') {
-          _handleCommentDeleted(data);
+        } catch (e) {
+          // ignore: 格式或解析错误，避免影响主流程
         }
-      } catch (e) {
-        // ignore: 格式或解析错误，避免影响主流程
-      }
-    }, onError: (err) {
-      // 可选：记录错误或做重连策略
-    }, onDone: () {
-      // 可选：自动重连（根据实际需要实现）
-    });
+      },
+      onError: (err) {
+        // 可选：记录错误或做重连策略
+      },
+      onDone: () {
+        // 可选：自动重连（根据实际需要实现）
+      },
+    );
   }
 
   void _handleCommentCreated(Map<String, dynamic> data) {
     // 期望 payload 在 data['comment'] 或 data['payload'] 中
-    final commentJson = (data['comment'] ?? data['payload'] ?? data['data']) as Map<String, dynamic>?;
+    final commentJson =
+        (data['comment'] ?? data['payload'] ?? data['data'])
+            as Map<String, dynamic>?;
     if (commentJson == null) return;
 
     try {
       final newComment = Comment.fromJson(commentJson);
 
       setState(() {
-        // 防止重复插入：如果已有同 id，忽略
-        final existsTop = _comments.any((c) => c.id == newComment.id);
-        if (existsTop) return;
+        // 防止重复插入：检查顶层评论和所有子回复
+        bool exists = false;
+        
+        // 检查顶层评论
+        if (_comments.any((c) => c.id == newComment.id)) {
+          exists = true;
+        }
+        
+        // 检查所有子回复
+        if (!exists) {
+          for (var comment in _comments) {
+            if (comment.replies.any((r) => r.id == newComment.id)) {
+              exists = true;
+              break;
+            }
+          }
+        }
+        
+        if (exists) {
+          return; // 已存在，忽略
+        }
 
         if (newComment.parentId == null) {
           // 顶层评论，插入到顶部
@@ -386,7 +436,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
   }
 
   void _handleCommentUpdated(Map<String, dynamic> data) {
-    final commentJson = (data['comment'] ?? data['payload'] ?? data['data']) as Map<String, dynamic>?;
+    final commentJson =
+        (data['comment'] ?? data['payload'] ?? data['data'])
+            as Map<String, dynamic>?;
     if (commentJson == null) return;
 
     try {
@@ -439,7 +491,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
 
   void _handleCommentDeleted(Map<String, dynamic> data) {
     // 期望 data 包含 commentId 或 payload
-    final commentId = (data['commentId'] ?? data['id'] ?? (data['payload'] is Map ? data['payload']['id'] : null)) as String?;
+    final commentId =
+        (data['commentId'] ??
+                data['id'] ??
+                (data['payload'] is Map ? data['payload']['id'] : null))
+            as String?;
     if (commentId == null) return;
 
     setState(() {
@@ -492,18 +548,28 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
     }
 
     try {
-      final resp = isLiked ? await ApiService.likePost(widget.post.id) : await ApiService.unlikePost(widget.post.id);
+      final resp = isLiked
+          ? await ApiService.likePost(widget.post.id)
+          : await ApiService.unlikePost(widget.post.id);
       final status = (resp['statusCode'] ?? 500) as int;
       final body = resp['body'] as Map<String, dynamic>?;
+
+      print('点赞响应: status=$status, body=$body'); // 调试日志
+
       if (status >= 200 && status < 300) {
         // 如果后端返回了最新计数，则以后端为准
-        if (body != null) {
+        if (body != null &&
+            body.containsKey('likesCount') &&
+            body.containsKey('isLiked')) {
           setState(() {
-            if (body.containsKey('likesCount')) likeCount = body['likesCount'] as int;
-            if (body.containsKey('isLiked')) isLiked = body['isLiked'] as bool;
+            likeCount = body['likesCount'] as int;
+            isLiked = body['isLiked'] as bool;
             widget.post.likesCount = likeCount;
             widget.post.isLiked = isLiked;
           });
+        } else if (body != null && body.containsKey('message')) {
+          // 如果只有 message，说明可能是 204 或其他情况，保持乐观更新
+          print('警告: 响应缺少 likesCount 或 isLiked，保持乐观更新');
         }
         // （可选）如果后端不自动创建通知，前端可以调用通知接口：
         // await ApiService.createNotification({ ... });
@@ -515,34 +581,98 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
           widget.post.isLiked = previousLiked;
           widget.post.likesCount = previousCount;
         });
-        final msg = body != null && body['message'] != null ? body['message'] : '点赞失败';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg.toString())));
+        final msg = body != null && body['message'] != null
+            ? body['message'].toString()
+            : '点赞失败，请稍后重试';
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(msg)));
+        }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       // 网络或解析错误 -> 回滚
+      print('点赞异常: $e');
+      print('堆栈跟踪: $stackTrace');
       setState(() {
         isLiked = previousLiked;
         likeCount = previousCount;
         widget.post.isLiked = previousLiked;
         widget.post.likesCount = previousCount;
       });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('网络错误，点赞未成功')));
+      if (mounted) {
+        final errorMsg = e.toString().contains('超时')
+            ? '请求超时，请检查网络连接'
+            : '网络错误，点赞未成功，请稍后重试';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMsg)));
+      }
     } finally {
       _postLikeInFlight = false;
     }
   }
 
-  void _toggleSave() {
+  Future<void> _toggleSave() async {
+    if (_saveInFlight) return;
+    _saveInFlight = true;
+    final previousSaved = isSaved;
     setState(() {
       isSaved = !isSaved;
       widget.post.isSaved = isSaved;
     });
-    // TODO: 调用后端 save/unsave
+    try {
+      final resp = isSaved
+          ? await ApiService.favoritePost(widget.post.id)
+          : await ApiService.unfavoritePost(widget.post.id);
+      final status = resp['statusCode'] as int? ?? 500;
+      final body = resp['body'] as Map<String, dynamic>?;
+      if (status >= 200 && status < 300) {
+        if (body != null && body.containsKey('isSaved')) {
+          final serverValue = body['isSaved'] as bool;
+          setState(() {
+            isSaved = serverValue;
+            widget.post.isSaved = serverValue;
+          });
+        }
+      } else {
+        setState(() {
+          isSaved = previousSaved;
+          widget.post.isSaved = previousSaved;
+        });
+        final msg = body != null && body['message'] != null
+            ? body['message'].toString()
+            : '收藏操作失败';
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(msg)));
+        }
+      }
+    } catch (e) {
+      setState(() {
+        isSaved = previousSaved;
+        widget.post.isSaved = previousSaved;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('网络错误，收藏操作未成功')));
+      }
+    } finally {
+      _saveInFlight = false;
+    }
+  }
+
+  void _openUserProfile(String userId) {
+    Navigator.of(context).pushNamed('/user/$userId');
   }
 
   void _onShare() {
     // TODO: 调用分享 API 或复制链接
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('分享（演示）')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('分享（演示）')));
   }
 
   Future<void> _submitComment({String? parentId, Author? replyTo}) async {
@@ -565,37 +695,56 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
 
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
+
+      print('创建评论响应: status=$status, body=$body'); // 调试日志
+
       if (status >= 200 && status < 300 && body != null) {
-        // 期望后端返回 {'comment': {...}}
-        final commentJson = (body['comment'] as Map<String, dynamic>?) ?? body;
-        final newComment = Comment.fromJson(commentJson);
-        setState(() {
-          if (parentId == null) {
-            // 顶层评论
-            _comments.insert(0, newComment);
-            commentCount += 1;
-            widget.post.commentsCount = commentCount;
-          } else {
-            // 回复评论：尝试找到父评论并追加
-            final parentIndex = _comments.indexWhere((c) => c.id == parentId);
-            if (parentIndex != -1) {
-              _comments[parentIndex].replies.add(newComment);
-            }
-          }
-          _commentController.clear();
-          if (_currentReplyTo != null) {
-            _cancelReply(); // 清除回复状态
+        // 评论创建成功，等待 WebSocket 推送来更新列表（避免重复添加）
+        // 如果 WebSocket 没有推送，则手动刷新评论列表
+        _commentController.clear();
+        if (_currentReplyTo != null) {
+          _cancelReply(); // 清除回复状态
+        }
+        
+        // 延迟刷新评论列表，给 WebSocket 推送一些时间
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            _loadComments(refresh: true);
           }
         });
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('评论发表成功')));
+        
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('评论发表成功')));
+        }
       } else {
-        final msg = body != null && body['message'] != null ? body['message'].toString() : '评论失败';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        // 处理错误响应
+        String errorMsg = '评论失败，请稍后重试';
+        if (status == 401 || status == 403) {
+          errorMsg = body != null && body['message'] != null
+              ? body['message'].toString()
+              : '未认证，请先登录';
+        } else if (body != null && body['message'] != null) {
+          errorMsg = body['message'].toString();
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(errorMsg)));
+        }
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('网络错误，评论未成功')),
-      );
+    } catch (e, stackTrace) {
+      print('创建评论异常: $e');
+      print('堆栈跟踪: $stackTrace');
+      if (mounted) {
+        final errorMsg = e.toString().contains('超时')
+            ? '请求超时，请检查网络连接'
+            : '网络错误，评论未成功，请稍后重试';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMsg)));
+      }
     } finally {
       setState(() {
         _isSubmittingComment = false;
@@ -630,7 +779,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
                       title: const Text('举报'),
                       onTap: () {
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已举报（演示）')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('已举报（演示）')),
+                        );
                       },
                     ),
                     ListTile(
@@ -638,7 +789,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
                       title: const Text('复制链接'),
                       onTap: () {
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('链接已复制（演示）')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('链接已复制（演示）')),
+                        );
                       },
                     ),
                   ],
@@ -662,18 +815,59 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
             child: PageView(
               children: widget.post.media.isNotEmpty
                   ? widget.post.media.map((m) {
-                      return Image.asset(m, fit: BoxFit.cover, width: double.infinity, height: 320, errorBuilder: (_, __, ___) {
-                        return Container(color: Colors.grey[200], height: 320, child: const Center(child: Icon(Icons.broken_image, size: 48, color: Colors.grey)));
-                      });
+                      // 判断是网络图片还是本地文件
+                      ImageProvider imageProvider;
+                      if (m.startsWith('http')) {
+                        imageProvider = NetworkImage(m);
+                      } else {
+                        imageProvider = FileImage(File(m));
+                      }
+
+                      return Image(
+                        image: imageProvider,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: 320,
+                        errorBuilder: (_, __, ___) {
+                          return Container(
+                            color: Colors.grey[200],
+                            height: 320,
+                            child: const Center(
+                              child: Icon(
+                                Icons.broken_image,
+                                size: 48,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          );
+                        },
+                      );
                     }).toList()
-                  : [Container(color: Colors.grey[200], height: 320, child: const Center(child: Icon(Icons.image_not_supported, size: 48, color: Colors.grey)))],
+                  : [
+                      Container(
+                        color: Colors.grey[200],
+                        height: 320,
+                        child: const Center(
+                          child: Icon(
+                            Icons.image_not_supported,
+                            size: 48,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ],
             ),
           ),
+          // 喜欢动画
           Positioned(
             child: _showBigHeart
                 ? ScaleTransition(
                     scale: _heartScale,
-                    child: const Icon(Icons.favorite, color: Colors.redAccent, size: 100),
+                    child: const Icon(
+                      Icons.favorite,
+                      color: Colors.redAccent,
+                      size: 100,
+                    ),
                   )
                 : const SizedBox.shrink(),
           ),
@@ -684,24 +878,29 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
 
   Widget _buildAuthorRow() {
     return ListTile(
+      onTap: () => _openUserProfile(widget.post.author.id),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      leading: CircleAvatar(
-        radius: 20,
-        backgroundColor: Colors.grey[300],
-        child: ClipOval(
-          child: Image.asset(widget.post.author.avatar, width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person)),
-        ),
+      leading: _buildAvatarWidget(widget.post.author.avatar, 20),
+      title: Text(
+        widget.post.author.name,
+        style: const TextStyle(fontWeight: FontWeight.w600),
       ),
-      title: Text(widget.post.author.name, style: const TextStyle(fontWeight: FontWeight.w600)),
       subtitle: Text(
         '${widget.post.author.affiliation ?? ''} • ${_formatRelative(widget.post.createdAt)}',
         style: const TextStyle(fontSize: 12, color: Colors.grey),
       ),
       trailing: ElevatedButton(
         onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('关注（演示）')));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('关注（演示）')));
         },
-        style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
         child: const Text('+ 关注', style: TextStyle(fontSize: 13)),
       ),
     );
@@ -717,59 +916,106 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
   Widget _buildContent() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(widget.post.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        Text(widget.post.content, style: const TextStyle(fontSize: 14, height: 1.6)),
-        const SizedBox(height: 12),
-        Wrap(spacing: 8, children: widget.post.tags.map((t) => Chip(label: Text(t, style: const TextStyle(fontSize: 12)))).toList()),
-        const SizedBox(height: 10),
-        if (widget.post.attachments.isNotEmpty)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: widget.post.attachments.map((att) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Row(
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('打开 ${att.fileName}（演示）')));
-                      },
-                      icon: const Icon(Icons.picture_as_pdf),
-                      label: Text(att.fileName),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(' • ${(att.sizeBytes / 1024).toStringAsFixed(0)} KB', style: TextStyle(color: Colors.grey[600])),
-                  ],
-                ),
-              );
-            }).toList(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.post.title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-        const SizedBox(height: 8),
-        if (widget.post.doi != null)
-          Text('DOI: ${widget.post.doi}', style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-        if (widget.post.journal != null)
-          Text('${widget.post.journal}${widget.post.year != null ? ' · ${widget.post.year}' : ''}', style: TextStyle(color: Colors.grey[700], fontSize: 12)),
-      ]),
+          const SizedBox(height: 8),
+          Text(
+            widget.post.content,
+            style: const TextStyle(fontSize: 14, height: 1.6),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            children: widget.post.tags
+                .map(
+                  (t) => Chip(
+                    label: Text(t, style: const TextStyle(fontSize: 12)),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 10),
+          if (widget.post.attachments.isNotEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: widget.post.attachments.map((att) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Row(
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('打开 ${att.fileName}（演示）')),
+                          );
+                        },
+                        icon: const Icon(Icons.picture_as_pdf),
+                        label: Text(att.fileName),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        ' • ${(att.sizeBytes / 1024).toStringAsFixed(0)} KB',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          const SizedBox(height: 8),
+          if (widget.post.doi != null)
+            Text(
+              'DOI: ${widget.post.doi}',
+              style: TextStyle(color: Colors.grey[700], fontSize: 12),
+            ),
+          if (widget.post.journal != null)
+            Text(
+              '${widget.post.journal}${widget.post.year != null ? ' · ${widget.post.year}' : ''}',
+              style: TextStyle(color: Colors.grey[700], fontSize: 12),
+            ),
+        ],
+      ),
     );
   }
 
   Widget _buildActionBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.grey.withOpacity(0.15)))),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey.withOpacity(0.15))),
+      ),
       child: Row(
         children: [
-          IconButton(icon: Icon(isLiked ? Icons.favorite : Icons.favorite_border, color: isLiked ? Colors.red : Colors.black87), onPressed: _toggleLike),
+          IconButton(
+            icon: Icon(
+              isLiked ? Icons.favorite : Icons.favorite_border,
+              color: isLiked ? Colors.red : Colors.black87,
+            ),
+            onPressed: _toggleLike,
+          ),
           Text('$likeCount'),
           const SizedBox(width: 12),
-          IconButton(icon: const Icon(Icons.mode_comment_outlined), onPressed: () => FocusScope.of(context).requestFocus(FocusNode())),
+          IconButton(
+            icon: const Icon(Icons.mode_comment_outlined),
+            onPressed: () => FocusScope.of(context).requestFocus(FocusNode()),
+          ),
           const SizedBox(width: 8),
           Text('$commentCount'),
           const Spacer(),
-          IconButton(icon: Icon(isSaved ? Icons.bookmark : Icons.bookmark_border), onPressed: _toggleSave),
-          IconButton(icon: const Icon(Icons.share_outlined), onPressed: _onShare),
+          IconButton(
+            icon: Icon(isSaved ? Icons.bookmark : Icons.bookmark_border),
+            onPressed: _toggleSave,
+          ),
+          IconButton(
+            icon: const Icon(Icons.share_outlined),
+            onPressed: _onShare,
+          ),
         ],
       ),
     );
@@ -784,7 +1030,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
-              Text('评论 ($commentCount)', style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(
+                '评论 ($commentCount)',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
               const Spacer(),
               if (_isLoadingComments)
                 const SizedBox(
@@ -794,7 +1043,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
                 ),
               IconButton(
                 icon: const Icon(Icons.refresh, size: 20),
-                onPressed: _isLoadingComments ? null : () => _loadComments(refresh: true),
+                onPressed: _isLoadingComments
+                    ? null
+                    : () => _loadComments(refresh: true),
                 tooltip: '刷新评论',
               ),
             ],
@@ -827,13 +1078,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Colors.grey[300],
-                    backgroundImage: AssetImage(c.author.avatar),
+                  onTap: () => _openUserProfile(c.author.id),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
                   ),
-                  title: Text(c.author.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  leading: _buildAvatarWidget(c.author.avatar, 16),
+                  title: Text(
+                    c.author.name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -842,7 +1099,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
                           padding: const EdgeInsets.only(bottom: 4.0),
                           child: Text(
                             '回复 @${c.replyTo!.name}',
-                            style: TextStyle(fontSize: 12, color: Colors.blue[700]),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.blue[700],
+                            ),
                           ),
                         ),
                       Text(c.content, style: const TextStyle(fontSize: 13)),
@@ -850,21 +1110,31 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
                         children: [
                           Text(
                             _formatRelative(c.createdAt),
-                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
                           ),
                           TextButton(
                             onPressed: () => _startReply(c),
-                            child: const Text('回复', style: TextStyle(fontSize: 12)),
+                            child: const Text(
+                              '回复',
+                              style: TextStyle(fontSize: 12),
+                            ),
                           ),
                           const Spacer(),
                           Text('${c.likesCount}'),
                           IconButton(
                             icon: Icon(
-                              c.isLiked ? Icons.thumb_up : Icons.thumb_up_off_alt,
+                              c.isLiked
+                                  ? Icons.thumb_up
+                                  : Icons.thumb_up_off_alt,
                               size: 18,
                               color: c.isLiked ? Colors.blue : Colors.black87,
                             ),
-                            onPressed: inFlight ? null : () => _handleCommentLikePressed(c),
+                            onPressed: inFlight
+                                ? null
+                                : () => _handleCommentLikePressed(c),
                           ),
                         ],
                       ),
@@ -877,15 +1147,23 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
                     padding: const EdgeInsets.only(left: 56.0),
                     child: Column(
                       children: c.replies.map((reply) {
-                        final replyInFlight = _commentLikeInFlight.contains(reply.id);
+                        final replyInFlight = _commentLikeInFlight.contains(
+                          reply.id,
+                        );
                         return ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                          leading: CircleAvatar(
-                            radius: 14,
-                            backgroundColor: Colors.grey[300],
-                            backgroundImage: AssetImage(reply.author.avatar),
+                          onTap: () => _openUserProfile(reply.author.id),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
                           ),
-                          title: Text(reply.author.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                          leading: _buildAvatarWidget(reply.author.avatar, 14),
+                          title: Text(
+                            reply.author.name,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -894,29 +1172,49 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
                                   padding: const EdgeInsets.only(bottom: 4.0),
                                   child: Text(
                                     '回复 @${reply.replyTo!.name}',
-                                    style: TextStyle(fontSize: 12, color: Colors.blue[700]),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.blue[700],
+                                    ),
                                   ),
                                 ),
-                              Text(reply.content, style: const TextStyle(fontSize: 13)),
+                              Text(
+                                reply.content,
+                                style: const TextStyle(fontSize: 13),
+                              ),
                               Row(
                                 children: [
                                   Text(
                                     _formatRelative(reply.createdAt),
-                                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
                                   ),
                                   TextButton(
-                                    onPressed: () => _startReply(reply, parentId: c.id),
-                                    child: const Text('回复', style: TextStyle(fontSize: 12)),
+                                    onPressed: () =>
+                                        _startReply(reply, parentId: c.id),
+                                    child: const Text(
+                                      '回复',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
                                   ),
                                   const Spacer(),
                                   Text('${reply.likesCount}'),
                                   IconButton(
                                     icon: Icon(
-                                      reply.isLiked ? Icons.thumb_up : Icons.thumb_up_off_alt,
+                                      reply.isLiked
+                                          ? Icons.thumb_up
+                                          : Icons.thumb_up_off_alt,
                                       size: 16,
-                                      color: reply.isLiked ? Colors.blue : Colors.black87,
+                                      color: reply.isLiked
+                                          ? Colors.blue
+                                          : Colors.black87,
                                     ),
-                                    onPressed: replyInFlight ? null : () => _handleCommentLikePressed(reply),
+                                    onPressed: replyInFlight
+                                        ? null
+                                        : () =>
+                                              _handleCommentLikePressed(reply),
                                   ),
                                 ],
                               ),
@@ -958,7 +1256,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
       final body = resp['body'] as Map<String, dynamic>?;
       if (status >= 200 && status < 300 && body != null) {
         setState(() {
-          if (body.containsKey('likesCount')) c.likesCount = body['likesCount'] as int;
+          if (body.containsKey('likesCount'))
+            c.likesCount = body['likesCount'] as int;
           if (body.containsKey('isLiked')) c.isLiked = body['isLiked'] as bool;
         });
       } else {
@@ -967,17 +1266,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
           c.isLiked = prevLiked;
           c.likesCount = prevCount;
         });
-        final msg = body != null && body['message'] != null ? body['message'].toString() : '操作失败';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        final msg = body != null && body['message'] != null
+            ? body['message'].toString()
+            : '操作失败';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(msg)));
       }
     } catch (e) {
       setState(() {
         c.isLiked = prevLiked;
         c.likesCount = prevCount;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('网络错误，操作未成功')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('网络错误，操作未成功')));
     } finally {
       _commentLikeInFlight.remove(c.id);
     }
@@ -993,14 +1296,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
         padding: EdgeInsets.only(
           left: 12,
           right: 12,
-          bottom: MediaQuery.of(context).padding.bottom == 0 ? 12 : MediaQuery.of(context).padding.bottom,
+          bottom: MediaQuery.of(context).padding.bottom == 0
+              ? 12
+              : MediaQuery.of(context).padding.bottom,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (_currentReplyTo != null)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 color: Colors.grey[100],
                 child: Row(
                   children: [
@@ -1027,9 +1335,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
                     focusNode: _commentFocusNode,
                     decoration: InputDecoration(
                       hintText: _currentReplyTo != null ? '写回复...' : '写评论...',
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       isDense: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
                       filled: true,
                       fillColor: Colors.grey[100],
                     ),
@@ -1042,7 +1356,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
                     replyTo: _currentReplyTo?.author,
                   ),
                   style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
                   child: Text(_currentReplyTo != null ? '回复' : '发送'),
                 ),
@@ -1076,6 +1392,54 @@ class _PostDetailScreenState extends State<PostDetailScreen> with SingleTickerPr
           ),
           _buildBottomCommentInput(),
         ],
+      ),
+    );
+  }
+
+  /// 构建头像 Widget，支持本地资源和网络 URL，带错误处理
+  Widget _buildAvatarWidget(String avatarPath, double radius) {
+    // 判断是否为网络 URL（以 http:// 或 https:// 开头）
+    if (avatarPath.startsWith('http://') || avatarPath.startsWith('https://')) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: Colors.grey[300],
+        child: ClipOval(
+          child: Image.network(
+            avatarPath,
+            width: radius * 2,
+            height: radius * 2,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Icon(Icons.person, size: radius, color: Colors.grey);
+            },
+          ),
+        ),
+      );
+    }
+
+    // 处理本地资源路径
+    // pubspec.yaml 配置了 assets: - assets/images/，所以使用时应该是 images/xxx
+    String assetPath = avatarPath;
+    if (assetPath.startsWith('assets/images/')) {
+      assetPath = assetPath.substring(14); // 去掉 "assets/images/" 前缀
+    } else if (assetPath.startsWith('assets/')) {
+      assetPath = assetPath.substring(7); // 去掉 "assets/" 前缀
+    }
+
+    // 使用 Image.asset 并添加错误处理
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: Colors.grey[300],
+      child: ClipOval(
+        child: Image.asset(
+          assetPath,
+          width: radius * 2,
+          height: radius * 2,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Icon(Icons.person, size: radius, color: Colors.grey);
+          },
+        ),
       ),
     );
   }

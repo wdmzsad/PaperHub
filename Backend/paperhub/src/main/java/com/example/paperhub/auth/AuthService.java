@@ -72,6 +72,10 @@ public class AuthService {
         return user;
     }
 
+    public java.util.Optional<User> findByEmail(String email) {//根据邮箱查找用户
+        return userRepository.findByEmail(email);
+    }
+
     public void requestReset(String email) {//请求重置密码
         User user = userRepository.findByEmail(email).orElseThrow(() -> new IllegalArgumentException("邮箱未注册"));
         String code = generateCode(6);

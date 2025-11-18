@@ -34,7 +34,6 @@ import '../widgets/bottom_navigation.dart';
 import '../pages/note_editor_page.dart';
 import '../services/api_service.dart';
 
-
 /// 首页入口组件（Stateful）：承载发现流与分区切换
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -46,10 +45,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   /// 底部导航当前索引（0=首页，1=消息，2=发布，3=我的）。
   int _currentIndex = 0;
+
   /// 用于监听列表滚动，判断是否接近底部以触发加载更多。
   final ScrollController _scrollController = ScrollController();
+
   /// 加载中标记，用于防止并发重复加载。
   bool _isLoading = false;
+
   /// 是否还有更多数据（由当前已加载数量与数据源长度决定）。
   bool _hasMore = true; //  是否还有更多数据
   /// 已加载到页面上的帖子列表。
@@ -66,10 +68,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _scrollController.addListener(_scrollListener);
   }
 
-/// 初始加载首屏内容
+  /// 初始加载首屏内容
   Future<void> _loadInitialPosts() async {
     if (_isLoading) return;
-    
+
     setState(() {
       _isLoading = true;
     });
@@ -78,15 +80,15 @@ class _HomeScreenState extends State<HomeScreen> {
       final resp = await ApiService.getPosts(page: 1, pageSize: 6);
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
-      
+
       print('加载帖子响应: status=$status, body=$body'); // 调试日志
-      
+
       if (status >= 200 && status < 300 && body != null) {
         final postsData = (body['posts'] as List<dynamic>?) ?? <dynamic>[];
         final total = body['total'] as int? ?? 0;
-        
+
         print('获取到 ${postsData.length} 条帖子'); // 调试日志
-        
+
         final newPosts = postsData
             .map((p) => Post.fromJson(p as Map<String, dynamic>))
             .toList();
@@ -102,11 +104,11 @@ class _HomeScreenState extends State<HomeScreen> {
           _isLoading = false;
         });
         // 显示更详细的错误信息
-        final errorMsg = body != null && body['message'] != null 
-            ? '加载失败: ${body['message']}' 
+        final errorMsg = body != null && body['message'] != null
+            ? '加载失败: ${body['message']}'
             : '加载失败: HTTP $status，请确保后端服务已启动 (http://localhost:8080)';
         print('加载帖子失败: $errorMsg'); // 调试日志
-        
+
         // 如果后端失败，可以使用模拟数据作为降级方案（可选）
         // 取消下面的注释以启用降级方案
         /*
@@ -129,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         */
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -162,11 +164,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final resp = await ApiService.getPosts(page: 1, pageSize: 6);
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
-      
+
       if (status >= 200 && status < 300 && body != null) {
         final postsData = (body['posts'] as List<dynamic>?) ?? <dynamic>[];
         final total = body['total'] as int? ?? 0;
-        
+
         final newPosts = postsData
             .map((p) => Post.fromJson(p as Map<String, dynamic>))
             .toList();
@@ -199,11 +201,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final resp = await ApiService.getPosts(page: currentPage, pageSize: 6);
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
-      
+
       if (status >= 200 && status < 300 && body != null) {
         final postsData = (body['posts'] as List<dynamic>?) ?? <dynamic>[];
         final total = body['total'] as int? ?? 0;
-        
+
         final newPosts = postsData
             .map((p) => Post.fromJson(p as Map<String, dynamic>))
             .toList();
@@ -224,7 +226,6 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
   }
-
 
   /// 当滚动距离接近底部（距离最大可滚动距离 200 像素以内）时，触发分页加载。
   /// 可根据需求调整 200 的阈值，平衡提前加载与性能。
@@ -252,13 +253,16 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-
   /// 顶部搜索图标点击 -> 打开搜索页
   void _onSearchTap() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const SearchScreen()),
     );
+  }
+
+  void _openUserProfile(String userId) {
+    Navigator.of(context).pushNamed('/user/$userId');
   }
 
   @override
@@ -367,6 +371,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return PostCard(
           post: _posts[index],
           onTap: () => _onPostTap(_posts[index]),
+          onAuthorTap: () => _openUserProfile(_posts[index].author.id),
         );
       },
     );
@@ -423,13 +428,13 @@ class _HomeScreenState extends State<HomeScreen> {
   /// - index=2 -> 打开发布弹窗（占位功能）。
   /// - index=3 -> 打开个人页（返回后重置高亮到首页）。
   Widget _buildBottomNavigationBar() {
-      return BottomNavigation(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-            if (index == 1) {
+    return BottomNavigation(
+      currentIndex: _currentIndex,
+      onTap: (index) {
+        setState(() {
+          _currentIndex = index;
+        });
+        if (index == 1) {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const MessageScreen()),
@@ -440,25 +445,26 @@ class _HomeScreenState extends State<HomeScreen> {
             });
           });
         } else if (index == 2) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => const NoteEditorPage()),
-          ).then((_) {
-            setState(() {
-              _currentIndex = 0;
-            });
-            // 发布后刷新列表（重新加载第一页）
-            final firstPagePosts = _posts.take(6).length;
-            if (firstPagePosts < 6 || _posts.isEmpty) {
-              // 如果当前列表为空或少于6条，重新加载
-              _posts.clear();
-              _hasMore = true;
-              _loadInitialPosts();
-            } else {
-              // 否则只重新加载第一页来获取最新发布的帖子
-              _refreshFirstPage();
-            }
-          });
-
+          Navigator.of(context)
+              .push(
+                MaterialPageRoute(builder: (context) => const NoteEditorPage()),
+              )
+              .then((_) {
+                setState(() {
+                  _currentIndex = 0;
+                });
+                // 发布后刷新列表（重新加载第一页）
+                final firstPagePosts = _posts.take(6).length;
+                if (firstPagePosts < 6 || _posts.isEmpty) {
+                  // 如果当前列表为空或少于6条，重新加载
+                  _posts.clear();
+                  _hasMore = true;
+                  _loadInitialPosts();
+                } else {
+                  // 否则只重新加载第一页来获取最新发布的帖子
+                  _refreshFirstPage();
+                }
+              });
         } else if (index == 3) {
           Navigator.push(
             context,
@@ -474,8 +480,6 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
     );
   }
-
-
 
   /// 发布弹窗（占位）
   void _showPublishDialog() {
