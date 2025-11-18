@@ -89,50 +89,58 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   }
 
   // 上传图片到后端，返回 URL
-  Future<String?> _uploadImageToServer(XFile image) async {
-    try {
-      final uri = Uri.parse('http://localhost:8080/posts/upload');
-      final request = http.MultipartRequest('POST', uri);
+  Future<String?> _uploadFileToServer(XFile file, String fileType) async {
+  try {
+    final uri = Uri.parse('http://localhost:8080/posts/upload');
+    final request = http.MultipartRequest('POST', uri);
 
+    if (fileType == 'image') {
       if (kIsWeb) {
-        // Web 端：使用 bytes
-        Uint8List bytes = await image.readAsBytes();
+        final bytes = await file.readAsBytes();
         request.files.add(
           http.MultipartFile.fromBytes(
             'file',
             bytes,
-            filename: image.name,
-            contentType: MediaType(
-              'image',
-              image.mimeType?.split('/').last ?? 'jpeg',
-            ),
+            filename: file.name,
+            contentType: MediaType('image', file.mimeType?.split('/').last ?? 'jpeg'),
           ),
         );
       } else {
-        // 移动端 / 桌面端：使用文件路径
+        request.files.add(await http.MultipartFile.fromPath('file', file.path));
+      }
+    } else if (fileType == 'pdf') {
+      if (kIsWeb) {
+        final bytes = await file.readAsBytes();
         request.files.add(
-          await http.MultipartFile.fromPath(
+          http.MultipartFile.fromBytes(
             'file',
-            image.path,
+            bytes,
+            filename: file.name,
+            contentType: MediaType('application', 'pdf'),
           ),
         );
-      }
-
-      final response = await request.send();
-
-      if (response.statusCode == 200) {
-        final respStr = await response.stream.bytesToString();
-        final Map<String, dynamic> data = jsonDecode(respStr);
-        return data['url'] as String?;
       } else {
-        print('上传失败: ${response.statusCode}');
-        return null;
+        request.files.add(await http.MultipartFile.fromPath('file', file.path));
       }
-    } catch (e) {
-      print('上传图片失败: $e');
+    } else {
+      print('不支持的文件类型');
       return null;
     }
+
+    final response = await request.send();
+    if (response.statusCode == 200) {
+      final respStr = await response.stream.bytesToString();
+      final data = jsonDecode(respStr) as Map<String, dynamic>;
+      return data['url'] as String?;
+    } else {
+      print('上传失败: ${response.statusCode}');
+      return null;
+    }
+  } catch (e) {
+    print('上传文件失败: $e');
+    return null;
   }
+}
 
   // 发布逻辑
   Future<void> _publishNote() async {
@@ -161,14 +169,23 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
 
     try {
+      // 调用创建笔记接口（注意：ApiService.createPost 需要支持 externalLinks 参数）
+      List<String> mediaUrls = [];
       // 先上传图片获取 URL
-      final List<String> mediaUrls = [];
-      for (final img in _images) {
-        final url = await _uploadImageToServer(img);
+      for (var img in _images) {
+        print('2\n');
+        final url = await _uploadFileToServer(img, 'image');
+        print(url);
+        print("\n");
         if (url != null) mediaUrls.add(url);
       }
-
-      // 调用创建笔记接口（注意：ApiService.createPost 需要支持 externalLinks 参数）
+      // 再上传 PDF（如有）
+      if (_pdfFile != null) {
+        final pdfXFile = XFile(_pdfFile!.path);
+        final pdfUrl = await _uploadFileToServer(pdfXFile, 'pdf');
+        if (pdfUrl != null) mediaUrls.add(pdfUrl);
+      }
+      // 调用创建笔记接口
       final resp = await ApiService.createPost(
         title: title,
         content: content.isNotEmpty ? content : null,

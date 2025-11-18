@@ -40,6 +40,7 @@ dependencies:
   flutter_staggered_grid_view: ^0.7.0 # sissi
   http: ^1.1.0 
   shared_preferences: ^2.2.2  # sissi 用于本地存储搜索历史
+  syncfusion_flutter_pdfviewer: ^24.2.9
 
   # WebSocket 支持，用于实时点赞等推送
   web_socket_channel: ^2.4.0

@@ -2,6 +2,10 @@ package com.example.paperhub.post;
 
 import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
+import com.example.paperhub.comment.CommentRepository;
+import com.example.paperhub.favorite.FavoritePostRepository;
+import com.example.paperhub.like.CommentLikeRepository;
+import com.example.paperhub.like.PostLikeRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -16,10 +20,24 @@ import java.util.Optional;
 public class PostService {
     private final PostRepository postRepository;
     private final UserRepository userRepository;
+    private final PostLikeRepository postLikeRepository;
+    private final FavoritePostRepository favoritePostRepository;
+    private final CommentRepository commentRepository;
+    private final CommentLikeRepository commentLikeRepository;
 
-    public PostService(PostRepository postRepository, UserRepository userRepository) {
+    public PostService(
+            PostRepository postRepository,
+            UserRepository userRepository,
+            PostLikeRepository postLikeRepository,
+            FavoritePostRepository favoritePostRepository,
+            CommentRepository commentRepository,
+            CommentLikeRepository commentLikeRepository) {
         this.postRepository = postRepository;
         this.userRepository = userRepository;
+        this.postLikeRepository = postLikeRepository;
+        this.favoritePostRepository = favoritePostRepository;
+        this.commentRepository = commentRepository;
+        this.commentLikeRepository = commentLikeRepository;
     }
 
     public Optional<Post> findById(Long id) {
@@ -112,6 +130,31 @@ public class PostService {
             post.setCommentsCount(post.getCommentsCount() - 1);
             postRepository.save(post);
         }
+    }
+
+    /// 删除帖子
+    @Transactional
+    public void deletePost(Long postId, Long operatorId) {
+        Post post = postRepository.findById(postId)
+            .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+
+        if (!post.getAuthor().getId().equals(operatorId)) {
+            throw new SecurityException("无权删除他人的笔记");
+        }
+
+        // 先清理依赖该帖子的子表数据，避免外键约束错误
+        // 1. 评论及其点赞
+        var commentIds = commentRepository.findIdsByPostId(postId);
+        if (!commentIds.isEmpty()) {
+            commentLikeRepository.deleteByCommentIdIn(commentIds);
+            commentRepository.deleteAllById(commentIds);
+        }
+
+        // 2. 帖子点赞与收藏
+        postLikeRepository.deleteByPostId(postId);
+        favoritePostRepository.deleteByPostId(postId);
+
+        postRepository.delete(post);
     }
 }
 

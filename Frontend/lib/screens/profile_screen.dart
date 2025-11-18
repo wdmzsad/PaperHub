@@ -195,7 +195,14 @@ class _ProfilePageState extends State<ProfilePage>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => PostDetailScreen(post: post)),
-    ).then((_) {
+    ).then((result) {
+      if (result == true) {
+        setState(() {
+          _authoredPosts.removeWhere((p) => p.id == post.id);
+          _favoritePosts.removeWhere((p) => p.id == post.id);
+        });
+        return;
+      }
       _loadProfile(forceNetwork: true);
     });
   }

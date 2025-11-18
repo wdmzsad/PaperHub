@@ -176,16 +176,27 @@ public class PostController {
         return !(lower.startsWith("javascript:") || lower.startsWith("data:"));
     }
 
-    // 上传图片接口
+    // 上传图片和pdf接口
     @PostMapping("/upload")
     public ResponseEntity<Map<String, String>> uploadFile(@RequestParam("file") MultipartFile file) {
         System.out.println("=== 上传接口开始执行 ===");
-        String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
-        String url = "https://" + obsConfig.getBucketName() + ".obs.cn-north-4.myhuaweicloud.com/" + fileName;
 
+        // 获取文件名和类型
+        String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+        String contentType = file.getContentType(); // 获取文件类型（如 image/jpeg 或 application/pdf）
+
+        // 判断文件类型
+        if (!isValidFileType(contentType)) {
+            Map<String, String> res = new HashMap<>();
+            res.put("message", "不支持的文件类型");
+            return ResponseEntity.status(400).body(res);
+        }
+
+        String url = "https://" + obsConfig.getBucketName() + ".obs.cn-north-4.myhuaweicloud.com/" + fileName;
         Map<String, String> res = new HashMap<>();
 
         try {
+            // 上传文件到 OBS
             PutObjectResult result = obsClient.putObject(obsConfig.getBucketName(), fileName, file.getInputStream());
 
             // 上传成功
@@ -210,6 +221,13 @@ public class PostController {
             return ResponseEntity.status(500).body(res);
         }
     }
+
+    // 文件类型校验方法
+    private boolean isValidFileType(String contentType) {
+        // 支持的文件类型，可以根据需要进行修改
+        return contentType.startsWith("image/") || "application/pdf".equals(contentType);
+    }
+
 
 
     /**
@@ -348,4 +366,32 @@ public class PostController {
         return ResponseEntity.ok(Map.of("isSaved", false));
     }
 
+    /**
+     * 删除帖子
+     */
+    @DeleteMapping("/{postId}")
+    public ResponseEntity<?> deletePost(
+            @PathVariable Long postId,
+            @AuthenticationPrincipal User user) {
+
+        if (user == null) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("message", "未认证，请先登录"));
+        }
+
+        try {
+            postService.deletePost(postId, user.getId());
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(404)
+                    .body(Map.of("message", ex.getMessage()));
+        } catch (SecurityException ex) {
+            return ResponseEntity.status(403)
+                    .body(Map.of("message", ex.getMessage()));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ResponseEntity.status(500)
+                    .body(Map.of("message", "删除帖子失败: " + ex.getMessage()));
+        }
+    }
 }
