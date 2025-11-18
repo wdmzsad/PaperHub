@@ -3,6 +3,7 @@ package com.example.paperhub.like;
 import com.example.paperhub.auth.User;
 import com.example.paperhub.comment.Comment;
 import com.example.paperhub.comment.CommentRepository;
+import com.example.paperhub.notification.NotificationService;
 import com.example.paperhub.post.Post;
 import com.example.paperhub.post.PostRepository;
 import com.example.paperhub.post.PostService;
@@ -18,18 +19,21 @@ public class LikeService {
     private final PostRepository postRepository;
     private final CommentRepository commentRepository;
     private final PostService postService;
+    private final NotificationService notificationService;
 
     public LikeService(
             PostLikeRepository postLikeRepository,
             CommentLikeRepository commentLikeRepository,
             PostRepository postRepository,
             CommentRepository commentRepository,
-            PostService postService) {
+            PostService postService,
+            NotificationService notificationService) {
         this.postLikeRepository = postLikeRepository;
         this.commentLikeRepository = commentLikeRepository;
         this.postRepository = postRepository;
         this.commentRepository = commentRepository;
         this.postService = postService;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -57,6 +61,14 @@ public class LikeService {
         long actualCount = postLikeRepository.countByPostId(postId);
         post.setLikesCount((int) actualCount);
         postRepository.save(post);
+        
+        // 创建通知
+        try {
+            notificationService.createPostLikeNotification(user, postId);
+        } catch (Exception e) {
+            // 通知创建失败不影响点赞操作
+            System.err.println("创建点赞通知失败: " + e.getMessage());
+        }
         
         return true; // 点赞成功
     }
@@ -140,6 +152,14 @@ public class LikeService {
         long actualCount = commentLikeRepository.countByCommentId(commentId);
         comment.setLikesCount((int) actualCount);
         commentRepository.save(comment);
+        
+        // 创建通知
+        try {
+            notificationService.createCommentLikeNotification(user, commentId);
+        } catch (Exception e) {
+            // 通知创建失败不影响点赞操作
+            System.err.println("创建评论点赞通知失败: " + e.getMessage());
+        }
         
         return true; // 点赞成功
     }
