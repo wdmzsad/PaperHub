@@ -7,15 +7,11 @@ import '../models/post_model.dart';
 import '../services/api_service.dart';
 import 'dart:io';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import '../widgets/pdf_iframe_view.dart';
+import '../services/local_storage.dart';
 
-
-class PostDetailScreen extends StatefulWidget {
-  final Post post;
-  const PostDetailScreen({Key? key, required this.post}) : super(key: key);
-
-  @override
-  State<PostDetailScreen> createState() => _PostDetailScreenState();
-}
 
 /*
 ================================================================================
@@ -119,6 +115,132 @@ class PostDetailScreen extends StatefulWidget {
 ================================================================================
 */
 
+
+class PostDetailScreen extends StatefulWidget {
+  final Post post;
+  const PostDetailScreen({Key? key, required this.post}) : super(key: key);
+
+  @override
+  State<PostDetailScreen> createState() => _PostDetailScreenState();
+}
+
+class PdfPreviewScreen extends StatefulWidget {
+  final String url;
+  final String title;
+
+  const PdfPreviewScreen({
+    super.key,
+    required this.url,
+    required this.title,
+  });
+
+  @override
+  State<PdfPreviewScreen> createState() => _PdfPreviewScreenState();
+}
+
+class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
+  bool _isLoading = true;
+  bool _hasError = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: _hasError
+                ? _buildErrorWidget()
+                : _buildViewer(),
+          ),
+          if (_isLoading)
+            const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            ),
+          _buildAppBar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildViewer() {
+    if (kIsWeb) {
+      if (_isLoading) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _isLoading = false);
+        });
+      }
+      return buildPlatformPdfView(widget.url);
+    }
+
+    return SfPdfViewer.network(
+      widget.url,
+      canShowPaginationDialog: false,
+      canShowScrollHead: false,
+      onDocumentLoaded: (_) => setState(() => _isLoading = false),
+      onDocumentLoadFailed: (_) => setState(() {
+        _isLoading = false;
+        _hasError = true;
+      }),
+    );
+  }
+
+  Widget _buildErrorWidget() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline, color: Colors.white, size: 64),
+          SizedBox(height: 16),
+          Text(
+            'PDF加载失败',
+            style: TextStyle(color: Colors.white, fontSize: 18),
+          ),
+          SizedBox(height: 8),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('返回'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppBar() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Row(
+          children: [
+            Material(
+              color: Colors.black54,
+              shape: const CircleBorder(),
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                widget.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
 class _PostDetailScreenState extends State<PostDetailScreen>
     with SingleTickerProviderStateMixin {
   WebSocketChannel? _wsChannel;
@@ -145,6 +267,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   late Animation<double> _heartScale;
   bool _showBigHeart = false;
   bool _saveInFlight = false;
+  bool _isDeleting = false;
+  String? _currentUserId;
   // ========= 外部链接跳转方法=========
   Future<void> _openExternalLink(String url) async {
     final trimmed = url.trim();
@@ -175,6 +299,14 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       mode: LaunchMode.externalApplication,
     );
   }
+  List<String> get _imageMedia =>
+      widget.post.media.where((m) => !_isPdf(m)).toList();
+
+  List<String> get _pdfMedia =>
+      widget.post.media.where(_isPdf).toList();
+  bool get _isOwner =>
+      _currentUserId != null && widget.post.author.id == _currentUserId;
+
   @override
   void initState() {
     super.initState();
@@ -213,6 +345,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
     // WebSocket 实时点赞监听
     _initWebSocket();
+
+    _currentUserId = LocalStorage.instance.read('userId');
   }
 
   /// 从后端加载帖子详情
@@ -800,113 +934,175 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       actions: [
         IconButton(
           icon: const Icon(Icons.more_horiz, color: Colors.black54),
-          onPressed: () {
-            showModalBottomSheet(
-              context: context,
-              builder: (_) => SafeArea(
-                child: Wrap(
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.flag),
-                      title: const Text('举报'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('已举报（演示）')),
-                        );
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.copy),
-                      title: const Text('复制链接'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('链接已复制（演示）')),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+          onPressed: _isDeleting ? null : _openMoreActions,
         ),
       ],
     );
   }
 
-  Widget _buildMediaGallery() {
-    return GestureDetector(
-      onDoubleTap: _toggleLike,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            height: 320,
-            child: PageView(
-              children: widget.post.media.isNotEmpty
-                  ? widget.post.media.map((m) {
-                      // 判断是网络图片还是本地文件
-                      ImageProvider imageProvider;
-                      if (m.startsWith('http')) {
-                        imageProvider = NetworkImage(m);
-                      } else {
-                        imageProvider = FileImage(File(m));
-                      }
-
-                      return Image(
-                        image: imageProvider,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        height: 320,
-                        errorBuilder: (_, __, ___) {
-                          return Container(
-                            color: Colors.grey[200],
-                            height: 320,
-                            child: const Center(
-                              child: Icon(
-                                Icons.broken_image,
-                                size: 48,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    }).toList()
-                  : [
-                      Container(
-                        color: Colors.grey[200],
-                        height: 320,
-                        child: const Center(
-                          child: Icon(
-                            Icons.image_not_supported,
-                            size: 48,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ),
-                    ],
+  void _openMoreActions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Wrap(
+          children: [
+            if (_isOwner)
+              ListTile(
+                leading: const Icon(Icons.delete_forever, color: Colors.red),
+                title: const Text(
+                  '删除笔记',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _confirmDeletePost();
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.flag),
+              title: const Text('举报'),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('已举报（演示）')),
+                );
+              },
             ),
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('复制链接'),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('链接已复制（演示）')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeletePost() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('确认删除笔记？'),
+        content: const Text('删除后将无法恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
           ),
-          // 喜欢动画
-          Positioned(
-            child: _showBigHeart
-                ? ScaleTransition(
-                    scale: _heartScale,
-                    child: const Icon(
-                      Icons.favorite,
-                      color: Colors.redAccent,
-                      size: 100,
-                    ),
-                  )
-                : const SizedBox.shrink(),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              '删除',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
     );
+
+    if (confirmed == true) {
+      await _deletePost();
+    }
   }
+
+  Future<void> _deletePost() async {
+    setState(() => _isDeleting = true);
+    try {
+      final resp = await ApiService.deletePost(widget.post.id);
+      final status = resp['statusCode'] as int? ?? 500;
+      final body = resp['body'] as Map<String, dynamic>?;
+
+      if (status >= 200 && status < 300) {
+        if (!mounted) return;
+        Navigator.of(context).pop(true);
+        return;
+      }
+
+      final msg = body != null && body['message'] != null
+          ? body['message'].toString()
+          : '删除失败，请稍后重试';
+      _showSnack(msg);
+    } catch (e) {
+      _showSnack('删除失败：$e');
+    } finally {
+      if (mounted) {
+        setState(() => _isDeleting = false);
+      }
+    }
+  }
+
+  Widget _buildMediaGallery() { 
+    // 根据帖子记录的宽高比自适应高度 
+    final ratio = widget.post.imageAspectRatio == 0 ? 1.5 : widget.post.imageAspectRatio; 
+    return GestureDetector( 
+      onDoubleTap: _toggleLike, 
+      child: Stack( 
+        alignment: Alignment.center, 
+        children: [ 
+          AspectRatio( 
+            aspectRatio: ratio, 
+            child: PageView( 
+              children: _imageMedia.isNotEmpty ? _imageMedia.map((m) { 
+                // 判断是网络图片还是本地文件 
+                ImageProvider imageProvider; 
+                if (m.startsWith('http')) { 
+                  imageProvider = NetworkImage(m); 
+                  } 
+                else { 
+                  imageProvider = FileImage(File(m)); 
+                } 
+                return Image( 
+                  image: imageProvider, 
+                  fit: BoxFit.cover, 
+                  width: double.infinity, 
+                  errorBuilder: (_, __, ___) { 
+                    return Container( 
+                      color: Colors.grey[200], 
+                      child: const Center( 
+                        child: Icon( 
+                          Icons.broken_image, 
+                          size: 48, 
+                          color: Colors.grey, 
+                        ), 
+                      ), 
+                    ); 
+                  }, 
+                ); 
+              }).toList() : [ 
+                Container( 
+                  color: Colors.grey[200], 
+                  child: const Center( 
+                    child: Icon( 
+                      Icons.image_not_supported, 
+                      size: 48, 
+                      color: Colors.grey, 
+                    ), 
+                  ), 
+                ), 
+              ],
+            ), 
+          ), // 喜欢动画 
+          Positioned( 
+            child: _showBigHeart ? ScaleTransition( 
+              scale: _heartScale, 
+              child: const Icon( 
+                Icons.favorite, 
+                color: Colors.redAccent, 
+                size: 100, 
+                ), 
+              ) : const SizedBox.shrink(), 
+            ), 
+          ], 
+        ), 
+      ); 
+    }
+
 
   Widget _buildAuthorRow() {
     return ListTile(
@@ -972,6 +1168,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                 .toList(),
           ),
           const SizedBox(height: 10),
+          if (_pdfMedia.isNotEmpty) _buildPdfSection(),
           if (widget.post.attachments.isNotEmpty)
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1050,6 +1247,149 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPdfSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'PDF 附件',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        ..._pdfMedia.map(_buildPdfTile),
+      ],
+    );
+  }
+
+  Widget _buildPdfTile(String url) {
+    final fileName = _extractFileName(url);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.all(8),
+                child: const Icon(
+                  Icons.picture_as_pdf,
+                  color: Color(0xFFD32F2F),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _openPdfPreview(url, fileName),
+                  icon: const Icon(Icons.visibility_outlined),
+                  label: const Text('预览'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _downloadPdf(url),
+                  icon: const Icon(Icons.download_outlined),
+                  label: const Text('下载'),
+                  style: ElevatedButton.styleFrom(
+                    elevation: 0,
+                    backgroundColor: Colors.blueGrey[50],
+                    foregroundColor: Colors.blueGrey[900],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openPdfPreview(String url, String title) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      _showSnack('PDF 链接无效');
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PdfPreviewScreen(url: uri.toString(), title: title),
+        fullscreenDialog: true,
+      ),
+    );
+  }
+
+  Future<void> _downloadPdf(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      _showSnack('PDF 链接无效');
+      return;
+    }
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) {
+        _showSnack('无法打开下载链接');
+      }
+    } catch (_) {
+      _showSnack('无法打开下载链接');
+    }
+  }
+
+  bool _isPdf(String url) {
+    final uri = Uri.tryParse(url);
+    final path = uri?.path.toLowerCase() ?? url.toLowerCase();
+    return path.endsWith('.pdf');
+  }
+
+  String _extractFileName(String url) {
+    try {
+      final uri = Uri.parse(url);
+      if (uri.pathSegments.isNotEmpty) {
+        final segment = uri.pathSegments.last;
+        if (segment.isNotEmpty) return Uri.decodeComponent(segment);
+      }
+    } catch (_) {
+      // ignore
+    }
+    final sanitized = url.split('?').first;
+    final parts = sanitized.split('/');
+    final fallback = parts.isNotEmpty ? parts.last : 'PDF 附件';
+    return fallback.isEmpty ? 'PDF 附件' : fallback;
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -1461,6 +1801,15 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             ),
           ),
           _buildBottomCommentInput(),
+          if (_isDeleting)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.25),
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            ),
         ],
       ),
     );

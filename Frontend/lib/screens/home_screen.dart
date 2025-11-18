@@ -263,13 +263,15 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => PostDetailScreen(post: post)),
-    ).then((_) {
-      // 从详情页返回后，刷新当前帖子信息（而不是整个列表）
-      // 这里可以选择只更新当前帖子，或者重新加载整个列表
-      // 为了简单，我们重新加载第一页
+    ).then((result) {
+      if (result == true) {
+        setState(() {
+          _posts.removeWhere((p) => p.id == post.id);
+        });
+        return;
+      }
       final currentPostIndex = _posts.indexWhere((p) => p.id == post.id);
       if (currentPostIndex != -1) {
-        // 可以只刷新单个帖子，这里暂时重新加载
         _loadInitialPosts();
       }
     });

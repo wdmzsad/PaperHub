@@ -854,6 +854,17 @@ class ApiService {
     );
   }
 
+  /// 删除帖子
+  static Future<Map<String, dynamic>> deletePost(String postId) async {
+    return await _makeRequest(
+      () => http.delete(
+        Uri.parse('$baseUrl/posts/$postId'),
+        headers: _buildHeaders(),
+      ),
+      '/posts/$postId',
+    );
+  }
+
   static Map<String, dynamic> _parseResponse(http.Response resp) {
     try {
       // 处理空响应体
@@ -908,4 +919,5 @@ class ApiService {
       };
     }
   }
+
 }
