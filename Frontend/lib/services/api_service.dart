@@ -824,6 +824,7 @@ class ApiService {
   /// @param doi DOI（可选）
   /// @param journal 期刊（可选）
   /// @param year 年份（可选）
+  /// @param externalLinks 外部链接列表（可选）
   static Future<Map<String, dynamic>> createPost({
     required String title,
     String? content,
@@ -832,6 +833,7 @@ class ApiService {
     String? doi,
     String? journal,
     int? year,
+    List<String>? externalLinks,
   }) async {
     return await _makeRequest(
       () => http.post(
@@ -845,6 +847,7 @@ class ApiService {
           if (doi != null) 'doi': doi,
           if (journal != null) 'journal': journal,
           if (year != null) 'year': year,
+          if (externalLinks != null) 'externalLinks': externalLinks,
         }),
       ),
       '/posts',

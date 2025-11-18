@@ -14,7 +14,8 @@ public class PostDtos {
         List<String> tags,
         String doi,
         String journal,
-        Integer year
+        Integer year,
+        List<String> externalLinks // 新增：外部链接列表
     ) {}
     
     // 作者信息
@@ -27,6 +28,7 @@ public class PostDtos {
         String content,
         List<String> media,
         List<String> tags,
+        List<String> externalLinks, // 新增：外部链接列表
         AuthorInfo author,
         int likesCount,
         int commentsCount,

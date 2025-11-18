@@ -163,6 +163,7 @@ class Post {
   final String content; // 富文本/纯文本（演示）
   final List<String> media; // 图片 url 列表（可为空）
   final List<Attachment> attachments; // PDF 等附件
+  final List<String> externalLinks; // 外部链接列表
   final List<String> tags;
   final Author author;
 
@@ -195,6 +196,7 @@ class Post {
     required this.attachments,
     required this.tags,
     required this.author,
+    required this.externalLinks,
     this.comments = const [],
     this.likesCount = 0,
     this.commentsCount = 0,
@@ -233,6 +235,12 @@ class Post {
       media: (json['media'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       attachments: [], // 后端暂时不支持附件，需要后续添加
       tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+
+      externalLinks: (json['externalLinks'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList()
+          ?? const [],
+          
       author: Author(
         id: authorId,
         name: authorJson['name'] as String? ?? 

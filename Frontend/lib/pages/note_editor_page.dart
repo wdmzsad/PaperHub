@@ -1,15 +1,15 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
-import '../services/api_service.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:typed_data';              // 用于 Uint8List
-import 'package:flutter/foundation.dart' show kIsWeb;  // 用于 kIsWeb
-import 'package:http_parser/http_parser.dart';        // 用于 MediaType
-   
-   
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../services/api_service.dart';
 
 class NoteEditorPage extends StatefulWidget {
   const NoteEditorPage({Key? key}) : super(key: key);
@@ -20,19 +20,28 @@ class NoteEditorPage extends StatefulWidget {
 
 class _NoteEditorPageState extends State<NoteEditorPage> {
   final ImagePicker _picker = ImagePicker();
-  List<XFile> _images = []; // 存放已选择的图片，最多9张
-  File? _pdfFile; // 存放选中的pdf（只允许1个）
+
+  // 图片与 PDF
+  List<XFile> _images = []; // 最多 9 张
+  File? _pdfFile; // 仅允许 1 个 PDF
+
+  // 文本输入
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
 
-  // 选择图片（从相册/相机都可以，这里用相册示例）
+  // 外部链接
+  final TextEditingController _linkController = TextEditingController();
+  final List<String> _externalLinks = [];
+
+  // 选择图片
   Future<void> _pickImage() async {
     if (_images.length >= 9) return;
     final XFile? file = await _picker.pickImage(source: ImageSource.gallery);
     if (file != null) {
       setState(() {
-        if (_images.length < 9) 
+        if (_images.length < 9) {
           _images.add(file);
+        }
       });
     }
   }
@@ -68,52 +77,62 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     });
   }
 
-  // 上传图片方法
+   /// 校验链接格式是否可识别，只接受 http / https
+  bool _isValidUrl(String url) {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) return false;
+
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null) return false;
+
+    return uri.isScheme('http') || uri.isScheme('https');
+  }
+
+  // 上传图片到后端，返回 URL
   Future<String?> _uploadImageToServer(XFile image) async {
     try {
       final uri = Uri.parse('http://localhost:8080/posts/upload');
       final request = http.MultipartRequest('POST', uri);
 
       if (kIsWeb) {
-       // -------------------------------------------
-        // ✔ Web 端：使用 bytes 创建 MultipartFile
-        // -------------------------------------------
+        // Web 端：使用 bytes
         Uint8List bytes = await image.readAsBytes();
         request.files.add(
           http.MultipartFile.fromBytes(
             'file',
             bytes,
             filename: image.name,
-            contentType: MediaType('image', image.mimeType?.split('/').last ?? 'jpeg'),
+            contentType: MediaType(
+              'image',
+              image.mimeType?.split('/').last ?? 'jpeg',
+            ),
           ),
         );
       } else {
-        // -------------------------------------------
-        // ✔ 移动端/桌面端：使用文件路径上传
-        // -------------------------------------------
+        // 移动端 / 桌面端：使用文件路径
         request.files.add(
           await http.MultipartFile.fromPath(
             'file',
             image.path,
-        ),
-      );
-    }
+          ),
+        );
+      }
 
-    final response = await request.send();
+      final response = await request.send();
 
-    if (response.statusCode == 200) {
-      final respStr = await response.stream.bytesToString();
-      final Map<String, dynamic> data = jsonDecode(respStr);
-      return data['url'];
-    } else {
-      print("上传失败: ${response.statusCode}");
+      if (response.statusCode == 200) {
+        final respStr = await response.stream.bytesToString();
+        final Map<String, dynamic> data = jsonDecode(respStr);
+        return data['url'] as String?;
+      } else {
+        print('上传失败: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('上传图片失败: $e');
       return null;
     }
-  } catch (e) {
-    print('上传图片失败: $e');
-    return null;
   }
-}
 
   // 发布逻辑
   Future<void> _publishNote() async {
@@ -141,19 +160,15 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
 
-    print('1\n');
     try {
       // 先上传图片获取 URL
-      List<String> mediaUrls = [];
-      for (var img in _images) {
-        print('2\n');
+      final List<String> mediaUrls = [];
+      for (final img in _images) {
         final url = await _uploadImageToServer(img);
-        print(url);
-        print("\n");
         if (url != null) mediaUrls.add(url);
       }
-      print(3);
-      // 调用创建笔记接口
+
+      // 调用创建笔记接口（注意：ApiService.createPost 需要支持 externalLinks 参数）
       final resp = await ApiService.createPost(
         title: title,
         content: content.isNotEmpty ? content : null,
@@ -162,9 +177,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         doi: null,
         journal: null,
         year: null,
+        externalLinks: _externalLinks.isNotEmpty ? _externalLinks : null,
       );
-      print(mediaUrls);
-      print("\n");
+
       // 关闭加载对话框
       if (mounted) Navigator.of(context).pop();
 
@@ -198,29 +213,28 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     }
   }
 
-
   @override
   void dispose() {
     _titleController.dispose();
     _contentController.dispose();
+    _linkController.dispose();
     super.dispose();
   }
 
+  // 图片九宫格
   Widget _buildImageGrid() {
-    // 使用 Grid 展示已选图片与“添加”格
     final int total = _images.length < 9 ? _images.length + 1 : 9;
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
       shrinkWrap: true,
       itemCount: total,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4, // 一行放4个正方形
+        crossAxisCount: 4,
         crossAxisSpacing: 8,
         mainAxisSpacing: 8,
-        childAspectRatio: 1, // 保证正方形
+        childAspectRatio: 1,
       ),
       itemBuilder: (context, index) {
-        // 如果 index < _images.length：显示图片，右上角显示删除按钮
         if (index < _images.length) {
           return Stack(
             children: [
@@ -240,12 +254,16 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 child: GestureDetector(
                   onTap: () => _removeImage(index),
                   child: Container(
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       color: Colors.black54,
                       shape: BoxShape.circle,
                     ),
                     padding: const EdgeInsets.all(4),
-                    child: const Icon(Icons.close, size: 14, color: Colors.white),
+                    child: const Icon(
+                      Icons.close,
+                      size: 14,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -253,12 +271,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           );
         }
 
-        // 否则显示添加按钮
+        // “添加图片” 按钮
         return GestureDetector(
           onTap: _pickImage,
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.grey[200], // 浅灰色背景
+              color: Colors.grey[200],
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Center(
@@ -270,9 +288,92 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 
+  // 外部链接输入区
+  Widget _buildExternalLinksSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        const Text(
+          '外部链接',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _linkController,
+                decoration: const InputDecoration(
+                  hintText: '输入链接后点击右侧添加',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: () {
+                final text = _linkController.text.trim();
+
+                if (text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('链接不能为空')),
+                  );
+                  return;
+                }
+
+                if (!_isValidUrl(text)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('链接格式不正确，请以 http 或 https 开头')),
+                  );
+                  return;
+                }
+
+                setState(() {
+                  _externalLinks.add(text);
+                  _linkController.clear();
+                });
+              },
+              icon: const Icon(Icons.add_link, size: 18),
+              label: const Text('添加'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_externalLinks.isNotEmpty)
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: _externalLinks.map((link) {
+              return Chip(
+                label: SizedBox(
+                  width: 160,
+                  child: Text(
+                    link,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                onDeleted: () {
+                  setState(() {
+                    _externalLinks.remove(link);
+                  });
+                },
+              );
+            }).toList(),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 整体白色背景，顶部 AppBar 左上角 × 关闭
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -287,7 +388,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             Navigator.of(context).maybePop();
           },
         ),
-        actions: const [SizedBox(width: 48)], // 预留空间使标题居中
+        actions: const [SizedBox(width: 48)],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -295,16 +396,18 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 图片区域
               _buildImageGrid(),
               const SizedBox(height: 16),
 
-              // 标题输入（单行）
+              // 标题
               TextField(
                 controller: _titleController,
                 textInputAction: TextInputAction.next,
                 maxLines: 1,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
                 decoration: const InputDecoration(
                   hintText: '添加标题（最多一行）',
                   hintStyle: TextStyle(color: Colors.grey),
@@ -314,8 +417,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               ),
               const Divider(height: 1, color: Colors.grey),
 
-              // 正文输入（多行）
               const SizedBox(height: 8),
+
+              // 正文
               TextField(
                 controller: _contentController,
                 keyboardType: TextInputType.multiline,
@@ -329,19 +433,28 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 ),
               ),
 
+              // 外部链接区
+              _buildExternalLinksSection(),
+
               const SizedBox(height: 16),
-              // PDF 附件区
+
+              // PDF 附件
               Row(
                 children: [
                   ElevatedButton.icon(
                     onPressed: _pickPdf,
                     icon: const Icon(Icons.picture_as_pdf_outlined),
-                    label: Text(_pdfFile == null ? '添加 PDF 附件（仅一篇）' : '替换 PDF'),
+                    label: Text(
+                      _pdfFile == null ? '添加 PDF 附件（仅一篇）' : '替换 PDF',
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey[100],
                       foregroundColor: Colors.black87,
                       elevation: 0,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -349,7 +462,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     Expanded(
                       child: Row(
                         children: [
-                          const Icon(Icons.attach_file, size: 18, color: Colors.grey),
+                          const Icon(Icons.attach_file,
+                              size: 18, color: Colors.grey),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -370,7 +484,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
               const SizedBox(height: 36),
 
-              // 发布按钮（底部蓝色）
+              // 发布按钮
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -378,9 +492,14 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1976D2),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  child: const Text('发布笔记', style: TextStyle(fontSize: 16, color: Colors.white)),
+                  child: const Text(
+                    '发布笔记',
+                    style: TextStyle(fontSize: 16, color: Colors.white),
+                  ),
                 ),
               ),
             ],
