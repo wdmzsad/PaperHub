@@ -1365,9 +1365,25 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   }
 
   bool _isPdf(String url) {
-    final uri = Uri.tryParse(url);
-    final path = uri?.path.toLowerCase() ?? url.toLowerCase();
-    return path.endsWith('.pdf');
+    if (url.isEmpty) return false;
+    try {
+      final uri = Uri.tryParse(url);
+      final path = uri?.path.toLowerCase() ?? url.toLowerCase();
+      // 主要检查：路径是否以 .pdf 结尾
+      if (path.endsWith('.pdf')) return true;
+      // 次要检查：URL 路径中包含 /pdf/ 或 /pdfs/ 等 PDF 专用路径
+      if (path.contains('/pdf/') || path.contains('/pdfs/')) return true;
+      // 检查查询参数中是否有 type=pdf 或 format=pdf
+      final query = uri?.queryParameters;
+      if (query != null) {
+        final type = query['type']?.toLowerCase() ?? query['format']?.toLowerCase();
+        if (type == 'pdf' || type == 'application/pdf') return true;
+      }
+      return false;
+    } catch (_) {
+      // 如果解析失败，回退到简单的字符串检查
+      return url.toLowerCase().endsWith('.pdf');
+    }
   }
 
   String _extractFileName(String url) {
