@@ -24,6 +24,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   // 图片与 PDF
   List<XFile> _images = []; // 最多 9 张
   File? _pdfFile; // 仅允许 1 个 PDF
+  Uint8List? _pdfFileBytes; // Web 平台的 PDF 字节数据
+  String? _pdfFileName; // Web 平台的 PDF 文件名
 
   // 文本输入
   final TextEditingController _titleController = TextEditingController();
@@ -58,14 +60,32 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
-      withData: false,
+      withData: kIsWeb, // Web 平台需要读取字节数据
     );
     if (result != null && result.files.isNotEmpty) {
-      final path = result.files.single.path;
-      if (path != null) {
-        setState(() {
-          _pdfFile = File(path);
-        });
+      final file = result.files.single;
+      if (kIsWeb) {
+        // Web 平台：使用字节数据创建临时文件路径标识
+        if (file.bytes != null) {
+          setState(() {
+            // 在 Web 上，我们存储文件名和字节数据
+            // 使用一个特殊的路径格式来标识这是 Web 文件
+            _pdfFile = File('web://${file.name}');
+            // 存储字节数据以便后续上传
+            _pdfFileBytes = file.bytes;
+            _pdfFileName = file.name;
+          });
+        }
+      } else {
+        // 移动平台：使用文件路径
+        final path = file.path;
+        if (path != null) {
+          setState(() {
+            _pdfFile = File(path);
+            _pdfFileBytes = null;
+            _pdfFileName = null;
+          });
+        }
       }
     }
   }
@@ -74,6 +94,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   void _removePdf() {
     setState(() {
       _pdfFile = null;
+      _pdfFileBytes = null;
+      _pdfFileName = null;
     });
   }
 
@@ -181,8 +203,30 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       }
       // 再上传 PDF（如有）
       if (_pdfFile != null) {
-        final pdfXFile = XFile(_pdfFile!.path);
-        final pdfUrl = await _uploadFileToServer(pdfXFile, 'pdf');
+        String? pdfUrl;
+        if (kIsWeb && _pdfFileBytes != null && _pdfFileName != null) {
+          // Web 平台：使用字节数据上传
+          final uri = Uri.parse('http://localhost:8080/posts/upload');
+          final request = http.MultipartRequest('POST', uri);
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'file',
+              _pdfFileBytes!,
+              filename: _pdfFileName!,
+              contentType: MediaType('application', 'pdf'),
+            ),
+          );
+          final response = await request.send();
+          if (response.statusCode == 200) {
+            final respStr = await response.stream.bytesToString();
+            final data = jsonDecode(respStr) as Map<String, dynamic>;
+            pdfUrl = data['url'] as String?;
+          }
+        } else {
+          // 移动平台：使用文件路径上传
+          final pdfXFile = XFile(_pdfFile!.path);
+          pdfUrl = await _uploadFileToServer(pdfXFile, 'pdf');
+        }
         if (pdfUrl != null) mediaUrls.add(pdfUrl);
       }
       // 调用创建笔记接口
@@ -484,7 +528,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              _pdfFile!.path.split('/').last,
+                              _pdfFileName ?? _pdfFile!.path.split('/').last,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontSize: 14),
                             ),
