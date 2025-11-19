@@ -178,6 +178,12 @@ class Post {
   final String? doi;
   final String? journal;
   final int? year;
+  
+  // arXiv 相关元数据（可选）
+  final String? arxivId;
+  final List<String> arxivAuthors; // arXiv 作者列表
+  final String? arxivPublishedDate; // 发布日期（格式：YYYY-MM-DD）
+  final List<String> arxivCategories; // arXiv 分类
 
   // 图片展示相关（保持原来字段以兼容瀑布流计算）
   final double imageAspectRatio;
@@ -206,6 +212,10 @@ class Post {
     this.doi,
     this.journal,
     this.year,
+    this.arxivId,
+    this.arxivAuthors = const [],
+    this.arxivPublishedDate,
+    this.arxivCategories = const [],
     required this.imageAspectRatio,
     required this.imageNaturalWidth,
     required this.imageNaturalHeight,
@@ -256,6 +266,14 @@ class Post {
       doi: json['doi'] as String?,
       journal: json['journal'] as String?,
       year: (json['year'] as num?)?.toInt(),
+      arxivId: json['arxivId'] as String?,
+      arxivAuthors: (json['arxivAuthors'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ?? const [],
+      arxivPublishedDate: json['arxivPublishedDate'] as String?,
+      arxivCategories: (json['arxivCategories'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ?? const [],
       imageAspectRatio: (json['imageAspectRatio'] as num?)?.toDouble() ?? 1.5,
       imageNaturalWidth: (json['imageNaturalWidth'] as num?)?.toDouble() ?? 800.0,
       imageNaturalHeight: (json['imageNaturalHeight'] as num?)?.toDouble() ?? 600.0,

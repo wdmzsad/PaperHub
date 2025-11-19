@@ -152,7 +152,11 @@ public class PostController {
                 req.doi(),
                 req.journal(),
                 req.year(),
-                req.externalLinks() != null ? req.externalLinks() : new ArrayList<>()
+                req.externalLinks() != null ? req.externalLinks() : new ArrayList<>(),
+                req.arxivId(),
+                req.arxivAuthors() != null ? req.arxivAuthors() : new ArrayList<>(),
+                req.arxivPublishedDate(),
+                req.arxivCategories() != null ? req.arxivCategories() : new ArrayList<>()
             );
             
             PostDtos.PostResp resp = postMapper.toPostResp(post, user.getId());

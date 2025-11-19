@@ -15,7 +15,11 @@ public class PostDtos {
         String doi,
         String journal,
         Integer year,
-        List<String> externalLinks // 新增：外部链接列表
+        List<String> externalLinks, // 新增：外部链接列表
+        String arxivId, // arXiv ID
+        List<String> arxivAuthors, // arXiv 作者列表
+        String arxivPublishedDate, // arXiv 发布日期
+        List<String> arxivCategories // arXiv 分类列表
     ) {}
     
     // 作者信息
@@ -38,6 +42,10 @@ public class PostDtos {
         String doi,
         String journal,
         Integer year,
+        String arxivId, // arXiv ID
+        List<String> arxivAuthors, // arXiv 作者列表
+        String arxivPublishedDate, // arXiv 发布日期
+        List<String> arxivCategories, // arXiv 分类列表
         String createdAt,
         double imageAspectRatio,
         double imageNaturalWidth,

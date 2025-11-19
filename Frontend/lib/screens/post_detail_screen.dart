@@ -306,6 +306,14 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       widget.post.media.where(_isPdf).toList();
   bool get _isOwner =>
       _currentUserId != null && widget.post.author.id == _currentUserId;
+  
+  // 检查是否有 arXiv 元数据
+  bool _hasArxivMetadata() {
+    return widget.post.arxivId != null && 
+           (widget.post.arxivAuthors.isNotEmpty || 
+            widget.post.arxivPublishedDate != null || 
+            widget.post.arxivCategories.isNotEmpty);
+  }
 
   @override
   void initState() {
@@ -1168,6 +1176,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                 .toList(),
           ),
           const SizedBox(height: 10),
+          // arXiv 文献信息（如果有）
+          if (_hasArxivMetadata()) _buildArxivMetadataSection(),
+          const SizedBox(height: 10),
           if (_pdfMedia.isNotEmpty) _buildPdfSection(),
           if (widget.post.attachments.isNotEmpty)
             Column(
@@ -1244,6 +1255,55 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             Text(
               '${widget.post.journal}${widget.post.year != null ? ' · ${widget.post.year}' : ''}',
               style: TextStyle(color: Colors.grey[700], fontSize: 12),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // 构建 arXiv 元数据信息卡片
+  Widget _buildArxivMetadataSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.post.arxivAuthors.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '作者：${widget.post.arxivAuthors.join(", ")}',
+                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              ),
+            ),
+          if (widget.post.arxivPublishedDate != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '发布日期：${widget.post.arxivPublishedDate}',
+                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              ),
+            ),
+          if (widget.post.arxivCategories.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '分类：${widget.post.arxivCategories.join(", ")}',
+                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              ),
+            ),
+          if (widget.post.arxivId != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'arXiv ID: ${widget.post.arxivId}',
+                style: TextStyle(fontSize: 11, color: Colors.grey[600], fontStyle: FontStyle.italic),
+              ),
             ),
         ],
       ),
