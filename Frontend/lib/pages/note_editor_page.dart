@@ -179,16 +179,22 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
 
-    if (title.isEmpty && content.isEmpty && _images.isEmpty && _pdfFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入标题、正文、图片或附件后再发布')),
-      );
-      return;
-    }
-
+    // 不允许为空的内容
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('请输入标题')),
+      );
+      return;
+    }
+    if (content.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入正文')),
+      );
+      return;
+    }
+    if (_images.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请添加图片')),
       );
       return;
     }
@@ -249,6 +255,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         journal: _journal,
         year: _year,
         externalLinks: _externalLinks.isNotEmpty ? _externalLinks : null,
+        arxivId: _arxivId,
+        arxivAuthors: _arxivMetadata?.authors,
+        arxivPublishedDate: _arxivMetadata?.publishedDateFormatted,
+        arxivCategories: _arxivMetadata?.categories,
       );
 
       // 关闭加载对话框

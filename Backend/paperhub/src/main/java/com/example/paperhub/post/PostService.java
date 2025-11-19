@@ -62,7 +62,8 @@ public class PostService {
      */
     @Transactional
     public Post createPost(String title, String content, User author, List<String> media, 
-                          List<String> tags, String doi, String journal, Integer year, List<String> externalLinks) {
+                          List<String> tags, String doi, String journal, Integer year, List<String> externalLinks,
+                          String arxivId, List<String> arxivAuthors, String arxivPublishedDate, List<String> arxivCategories) {
         Post post = new Post();
         post.setTitle(title);
         post.setContent(content != null ? content : "");
@@ -74,6 +75,11 @@ public class PostService {
         post.setYear(year);
         // 外部链接列表（可为空）
         post.setExternalLinks(externalLinks != null ? externalLinks : List.of());
+        // arXiv 相关元数据
+        post.setArxivId(arxivId);
+        post.setArxivAuthors(arxivAuthors != null ? arxivAuthors : List.of());
+        post.setArxivPublishedDate(arxivPublishedDate);
+        post.setArxivCategories(arxivCategories != null ? arxivCategories : List.of());
         post.setLikesCount(0);
         post.setCommentsCount(0);
         post.setViewsCount(0);

@@ -53,6 +53,23 @@ public class Post {
     
     @Column(name = "year")
     private Integer year;
+    
+    // arXiv 相关元数据（可选）
+    @Column(name = "arxiv_id")
+    private String arxivId;
+    
+    @ElementCollection
+    @CollectionTable(name = "post_arxiv_authors", joinColumns = @JoinColumn(name = "post_id"))
+    @Column(name = "author_name")
+    private List<String> arxivAuthors = new ArrayList<>();
+    
+    @Column(name = "arxiv_published_date")
+    private String arxivPublishedDate;
+    
+    @ElementCollection
+    @CollectionTable(name = "post_arxiv_categories", joinColumns = @JoinColumn(name = "post_id"))
+    @Column(name = "category")
+    private List<String> arxivCategories = new ArrayList<>();
 
     // 统计信息
     @Column(name = "likes_count", nullable = false)
@@ -189,6 +206,39 @@ public class Post {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    // arXiv 相关字段的 Getter 和 Setter
+    public String getArxivId() {
+        return arxivId;
+    }
+
+    public void setArxivId(String arxivId) {
+        this.arxivId = arxivId;
+    }
+
+    public List<String> getArxivAuthors() {
+        return arxivAuthors;
+    }
+
+    public void setArxivAuthors(List<String> arxivAuthors) {
+        this.arxivAuthors = arxivAuthors != null ? arxivAuthors : new ArrayList<>();
+    }
+
+    public String getArxivPublishedDate() {
+        return arxivPublishedDate;
+    }
+
+    public void setArxivPublishedDate(String arxivPublishedDate) {
+        this.arxivPublishedDate = arxivPublishedDate;
+    }
+
+    public List<String> getArxivCategories() {
+        return arxivCategories;
+    }
+
+    public void setArxivCategories(List<String> arxivCategories) {
+        this.arxivCategories = arxivCategories != null ? arxivCategories : new ArrayList<>();
     }
 }
 

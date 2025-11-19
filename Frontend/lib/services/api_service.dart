@@ -825,6 +825,10 @@ class ApiService {
   /// @param journal 期刊（可选）
   /// @param year 年份（可选）
   /// @param externalLinks 外部链接列表（可选）
+  /// @param arxivId arXiv ID（可选）
+  /// @param arxivAuthors arXiv 作者列表（可选）
+  /// @param arxivPublishedDate arXiv 发布日期（可选）
+  /// @param arxivCategories arXiv 分类列表（可选）
   static Future<Map<String, dynamic>> createPost({
     required String title,
     String? content,
@@ -834,6 +838,10 @@ class ApiService {
     String? journal,
     int? year,
     List<String>? externalLinks,
+    String? arxivId,
+    List<String>? arxivAuthors,
+    String? arxivPublishedDate,
+    List<String>? arxivCategories,
   }) async {
     return await _makeRequest(
       () => http.post(
@@ -848,6 +856,10 @@ class ApiService {
           if (journal != null) 'journal': journal,
           if (year != null) 'year': year,
           if (externalLinks != null) 'externalLinks': externalLinks,
+          if (arxivId != null) 'arxivId': arxivId,
+          if (arxivAuthors != null && arxivAuthors.isNotEmpty) 'arxivAuthors': arxivAuthors,
+          if (arxivPublishedDate != null) 'arxivPublishedDate': arxivPublishedDate,
+          if (arxivCategories != null && arxivCategories.isNotEmpty) 'arxivCategories': arxivCategories,
         }),
       ),
       '/posts',
