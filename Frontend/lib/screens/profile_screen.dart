@@ -12,6 +12,8 @@ import '../pages/note_editor_page.dart';
 import '../services/api_service.dart';
 import '../services/local_storage.dart';
 import '../widgets/bottom_navigation.dart';
+import '../widgets/post_card.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'home_screen.dart';
 import 'message_screen.dart';
 import 'post_detail_screen.dart';
@@ -115,6 +117,200 @@ class _ProfilePageState extends State<ProfilePage>
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _showAvatarViewer(String? avatar) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image(
+                  image: _resolveAvatar(avatar),
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 20,
+              left: 20,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAvatarDirectly() async {
+    if (!_isViewingSelf || _profile == null) return;
+    final picker = ImagePicker();
+    final XFile? picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 1024,
+    );
+    if (picked == null) return;
+
+    final ext = picked.name.split('.').last.toLowerCase();
+    const allowed = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+    if (!allowed.contains(ext)) {
+      _showSnack('仅支持 png/jpg/jpeg/gif/webp 格式');
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      final bytes = await picked.readAsBytes();
+      final uploadResp = await ApiService.uploadAvatarBytes(
+        bytes,
+        picked.name,
+      );
+      if (uploadResp['statusCode'] != 200) {
+        final message =
+            (uploadResp['body'] as Map<String, dynamic>?)?['message'] ?? '头像上传失败';
+        throw Exception(message);
+      }
+      final body = uploadResp['body'] as Map<String, dynamic>;
+      final avatarUrl = (body['url'] ?? body['avatar'])?.toString();
+
+      final resp = await ApiService.updateProfile(
+        displayName: _profile!.displayName,
+        bio: _profile!.bio,
+        researchDirections: _profile!.researchDirections,
+        avatarUrl: avatarUrl,
+      );
+      if (resp['statusCode'] != 200) {
+        final message =
+            (resp['body'] as Map<String, dynamic>?)?['message'] ?? '保存失败';
+        throw Exception(message);
+      }
+      await _loadProfile(forceNetwork: true);
+      _showSnack('头像已更新');
+    } catch (e) {
+      _showSnack('上传失败：$e');
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  void _showBackgroundViewer(String? background) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image(
+                  image: _resolveBackground(background),
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            if (_isViewingSelf)
+              Positioned(
+                bottom: 20,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: FloatingActionButton.extended(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      _pickBackgroundDirectly();
+                    },
+                    backgroundColor: Colors.white.withOpacity(0.9),
+                    icon: const Icon(Icons.image, color: Colors.black87),
+                    label: const Text(
+                      '更换背景图',
+                      style: TextStyle(color: Colors.black87),
+                    ),
+                  ),
+                ),
+              ),
+            Positioned(
+              top: 20,
+              left: 20,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickBackgroundDirectly() async {
+    if (!_isViewingSelf || _profile == null) return;
+    final picker = ImagePicker();
+    final XFile? picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 1920,
+    );
+    if (picked == null) return;
+    final ext = picked.name.split('.').last.toLowerCase();
+    const allowed = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+    if (!allowed.contains(ext)) {
+      _showSnack('仅支持 png/jpg/jpeg/gif/webp 格式');
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      final bytes = await picked.readAsBytes();
+      final uploadResp = await ApiService.uploadBackgroundBytes(
+        bytes,
+        picked.name,
+      );
+      if (uploadResp['statusCode'] != 200) {
+        final message =
+            (uploadResp['body'] as Map<String, dynamic>?)?['message'] ??
+            '背景图上传失败';
+        throw Exception(message);
+      }
+      final body = uploadResp['body'] as Map<String, dynamic>;
+      final backgroundUrl = (body['url'] ?? body['background'])?.toString();
+
+      final resp = await ApiService.updateProfile(
+        displayName: _profile!.displayName,
+        bio: _profile!.bio,
+        researchDirections: _profile!.researchDirections,
+        backgroundImage: backgroundUrl,
+      );
+      if (resp['statusCode'] != 200) {
+        final message =
+            (resp['body'] as Map<String, dynamic>?)?['message'] ?? '保存失败';
+        throw Exception(message);
+      }
+      await _loadProfile(forceNetwork: true);
+      _showSnack('背景图已更新');
+    } catch (e) {
+      _showSnack('上传失败：$e');
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
   }
 
   Future<void> _openEditProfileSheet() async {
@@ -441,7 +637,7 @@ class _ProfilePageState extends State<ProfilePage>
       child: Scaffold(
         drawer: _buildDrawer(),
         backgroundColor: const Color(0xFFF5F5F5),
-        bottomNavigationBar: _buildBottomNavigationBar(),
+        bottomNavigationBar: _isViewingSelf ? _buildBottomNavigationBar() : null,
         body: SafeArea(
           child: RefreshIndicator(
             onRefresh: _handleRefresh,
@@ -504,127 +700,161 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Widget _buildHeader(UserProfile profile) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        image: DecorationImage(
-          image: _resolveBackground(profile.backgroundImage),
-          fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(
-            Colors.black.withOpacity(0.45),
-            BlendMode.darken,
+    return GestureDetector(
+      onTap: _isViewingSelf ? () => _showBackgroundViewer(profile.backgroundImage) : null,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: _resolveBackground(profile.backgroundImage),
+            fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(
+              Colors.black.withOpacity(0.45),
+              BlendMode.darken,
+            ),
+          ),
+          borderRadius: const BorderRadius.only(
+            bottomLeft: Radius.circular(20),
+            bottomRight: Radius.circular(20),
           ),
         ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(20),
-          bottomRight: Radius.circular(20),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.only(
-          top: 32,
-          bottom: 24,
-          left: 20,
-          right: 20,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_isViewingSelf)
+        child: Padding(
+          padding: const EdgeInsets.only(
+            top: 32,
+            bottom: 24,
+            left: 20,
+            right: 20,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
                 children: [
-                  Builder(
-                    builder: (ctx) => IconButton(
-                      icon: const Icon(Icons.menu, color: Colors.white),
-                      onPressed: () => Scaffold.of(ctx).openDrawer(),
+                  if (_isViewingSelf)
+                    Builder(
+                      builder: (ctx) => IconButton(
+                        icon: const Icon(Icons.menu, color: Colors.white),
+                        onPressed: () => Scaffold.of(ctx).openDrawer(),
+                      ),
+                    )
+                  else
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () => Navigator.of(context).pop(),
                     ),
-                  ),
                 ],
               ),
-            if (_isViewingSelf) const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 48,
-                  backgroundImage: _resolveAvatar(profile.avatar),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        profile.displayName,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GestureDetector(
+                    onTap: () => _showAvatarViewer(profile.avatar),
+                    child: Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 48,
+                          backgroundImage: _resolveAvatar(profile.avatar),
                         ),
-                      ),
-                      if (profile.bio != null) ...[
-                        const SizedBox(height: 4),
+                        if (_isViewingSelf)
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: _pickAvatarDirectly,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: const BoxDecoration(
+                                  color: Colors.black87,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          profile.bio!,
-                          style: const TextStyle(color: Colors.white70),
+                          profile.displayName,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (profile.bio != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            profile.bio!,
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        Text(
+                          profile.email,
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                          ),
                         ),
                       ],
-                      const SizedBox(height: 8),
-                      Text(
-                        profile.email,
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (_isViewingSelf)
-                  IconButton(
-                    onPressed: _openEditProfileSheet,
-                    icon: const Icon(Icons.edit, color: Colors.white),
-                  )
-                else
-                  ElevatedButton(
-                    onPressed: _toggleFollow,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: (_isFollowing ?? false)
-                          ? Colors.white.withOpacity(0.2)
-                          : Colors.blueAccent,
-                      foregroundColor: Colors.white,
                     ),
-                    child: Text((_isFollowing ?? false) ? '已关注' : '关注'),
                   ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _StatItem(
-                    title: '关注',
-                    count: profile.followingCount,
-                    onTap: _isViewingSelf ? () => _openFollowList(false) : null,
-                  ),
-                  _StatItem(
-                    title: '粉丝',
-                    count: profile.followersCount,
-                    onTap: () => _openFollowList(true),
-                  ),
-                  _StatItem(title: '收藏', count: profile.favoritesCount),
-                  _StatItem(title: '点赞', count: profile.likesCount),
+                  if (_isViewingSelf)
+                    IconButton(
+                      onPressed: _openEditProfileSheet,
+                      icon: const Icon(Icons.edit, color: Colors.white),
+                    )
+                  else
+                    ElevatedButton(
+                      onPressed: _toggleFollow,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: (_isFollowing ?? false)
+                            ? Colors.white.withOpacity(0.2)
+                            : Colors.blueAccent,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: Text((_isFollowing ?? false) ? '已关注' : '关注'),
+                    ),
                 ],
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _StatItem(
+                      title: '关注',
+                      count: profile.followingCount,
+                      onTap: _isViewingSelf ? () => _openFollowList(false) : null,
+                    ),
+                    _StatItem(
+                      title: '粉丝',
+                      count: profile.followersCount,
+                      onTap: () => _openFollowList(true),
+                    ),
+                    _StatItem(title: '收藏', count: profile.favoritesCount),
+                    _StatItem(title: '点赞', count: profile.likesCount),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -644,11 +874,6 @@ class _ProfilePageState extends State<ProfilePage>
                 '研究方向',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              if (_isViewingSelf)
-                TextButton(
-                  onPressed: _openDirectionsSheet,
-                  child: const Text('管理标签'),
-                ),
             ],
           ),
           const SizedBox(height: 8),
@@ -720,16 +945,16 @@ class _ProfilePageState extends State<ProfilePage>
           ),
           const SizedBox(height: 8),
           SizedBox(
-            height: 420,
+            height: 600,
             child: TabBarView(
               children: [
-                _buildPostListContent(
+                _buildPostGridContent(
                   posts: _authoredPosts,
                   isLoading: _loadingAuthored,
                   hasMore: _hasMoreAuthored,
                   loader: _loadUserPosts,
                 ),
-                _buildPostListContent(
+                _buildPostGridContent(
                   posts: _favoritePosts,
                   isLoading: _loadingFavorites,
                   hasMore: _hasMoreFavorites,
@@ -743,7 +968,7 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Widget _buildPostListContent({
+  Widget _buildPostGridContent({
     required List<Post> posts,
     required bool isLoading,
     required bool hasMore,
@@ -762,9 +987,12 @@ class _ProfilePageState extends State<ProfilePage>
     }
     return RefreshIndicator(
       onRefresh: () => loader(refresh: true),
-      child: ListView.separated(
+      child: MasonryGridView.count(
+        crossAxisCount: 2,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         itemCount: posts.length + (hasMore ? 1 : 0),
-        separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (context, index) {
           if (index == posts.length) {
             if (isLoading) {
@@ -785,18 +1013,14 @@ class _ProfilePageState extends State<ProfilePage>
             );
           }
           final post = posts[index];
-          return ListTile(
-            title: Text(
-              post.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              _formatPostTime(post.createdAt),
-              style: const TextStyle(fontSize: 12),
-            ),
-            trailing: const Icon(Icons.chevron_right),
+          return PostCard(
+            post: post,
             onTap: () => _openPostDetail(post),
+            onAuthorTap: () {
+              if (post.author.id != _currentUserId) {
+                Navigator.of(context).pushNamed('/user/${post.author.id}');
+              }
+            },
           );
         },
       ),
@@ -1312,6 +1536,20 @@ class _ProfileEditSheetState extends State<_ProfileEditSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              Row(
+                children: [
+                  const Text(
+                    '编辑个人资料',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: Stack(
@@ -1336,20 +1574,6 @@ class _ProfileEditSheetState extends State<_ProfileEditSheet> {
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  const Text(
-                    '编辑个人资料',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
               ),
               const SizedBox(height: 16),
               Center(
