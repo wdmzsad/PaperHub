@@ -462,7 +462,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 
-  // arXiv 文献信息区
+  // 拉取 arXiv 文献信息区
   Widget _buildArxivSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
