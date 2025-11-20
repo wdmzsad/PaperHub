@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../config/app_env.dart';
 import '../services/api_service.dart';
 import '../services/arxiv_service.dart';
 
@@ -123,7 +124,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   // 上传图片到后端，返回 URL
   Future<String?> _uploadFileToServer(XFile file, String fileType) async {
   try {
-    final uri = Uri.parse('http://localhost:8080/posts/upload');
+    final uri = Uri.parse('${AppEnv.apiBaseUrl}/posts/upload');
     final request = http.MultipartRequest('POST', uri);
 
     if (fileType == 'image') {
@@ -222,7 +223,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         String? pdfUrl;
         if (kIsWeb && _pdfFileBytes != null && _pdfFileName != null) {
           // Web 平台：使用字节数据上传
-          final uri = Uri.parse('http://localhost:8080/posts/upload');
+          final uri = Uri.parse('${AppEnv.apiBaseUrl}/posts/upload');
           final request = http.MultipartRequest('POST', uri);
           request.files.add(
             http.MultipartFile.fromBytes(
