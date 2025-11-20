@@ -11,7 +11,7 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../widgets/pdf_iframe_view.dart';
 import '../services/local_storage.dart';
-
+import '../config/app_env.dart';
 
 /*
 ================================================================================
@@ -476,7 +476,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   /// 初始化 WebSocket 连接，监听后端推送的点赞/评论点赞变更
   void _initWebSocket() {
     // TODO: 替换为你后端实际 ws 地址
-    final wsUrl = 'ws://localhost:8080/ws/posts/${widget.post.id}';
+    final wsUrl = 'ws:${AppEnv.apiBaseUrl}/ws/posts/${widget.post.id}';
     _wsChannel = WebSocketChannel.connect(Uri.parse(wsUrl));
     _wsChannel!.stream.listen(
       (event) {
