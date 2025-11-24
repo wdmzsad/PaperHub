@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import '../config/app_env.dart';
 import 'local_storage.dart';
 
 /*
@@ -36,8 +37,7 @@ import 'local_storage.dart';
 */
 
 /// TODO: 把 baseUrl 换成你后端的地址
-const String baseUrl = 'http://124.70.87.106:8080';
-//const String baseUrl = 'http://localhost:8080';
+final String baseUrl = AppEnv.apiBaseUrl;
 
 class ApiService {
   // 标记是否正在刷新，避免并发请求时多次刷新
