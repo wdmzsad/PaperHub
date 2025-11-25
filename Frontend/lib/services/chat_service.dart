@@ -178,7 +178,8 @@ class ChatService extends ChangeNotifier {
       if (result['statusCode'] == 200) {
         final Map<String, dynamic> data = result['body'];
         final List<dynamic> content = data['content'] ?? [];
-        _messages = content.map((json) => Message.fromJson(json)).toList();
+        // 后端返回的消息是按时间降序（最新的在前），需要反转以显示最早的在顶部
+        _messages = content.map((json) => Message.fromJson(json)).toList().reversed.toList();
       } else {
         debugPrint('加载消息失败: ${result['body']['message']}');
         // 失败时显示空消息列表
@@ -249,6 +250,7 @@ class ChatService extends ChangeNotifier {
       isMe: true,
     );
 
+    // 添加到消息列表末尾（因为列表现在是按时间升序排列，最早的在顶部）
     _messages.add(newMessage);
     notifyListeners();
 

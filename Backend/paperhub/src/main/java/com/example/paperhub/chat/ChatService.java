@@ -218,7 +218,7 @@ public class ChatService {
 
         Long otherUserId = participants.stream()
                 .map(ConversationParticipant::getUserId)
-                .filter(userId -> !userId.equals(currentUserId))
+                .filter(userId -> userId != null && !userId.equals(currentUserId))
                 .findFirst()
                 .orElse(null); // 返回null而不是抛出异常
 
