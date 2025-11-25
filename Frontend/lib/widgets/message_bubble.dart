@@ -25,8 +25,9 @@ class MessageBubble extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
-        mainAxisAlignment:
-            message.isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: message.isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!message.isMe && showAvatar) ...[
@@ -35,8 +36,9 @@ class MessageBubble extends StatelessWidget {
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  message.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: message.isMe
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 _buildMessageContent(context),
                 if (showTime) ...[
@@ -141,8 +143,12 @@ class MessageBubble extends StatelessWidget {
       decoration: BoxDecoration(
         color: message.isMe ? const Color(0xFF1976D2) : Colors.white,
         borderRadius: BorderRadius.circular(18).copyWith(
-          bottomLeft: message.isMe ? const Radius.circular(18) : const Radius.circular(4),
-          bottomRight: message.isMe ? const Radius.circular(4) : const Radius.circular(18),
+          bottomLeft: message.isMe
+              ? const Radius.circular(18)
+              : const Radius.circular(4),
+          bottomRight: message.isMe
+              ? const Radius.circular(4)
+              : const Radius.circular(18),
         ),
         boxShadow: [
           BoxShadow(
@@ -164,101 +170,153 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildImageMessage(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(
-        maxWidth: MediaQuery.of(context).size.width * 0.7,
-        maxHeight: 200,
-      ),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: Colors.grey[100],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Stack(
-          children: [
-            // 图片占位符
-            Container(
-              width: double.infinity,
-              height: double.infinity,
-              color: Colors.grey[200],
-              child: const Icon(
-                Icons.image,
-                size: 48,
-                color: Colors.grey,
-              ),
-            ),
-            // 图片名称
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.5),
-                    ],
-                  ),
-                ),
-                child: Text(
-                  message.content,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+    if (message.mediaUrls.isEmpty) {
+      return _buildTextMessage(context);
+    }
 
-  Widget _buildFileMessage(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(
-        maxWidth: MediaQuery.of(context).size.width * 0.7,
-      ),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: message.isMe ? const Color(0xFF1976D2) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+    return Column(
+      crossAxisAlignment: message.isMe
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: [
+        ...message.mediaUrls.map(
+          (url) => Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.6,
+              maxHeight: 300,
+            ),
+            margin: const EdgeInsets.only(bottom: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.grey[100],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                url,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    height: 200,
+                    color: Colors.grey[200],
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                            : null,
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: 200,
+                    color: Colors.grey[200],
+                    child: const Icon(
+                      Icons.broken_image,
+                      size: 48,
+                      color: Colors.grey,
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.insert_drive_file_outlined,
-            color: message.isMe ? Colors.white : Colors.grey[600],
-            size: 20,
-          ),
-          const SizedBox(width: 8),
-          Flexible(
+        ),
+        if (message.content.isNotEmpty)
+          Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.6,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: message.isMe ? const Color(0xFF1976D2) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Text(
               message.content,
               style: TextStyle(
                 color: message.isMe ? Colors.white : Colors.black87,
                 fontSize: 14,
               ),
-              overflow: TextOverflow.ellipsis,
             ),
           ),
-        ],
-      ),
+      ],
+    );
+  }
+
+  Widget _buildFileMessage(BuildContext context) {
+    if (message.mediaUrls.isEmpty) {
+      return _buildTextMessage(context);
+    }
+
+    return Column(
+      crossAxisAlignment: message.isMe
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: [
+        ...message.mediaUrls.map(
+          (url) => Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.7,
+            ),
+            margin: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: message.isMe ? const Color(0xFF1976D2) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.insert_drive_file_outlined,
+                  color: message.isMe ? Colors.white : Colors.grey[600],
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    url.split('/').last,
+                    style: TextStyle(
+                      color: message.isMe ? Colors.white : Colors.black87,
+                      fontSize: 14,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (message.content.isNotEmpty)
+          Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.7,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: message.isMe ? const Color(0xFF1976D2) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              message.content,
+              style: TextStyle(
+                color: message.isMe ? Colors.white : Colors.black87,
+                fontSize: 14,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -271,8 +329,12 @@ class MessageBubble extends StatelessWidget {
       decoration: BoxDecoration(
         color: message.isMe ? const Color(0xFF1976D2) : Colors.white,
         borderRadius: BorderRadius.circular(18).copyWith(
-          bottomLeft: message.isMe ? const Radius.circular(18) : const Radius.circular(4),
-          bottomRight: message.isMe ? const Radius.circular(4) : const Radius.circular(18),
+          bottomLeft: message.isMe
+              ? const Radius.circular(18)
+              : const Radius.circular(4),
+          bottomRight: message.isMe
+              ? const Radius.circular(4)
+              : const Radius.circular(18),
         ),
         boxShadow: [
           BoxShadow(
@@ -334,10 +396,7 @@ class MessageBubble extends StatelessWidget {
         ),
         child: Text(
           message.content,
-          style: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 12,
-          ),
+          style: TextStyle(color: Colors.grey[600], fontSize: 12),
         ),
       ),
     );
@@ -345,16 +404,14 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildMessageMeta() {
     return Row(
-      mainAxisAlignment:
-          message.isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+      mainAxisAlignment: message.isMe
+          ? MainAxisAlignment.end
+          : MainAxisAlignment.start,
       children: [
         if (!message.isMe) ...[
           Text(
             _formatTime(message.createdAt),
-            style: TextStyle(
-              color: Colors.grey[500],
-              fontSize: 11,
-            ),
+            style: TextStyle(color: Colors.grey[500], fontSize: 11),
           ),
           const SizedBox(width: 4),
           Text(
@@ -370,10 +427,7 @@ class MessageBubble extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             _formatTime(message.createdAt),
-            style: TextStyle(
-              color: Colors.grey[500],
-              fontSize: 11,
-            ),
+            style: TextStyle(color: Colors.grey[500], fontSize: 11),
           ),
         ],
       ],
@@ -410,11 +464,7 @@ class MessageBubble extends StatelessWidget {
         color = Colors.grey[400]!;
     }
 
-    return Icon(
-      icon,
-      size: 14,
-      color: color,
-    );
+    return Icon(icon, size: 14, color: color);
   }
 
   String _formatTime(DateTime dateTime) {

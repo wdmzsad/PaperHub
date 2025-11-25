@@ -168,12 +168,12 @@ public class ChatService {
                               String fileUrl, String fileName, Long fileSize) {
         // 验证用户是否在会话中
         if (!conversationParticipantRepository.existsByConversationIdAndUserId(conversationId, senderId)) {
-            return null; // 返回null而不是抛出异常
+            return null;
         }
 
         Optional<Conversation> conversationOpt = conversationRepository.findById(conversationId);
         if (conversationOpt.isEmpty()) {
-            return null; // 返回null而不是抛出异常
+            return null;
         }
 
         Message message = new Message();
@@ -184,6 +184,42 @@ public class ChatService {
         message.setFileUrl(fileUrl);
         message.setFileName(fileName);
         message.setFileSize(fileSize);
+        message.setCreatedAt(LocalDateTime.now());
+
+        Message savedMessage = messageRepository.save(message);
+
+        // 更新会话的更新时间
+        Conversation conversation = conversationOpt.get();
+        conversation.setUpdatedAt(LocalDateTime.now());
+        conversationRepository.save(conversation);
+
+        // 推送实时消息给会话参与者
+        pushRealTimeMessage(conversationId, savedMessage);
+
+        return savedMessage;
+    }
+
+    /**
+     * 发送带媒体文件的消息
+     */
+    @Transactional
+    public Message sendMessageWithMedia(Long conversationId, Long senderId, String content,
+                                       MessageType type, List<String> mediaUrls) {
+        if (!conversationParticipantRepository.existsByConversationIdAndUserId(conversationId, senderId)) {
+            return null;
+        }
+
+        Optional<Conversation> conversationOpt = conversationRepository.findById(conversationId);
+        if (conversationOpt.isEmpty()) {
+            return null;
+        }
+
+        Message message = new Message();
+        message.setConversation(conversationOpt.get());
+        message.setSenderId(senderId);
+        message.setContent(content);
+        message.setType(type);
+        message.setMediaUrls(mediaUrls != null ? mediaUrls : new ArrayList<>());
         message.setCreatedAt(LocalDateTime.now());
 
         Message savedMessage = messageRepository.save(message);

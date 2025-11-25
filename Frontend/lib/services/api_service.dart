@@ -952,6 +952,29 @@ class ApiService {
     );
   }
 
+  /// 发送带媒体的消息
+  /// POST /api/conversations/{conversationId}/messages
+  static Future<Map<String, dynamic>> sendMessageWithMedia(
+    String conversationId,
+    List<String> mediaUrls, {
+    String type = 'IMAGE',
+    String content = '',
+  }) async {
+    final uri = Uri.parse('$baseUrl/api/conversations/$conversationId/messages');
+    return await _makeRequest(
+      () => http.post(
+        uri,
+        headers: _buildHeaders(),
+        body: jsonEncode({
+          'content': content,
+          'type': type,
+          'mediaUrls': mediaUrls,
+        }),
+      ),
+      '/api/conversations/$conversationId/messages',
+    );
+  }
+
   /// 标记会话为已读
   /// PUT /api/conversations/{conversationId}/read
   static Future<Map<String, dynamic>> markConversationAsRead(String conversationId) async {

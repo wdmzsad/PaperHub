@@ -6,10 +6,18 @@
 /// - 表情和附件按钮
 /// - 发送按钮状态管理
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:typed_data';
+import '../services/local_storage.dart';
+import '../config/app_env.dart';
 
 class ChatInput extends StatefulWidget {
   final TextEditingController controller;
   final Function(String) onSend;
+  final Function(List<String> mediaUrls, String messageType)? onSendMedia;
   final String hintText;
   final bool enabled;
   final int maxLines;
@@ -18,6 +26,7 @@ class ChatInput extends StatefulWidget {
     Key? key,
     required this.controller,
     required this.onSend,
+    this.onSendMedia,
     this.hintText = '输入消息...',
     this.enabled = true,
     this.maxLines = 5,
@@ -78,7 +87,28 @@ class _ChatInputState extends State<ChatInput> {
 
   void _showEmojiPicker() {
     // 简单的表情选择实现
-    final emojis = ['😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛'];
+    final emojis = [
+      '😀',
+      '😃',
+      '😄',
+      '😁',
+      '😅',
+      '😂',
+      '🤣',
+      '😊',
+      '😇',
+      '🙂',
+      '😉',
+      '😌',
+      '😍',
+      '🥰',
+      '😘',
+      '😗',
+      '😙',
+      '😚',
+      '😋',
+      '😛',
+    ];
 
     showModalBottomSheet(
       context: context,
@@ -104,10 +134,7 @@ class _ChatInputState extends State<ChatInput> {
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
                 '选择表情',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
             ),
             Container(
@@ -176,19 +203,19 @@ class _ChatInputState extends State<ChatInput> {
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
                 '选择附件类型',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library, color: Color(0xFF1976D2)),
+              leading: const Icon(
+                Icons.photo_library,
+                color: Color(0xFF1976D2),
+              ),
               title: const Text('图片'),
               subtitle: const Text('从相册选择图片'),
               onTap: () {
                 Navigator.pop(context);
-                // TODO: 实现图片选择
+                _pickImage(ImageSource.gallery);
               },
             ),
             ListTile(
@@ -197,7 +224,7 @@ class _ChatInputState extends State<ChatInput> {
               subtitle: const Text('使用相机拍照'),
               onTap: () {
                 Navigator.pop(context);
-                // TODO: 实现拍照功能
+                _pickImage(ImageSource.camera);
               },
             ),
             ListTile(
@@ -206,7 +233,7 @@ class _ChatInputState extends State<ChatInput> {
               subtitle: const Text('选择文档文件'),
               onTap: () {
                 Navigator.pop(context);
-                // TODO: 实现文件选择
+                _pickFile();
               },
             ),
             const SizedBox(height: 16),
@@ -214,6 +241,95 @@ class _ChatInputState extends State<ChatInput> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: source);
+
+    if (image != null && widget.onSendMedia != null) {
+      await _uploadAndSendMediaFile(image, 'IMAGE');
+    }
+  }
+
+  Future<void> _pickFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles();
+
+    if (result != null && widget.onSendMedia != null) {
+      final file = result.files.single;
+      await _uploadAndSendMediaBytes(file.bytes!, file.name, 'FILE');
+    }
+  }
+
+  Future<void> _uploadAndSendMediaFile(XFile file, String messageType) async {
+    final bytes = await file.readAsBytes();
+    await _uploadAndSendMediaBytes(bytes, file.name, messageType);
+  }
+
+  Future<void> _uploadAndSendMediaBytes(
+    List<int> bytes,
+    String fileName,
+    String messageType,
+  ) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final url = await _uploadFileBytes(bytes, fileName);
+
+      Navigator.pop(context);
+
+      if (url != null && widget.onSendMedia != null) {
+        widget.onSendMedia!([url], messageType);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('上传失败，未获取到文件URL')),
+        );
+      }
+    } catch (e) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('上传失败: $e')),
+      );
+    }
+  }
+
+  Future<String?> _uploadFileBytes(List<int> bytes, String fileName) async {
+    try {
+      final String? token = LocalStorage.instance.read('accessToken');
+      if (token == null) {
+        throw Exception('未登录');
+      }
+
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('${AppEnv.apiBaseUrl}/api/upload/chat-file'),
+      );
+
+      request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: fileName,
+      ));
+
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('上传成功: ${data['url']}');
+        return data['url'];
+      } else {
+        throw Exception('上传失败: ${response.body}');
+      }
+    } catch (e) {
+      print('上传文件失败: $e');
+      return null;
+    }
   }
 
   @override
@@ -247,10 +363,7 @@ class _ChatInputState extends State<ChatInput> {
           // 输入框
           Expanded(
             child: Container(
-              constraints: const BoxConstraints(
-                minHeight: 40,
-                maxHeight: 120,
-              ),
+              constraints: const BoxConstraints(minHeight: 40, maxHeight: 120),
               child: TextField(
                 controller: widget.controller,
                 focusNode: _focusNode,
@@ -260,20 +373,14 @@ class _ChatInputState extends State<ChatInput> {
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
                   hintText: widget.hintText,
-                  hintStyle: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 16,
-                  ),
+                  hintStyle: TextStyle(color: Colors.grey[500], fontSize: 16),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 10,
                   ),
                 ),
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.black87,
-                ),
+                style: const TextStyle(fontSize: 16, color: Colors.black87),
                 onSubmitted: (text) {
                   if (_isComposing) {
                     _handleSend();
@@ -297,11 +404,7 @@ class _ChatInputState extends State<ChatInput> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
       child: IconButton(
-        icon: Icon(
-          icon,
-          color: const Color(0xFF1976D2),
-          size: 24,
-        ),
+        icon: Icon(icon, color: const Color(0xFF1976D2), size: 24),
         onPressed: widget.enabled ? onPressed : null,
         splashRadius: 20,
       ),

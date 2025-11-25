@@ -116,15 +116,29 @@ public class ChatController {
             return ResponseEntity.badRequest().build();
         }
 
-        Message message = chatService.sendMessage(
-            conversationId,
-            user.getId(),
-            request.getContent(),
-            request.getType() != null ? request.getType() : MessageType.TEXT,
-            request.getFileUrl(),
-            request.getFileName(),
-            request.getFileSize()
-        );
+        Message message;
+
+        // 如果有媒体文件列表，使用新的方法
+        if (request.getMediaUrls() != null && !request.getMediaUrls().isEmpty()) {
+            message = chatService.sendMessageWithMedia(
+                conversationId,
+                user.getId(),
+                request.getContent(),
+                request.getType() != null ? request.getType() : MessageType.IMAGE,
+                request.getMediaUrls()
+            );
+        } else {
+            // 否则使用旧的方法
+            message = chatService.sendMessage(
+                conversationId,
+                user.getId(),
+                request.getContent(),
+                request.getType() != null ? request.getType() : MessageType.TEXT,
+                request.getFileUrl(),
+                request.getFileName(),
+                request.getFileSize()
+            );
+        }
 
         if (message == null) {
             return ResponseEntity.badRequest().build();

@@ -1,10 +1,12 @@
 package com.example.paperhub.chat.dto;
 
 import com.example.paperhub.chat.MessageType;
+import java.util.List;
 
 public class SendMessageRequest {
     private String content;
     private MessageType type;
+    private List<String> mediaUrls;
     private String fileUrl;
     private String fileName;
     private Long fileSize;
@@ -50,5 +52,13 @@ public class SendMessageRequest {
 
     public void setFileSize(Long fileSize) {
         this.fileSize = fileSize;
+    }
+
+    public List<String> getMediaUrls() {
+        return mediaUrls;
+    }
+
+    public void setMediaUrls(List<String> mediaUrls) {
+        this.mediaUrls = mediaUrls;
     }
 }

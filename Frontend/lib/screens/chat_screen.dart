@@ -167,6 +167,26 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
   }
 
+  void _onSendMedia(List<String> mediaUrls, String messageType) {
+    final conversation = widget.conversation ?? _loadedConversation;
+    if (conversation == null) return;
+
+    MessageType type = MessageType.image;
+    if (messageType == 'FILE') {
+      type = MessageType.file;
+    } else if (messageType == 'IMAGE') {
+      type = MessageType.image;
+    }
+
+    _chatService.sendMessageWithMedia(
+      conversationId: conversation.id,
+      mediaUrls: mediaUrls,
+      type: type,
+    );
+
+    _scrollToBottom();
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -474,6 +494,7 @@ class _ChatScreenState extends State<ChatScreen> {
       child: ChatInput(
         controller: _textController,
         onSend: _onSendMessage,
+        onSendMedia: _onSendMedia,
         hintText: '输入消息...',
       ),
     );

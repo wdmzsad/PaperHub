@@ -3,6 +3,8 @@ package com.example.paperhub.chat.dto;
 import com.example.paperhub.chat.Message;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MessageResponse {
     private Long id;
@@ -12,6 +14,7 @@ public class MessageResponse {
     private String senderAvatar;
     private String type;
     private String content;
+    private List<String> mediaUrls;
     private String fileUrl;
     private String fileName;
     private Long fileSize;
@@ -26,6 +29,7 @@ public class MessageResponse {
         this.senderId = message.getSenderId();
         this.type = message.getType().name();
         this.content = message.getContent();
+        this.mediaUrls = message.getMediaUrls() != null ? message.getMediaUrls() : new ArrayList<>();
         this.fileUrl = message.getFileUrl();
         this.fileName = message.getFileName();
         this.fileSize = message.getFileSize();
@@ -127,5 +131,13 @@ public class MessageResponse {
 
     public void setIsMe(Boolean isMe) {
         this.isMe = isMe;
+    }
+
+    public List<String> getMediaUrls() {
+        return mediaUrls;
+    }
+
+    public void setMediaUrls(List<String> mediaUrls) {
+        this.mediaUrls = mediaUrls;
     }
 }

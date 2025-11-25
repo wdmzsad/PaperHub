@@ -2,6 +2,8 @@ package com.example.paperhub.chat;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "messages")
@@ -23,6 +25,11 @@ public class Message {
 
     @Column(columnDefinition = "TEXT")
     private String content;
+
+    @ElementCollection
+    @CollectionTable(name = "conversation_media", joinColumns = @JoinColumn(name = "message_id"))
+    @Column(name = "media_url")
+    private List<String> mediaUrls = new ArrayList<>();
 
     @Column(name = "file_url")
     private String fileUrl;
@@ -112,6 +119,14 @@ public class Message {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public List<String> getMediaUrls() {
+        return mediaUrls;
+    }
+
+    public void setMediaUrls(List<String> mediaUrls) {
+        this.mediaUrls = mediaUrls;
     }
 }
 

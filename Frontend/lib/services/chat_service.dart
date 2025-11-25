@@ -290,6 +290,68 @@ class ChatService extends ChangeNotifier {
     }
   }
 
+  /// 发送带媒体的消息
+  Future<void> sendMessageWithMedia({
+    required String conversationId,
+    required List<String> mediaUrls,
+    String content = '',
+    MessageType type = MessageType.image,
+  }) async {
+    final newMessage = Message(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      conversationId: conversationId,
+      senderId: 'me',
+      senderName: '我',
+      senderAvatar: 'https://via.placeholder.com/50',
+      content: content,
+      type: type,
+      mediaUrls: mediaUrls,
+      createdAt: DateTime.now(),
+      status: MessageStatus.sending,
+      isMe: true,
+    );
+
+    // 添加到消息列表
+    _messages.add(newMessage);
+    notifyListeners();
+
+    try {
+      final result = await ApiService.sendMessageWithMedia(
+        conversationId,
+        mediaUrls,
+        type: _convertMessageType(type),
+        content: content,
+      );
+
+      if (result['statusCode'] == 200) {
+        // 更新消息状态为已发送
+        final updatedMessage = newMessage.copyWith(status: MessageStatus.sent);
+        final index = _messages.indexWhere((m) => m.id == newMessage.id);
+        if (index != -1) {
+          _messages[index] = updatedMessage;
+          notifyListeners();
+        }
+
+        // 更新会话的最后消息
+        _updateLastMessage(conversationId, updatedMessage);
+      } else {
+        debugPrint('发送媒体消息失败: ${result['body']['message']}');
+        throw Exception(result['body']['message'] ?? '发送消息失败');
+      }
+    } catch (e) {
+      debugPrint('发送媒体消息失败: $e');
+
+      // 更新消息状态为发送失败
+      final failedMessage = newMessage.copyWith(status: MessageStatus.failed);
+      final index = _messages.indexWhere((m) => m.id == newMessage.id);
+      if (index != -1) {
+        _messages[index] = failedMessage;
+        notifyListeners();
+      }
+      rethrow;
+    }
+  }
+
   /// 转换前端消息类型为后端消息类型
   String _convertMessageType(MessageType type) {
     switch (type) {

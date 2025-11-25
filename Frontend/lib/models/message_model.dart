@@ -9,6 +9,7 @@ class Message {
   final String senderAvatar;
   final String content;
   final MessageType type;
+  final List<String> mediaUrls;
   final DateTime createdAt;
   final MessageStatus status;
   final bool isMe;
@@ -21,6 +22,7 @@ class Message {
     required this.senderAvatar,
     required this.content,
     this.type = MessageType.text,
+    this.mediaUrls = const [],
     required this.createdAt,
     this.status = MessageStatus.sent,
     this.isMe = false,
@@ -35,9 +37,12 @@ class Message {
       senderAvatar: json['senderAvatar'] ?? '',
       content: json['content'] ?? '',
       type: MessageType.values.firstWhere(
-        (e) => e.toString() == 'MessageType.${json['type']}',
+        (e) => e.toString() == 'MessageType.${json['type']}'.toLowerCase(),
         orElse: () => MessageType.text,
       ),
+      mediaUrls: json['mediaUrls'] != null
+          ? List<String>.from(json['mediaUrls'])
+          : [],
       createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
       status: MessageStatus.values.firstWhere(
         (e) => e.toString() == 'MessageStatus.${json['status']}',
@@ -55,7 +60,8 @@ class Message {
       'senderName': senderName,
       'senderAvatar': senderAvatar,
       'content': content,
-      'type': type.toString().split('.').last,
+      'type': type.toString().split('.').last.toUpperCase(),
+      'mediaUrls': mediaUrls,
       'createdAt': createdAt.toIso8601String(),
       'status': status.toString().split('.').last,
       'isMe': isMe,
@@ -70,6 +76,7 @@ class Message {
     String? senderAvatar,
     String? content,
     MessageType? type,
+    List<String>? mediaUrls,
     DateTime? createdAt,
     MessageStatus? status,
     bool? isMe,
@@ -82,6 +89,7 @@ class Message {
       senderAvatar: senderAvatar ?? this.senderAvatar,
       content: content ?? this.content,
       type: type ?? this.type,
+      mediaUrls: mediaUrls ?? this.mediaUrls,
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
       isMe: isMe ?? this.isMe,
