@@ -6,19 +6,49 @@ import java.time.Instant;
 
 public class NotificationDtos {
     // 未读数量响应
-    public record UnreadCountResp(long likes, long follows, long comments) {}
+    public static class UnreadCountResp {
+        public final long likes;
+        public final long follows;
+        public final long comments;
+
+        public UnreadCountResp(long likes, long follows, long comments) {
+            this.likes = likes;
+            this.follows = follows;
+            this.comments = comments;
+        }
+    }
 
     // 通知响应
-    public record NotificationResp(
-            Long id,
-            ActorInfo actor,
-            NotificationType type,
-            String content,
-            PostInfo post,
-            CommentInfo comment,
-            boolean read,
-            String createdAt
-    ) {
+    public static class NotificationResp {
+        public final Long id;
+        public final ActorInfo actor;
+        public final NotificationType type;
+        public final String content;
+        public final PostInfo post;
+        public final CommentInfo comment;
+        public final boolean read;
+        public final String createdAt;
+
+        public NotificationResp(
+                Long id,
+                ActorInfo actor,
+                NotificationType type,
+                String content,
+                PostInfo post,
+                CommentInfo comment,
+                boolean read,
+                String createdAt
+        ) {
+            this.id = id;
+            this.actor = actor;
+            this.type = type;
+            this.content = content;
+            this.post = post;
+            this.comment = comment;
+            this.read = read;
+            this.createdAt = createdAt;
+        }
+
         public static NotificationResp from(Notification notification) {
             String content = generateContent(notification);
             return new NotificationResp(
@@ -73,20 +103,58 @@ public class NotificationDtos {
     }
 
     // 用户信息
-    public record ActorInfo(Long id, String name, String avatar) {}
+    public static class ActorInfo {
+        public final Long id;
+        public final String name;
+        public final String avatar;
+
+        public ActorInfo(Long id, String name, String avatar) {
+            this.id = id;
+            this.name = name;
+            this.avatar = avatar;
+        }
+    }
 
     // 帖子信息
-    public record PostInfo(Long id, String title) {}
+    public static class PostInfo {
+        public final Long id;
+        public final String title;
+
+        public PostInfo(Long id, String title) {
+            this.id = id;
+            this.title = title;
+        }
+    }
 
     // 评论信息
-    public record CommentInfo(Long id, String content) {}
+    public static class CommentInfo {
+        public final Long id;
+        public final String content;
+
+        public CommentInfo(Long id, String content) {
+            this.id = id;
+            this.content = content;
+        }
+    }
 
     // 通知列表响应
-    public record NotificationListResp(
-            java.util.List<NotificationResp> notifications,
-            long total,
-            int page,
-            int pageSize
-    ) {}
+    public static class NotificationListResp {
+        public final java.util.List<NotificationResp> notifications;
+        public final long total;
+        public final int page;
+        public final int pageSize;
+
+        public NotificationListResp(
+                java.util.List<NotificationResp> notifications,
+                long total,
+                int page,
+                int pageSize
+        ) {
+            this.notifications = notifications;
+            this.total = total;
+            this.page = page;
+            this.pageSize = pageSize;
+        }
+    }
 }
 

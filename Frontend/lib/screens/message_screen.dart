@@ -30,8 +30,7 @@ class LikesAndFavoritesScreen extends StatefulWidget {
   const LikesAndFavoritesScreen({Key? key}) : super(key: key);
 
   @override
-  State<LikesAndFavoritesScreen> createState() =>
-      _LikesAndFavoritesScreenState();
+  State<LikesAndFavoritesScreen> createState() => _LikesAndFavoritesScreenState();
 }
 
 class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
@@ -56,10 +55,7 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
     }
 
     try {
-      final resp = await ApiService.getLikesAndFavorites(
-        page: _page,
-        pageSize: _pageSize,
-      );
+      final resp = await ApiService.getLikesAndFavorites(page: _page, pageSize: _pageSize);
       if (resp['statusCode'] == 200) {
         final body = resp['body'] as Map<String, dynamic>;
         final notifications = (body['notifications'] as List)
@@ -82,9 +78,9 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
         _isLoading = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('加载失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载失败: $e')),
+        );
       }
     }
   }
@@ -144,9 +140,9 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('加载帖子失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载帖子失败: $e')),
+        );
       }
     }
   }
@@ -155,7 +151,9 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
     if (userId.isEmpty) return;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ProfilePage(userId: userId)),
+      MaterialPageRoute(
+        builder: (_) => ProfilePage(userId: userId),
+      ),
     );
   }
 
@@ -195,26 +193,26 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
       body: _isLoading && _notifications.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : _notifications.isEmpty
-          ? const Center(child: Text('暂无通知'))
-          : RefreshIndicator(
-              onRefresh: () => _loadNotifications(),
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                itemCount: _notifications.length + (_hasMore ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == _notifications.length) {
-                    _loadNotifications(loadMore: true);
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final notification = _notifications[index];
-                  return _buildNotificationItem(
-                    notification: notification,
-                    icon: _getIcon(notification.type),
-                    iconColor: _getIconColor(notification.type),
-                  );
-                },
-              ),
-            ),
+              ? const Center(child: Text('暂无通知'))
+              : RefreshIndicator(
+                  onRefresh: () => _loadNotifications(),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    itemCount: _notifications.length + (_hasMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _notifications.length) {
+                        _loadNotifications(loadMore: true);
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final notification = _notifications[index];
+                      return _buildNotificationItem(
+                        notification: notification,
+                        icon: _getIcon(notification.type),
+                        iconColor: _getIconColor(notification.type),
+                      );
+                    },
+                  ),
+                ),
     );
   }
 
@@ -267,11 +265,9 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
                     ? NetworkImage(notification.actor.avatar!)
                     : null,
                 child: notification.actor.avatar == null
-                    ? Text(
-                        notification.actor.name.isNotEmpty
-                            ? notification.actor.name[0].toUpperCase()
-                            : '?',
-                      )
+                    ? Text(notification.actor.name.isNotEmpty
+                        ? notification.actor.name[0].toUpperCase()
+                        : '?')
                     : null,
               ),
             ),
@@ -290,7 +286,10 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
                   const SizedBox(height: 4),
                   Text(
                     notification.content,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -303,7 +302,10 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
               children: [
                 Text(
                   _formatTime(notification.createdAt),
-                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 12,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 _buildIconBadge(icon, iconColor),
@@ -351,18 +353,13 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
     }
 
     try {
-      final resp = await ApiService.getFollows(
-        page: _page,
-        pageSize: _pageSize,
-      );
+      final resp = await ApiService.getFollows(page: _page, pageSize: _pageSize);
       if (resp['statusCode'] == 200) {
         final body = resp['body'] as Map<String, dynamic>;
         final notifications = (body['notifications'] as List)
             .map((json) => NotificationItem.fromJson(json))
             .toList();
-        final resolvedFollowBackIds = await _determineFollowBackIds(
-          notifications,
-        );
+        final resolvedFollowBackIds = await _determineFollowBackIds(notifications);
 
         setState(() {
           if (loadMore) {
@@ -384,9 +381,9 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
         _isLoading = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('加载失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载失败: $e')),
+        );
       }
     }
   }
@@ -422,25 +419,27 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('加载帖子失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载帖子失败: $e')),
+        );
       }
     }
   }
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   void _openUserProfile(String userId) {
     if (userId.isEmpty) return;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ProfilePage(userId: userId)),
+      MaterialPageRoute(
+        builder: (_) => ProfilePage(userId: userId),
+      ),
     );
   }
 
@@ -454,8 +453,7 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
     try {
       final resp = await ApiService.followUser(userId);
       if (resp['statusCode'] != 200) {
-        final message =
-            (resp['body'] as Map<String, dynamic>?)?['message'] ?? '回关失败';
+        final message = (resp['body'] as Map<String, dynamic>?)?['message'] ?? '回关失败';
         throw Exception(message);
       }
       setState(() {
@@ -477,9 +475,7 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
   Future<Set<String>> _determineFollowBackIds(
     List<NotificationItem> notifications,
   ) async {
-    final currentUserId = _currentUserId ??= LocalStorage.instance.read(
-      'userId',
-    );
+    final currentUserId = _currentUserId ??= LocalStorage.instance.read('userId');
     if (currentUserId == null || currentUserId.isEmpty) {
       return {};
     }
@@ -495,10 +491,7 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
       if (cached != null) {
         return MapEntry(actorId, cached);
       }
-      final isFollowed = await _isCurrentUserInFollowers(
-        actorId,
-        currentUserId,
-      );
+      final isFollowed = await _isCurrentUserInFollowers(actorId, currentUserId);
       _followStatusCache[actorId] = isFollowed;
       return MapEntry(actorId, isFollowed);
     });
@@ -513,10 +506,7 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
     return followedIds;
   }
 
-  Future<bool> _isCurrentUserInFollowers(
-    String targetUserId,
-    String currentUserId,
-  ) async {
+  Future<bool> _isCurrentUserInFollowers(String targetUserId, String currentUserId) async {
     int page = 0;
     const int pageSize = 50;
     while (true) {
@@ -570,37 +560,37 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
       body: _isLoading && _notifications.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : _notifications.isEmpty
-          ? const Center(child: Text('暂无通知'))
-          : RefreshIndicator(
-              onRefresh: () => _loadNotifications(),
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                itemCount: _notifications.length + (_hasMore ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == _notifications.length) {
-                    _loadNotifications(loadMore: true);
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final notification = _notifications[index];
-                  final actorId = notification.actor.id;
-                  final isAlreadyFollowed =
-                      _followedUserIds.contains(actorId) ||
-                      (notification.actor.isFollowed ?? false);
-                  return _buildFollowerItem(
-                    notification: notification,
-                    isFollowed: isAlreadyFollowed,
-                    isLoading: _followLoadingUserIds.contains(actorId),
-                    onFollow: () => _handleFollowBack(notification),
-                    onAvatarTap: () {
-                      if (!notification.read) {
-                        ApiService.markNotificationAsRead(notification.id);
+              ? const Center(child: Text('暂无通知'))
+              : RefreshIndicator(
+                  onRefresh: () => _loadNotifications(),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    itemCount: _notifications.length + (_hasMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _notifications.length) {
+                        _loadNotifications(loadMore: true);
+                        return const Center(child: CircularProgressIndicator());
                       }
-                      _openUserProfile(actorId);
+                      final notification = _notifications[index];
+                      final actorId = notification.actor.id;
+                      final isAlreadyFollowed =
+                          _followedUserIds.contains(actorId) ||
+                              (notification.actor.isFollowed ?? false);
+                      return _buildFollowerItem(
+                        notification: notification,
+                        isFollowed: isAlreadyFollowed,
+                        isLoading: _followLoadingUserIds.contains(actorId),
+                        onFollow: () => _handleFollowBack(notification),
+                        onAvatarTap: () {
+                          if (!notification.read) {
+                            ApiService.markNotificationAsRead(notification.id);
+                          }
+                          _openUserProfile(actorId);
+                        },
+                      );
                     },
-                  );
-                },
-              ),
-            ),
+                  ),
+                ),
     );
   }
 
@@ -647,11 +637,9 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
                     ? NetworkImage(notification.actor.avatar!)
                     : null,
                 child: notification.actor.avatar == null
-                    ? Text(
-                        notification.actor.name.isNotEmpty
-                            ? notification.actor.name[0].toUpperCase()
-                            : '?',
-                      )
+                    ? Text(notification.actor.name.isNotEmpty
+                        ? notification.actor.name[0].toUpperCase()
+                        : '?')
                     : null,
               ),
             ),
@@ -670,7 +658,10 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
                   const SizedBox(height: 4),
                   Text(
                     notification.content,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -682,28 +673,26 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
               children: [
                 Text(
                   _formatTime(notification.createdAt),
-                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 12,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 ElevatedButton(
                   onPressed: isFollowed || isLoading ? null : onFollow,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isFollowed
-                        ? Colors.grey[200]
-                        : const Color(0xFF1976D2),
-                    foregroundColor: isFollowed
-                        ? Colors.grey[700]
-                        : Colors.white,
+                    backgroundColor:
+                        isFollowed ? Colors.grey[200] : const Color(0xFF1976D2),
+                    foregroundColor:
+                        isFollowed ? Colors.grey[700] : Colors.white,
                     disabledBackgroundColor: isFollowed
                         ? Colors.grey[200]
                         : const Color(0xFF1976D2),
-                    disabledForegroundColor: isFollowed
-                        ? Colors.grey[600]
-                        : Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 8,
-                    ),
+                    disabledForegroundColor:
+                        isFollowed ? Colors.grey[600] : Colors.white,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
                     ),
@@ -740,8 +729,7 @@ class CommentsAndMentionsScreen extends StatefulWidget {
   const CommentsAndMentionsScreen({Key? key}) : super(key: key);
 
   @override
-  State<CommentsAndMentionsScreen> createState() =>
-      _CommentsAndMentionsScreenState();
+  State<CommentsAndMentionsScreen> createState() => _CommentsAndMentionsScreenState();
 }
 
 class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
@@ -766,10 +754,7 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
     }
 
     try {
-      final resp = await ApiService.getCommentsAndMentions(
-        page: _page,
-        pageSize: _pageSize,
-      );
+      final resp = await ApiService.getCommentsAndMentions(page: _page, pageSize: _pageSize);
       if (resp['statusCode'] == 200) {
         final body = resp['body'] as Map<String, dynamic>;
         final notifications = (body['notifications'] as List)
@@ -792,9 +777,9 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
         _isLoading = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('加载失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载失败: $e')),
+        );
       }
     }
   }
@@ -830,9 +815,9 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('加载帖子失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载帖子失败: $e')),
+        );
       }
     }
   }
@@ -841,7 +826,9 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
     if (userId.isEmpty) return;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ProfilePage(userId: userId)),
+      MaterialPageRoute(
+        builder: (_) => ProfilePage(userId: userId),
+      ),
     );
   }
 
@@ -869,22 +856,22 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
       body: _isLoading && _notifications.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : _notifications.isEmpty
-          ? const Center(child: Text('暂无通知'))
-          : RefreshIndicator(
-              onRefresh: () => _loadNotifications(),
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                itemCount: _notifications.length + (_hasMore ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == _notifications.length) {
-                    _loadNotifications(loadMore: true);
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final notification = _notifications[index];
-                  return _buildCommentItem(notification: notification);
-                },
-              ),
-            ),
+              ? const Center(child: Text('暂无通知'))
+              : RefreshIndicator(
+                  onRefresh: () => _loadNotifications(),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    itemCount: _notifications.length + (_hasMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _notifications.length) {
+                        _loadNotifications(loadMore: true);
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final notification = _notifications[index];
+                      return _buildCommentItem(notification: notification);
+                    },
+                  ),
+                ),
     );
   }
 
@@ -938,11 +925,9 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
                         ? NetworkImage(notification.actor.avatar!)
                         : null,
                     child: notification.actor.avatar == null
-                        ? Text(
-                            notification.actor.name.isNotEmpty
-                                ? notification.actor.name[0].toUpperCase()
-                                : '?',
-                          )
+                        ? Text(notification.actor.name.isNotEmpty
+                            ? notification.actor.name[0].toUpperCase()
+                            : '?')
                         : null,
                   ),
                 ),
@@ -957,14 +942,20 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
                 const Spacer(),
                 Text(
                   _formatTime(notification.createdAt),
-                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  style: TextStyle(
+                    color: Colors.grey[500],
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
               commentContent.isNotEmpty ? commentContent : notification.content,
-              style: const TextStyle(fontSize: 14, height: 1.4),
+              style: const TextStyle(
+                fontSize: 14,
+                height: 1.4,
+              ),
             ),
             if (notification.post != null) ...[
               const SizedBox(height: 8),
@@ -977,9 +968,7 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
                 child: Row(
                   children: [
                     Icon(
-                      isMention
-                          ? Icons.alternate_email
-                          : Icons.chat_bubble_outline,
+                      isMention ? Icons.alternate_email : Icons.chat_bubble_outline,
                       color: Colors.grey[500],
                       size: 16,
                     ),
@@ -987,7 +976,10 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
                     Expanded(
                       child: Text(
                         notification.post!.title,
-                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 13,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1010,8 +1002,13 @@ class DiscoverScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('发现'), backgroundColor: Colors.white),
-      body: const Center(child: Text('发现页面开发中...')),
+      appBar: AppBar(
+        title: const Text('发现'),
+        backgroundColor: Colors.white,
+      ),
+      body: const Center(
+        child: Text('发现页面开发中...'),
+      ),
     );
   }
 }
@@ -1120,7 +1117,9 @@ class _MessageScreenState extends State<MessageScreen> {
           children: [
             // 小红书风格的顶部图标导航
             _buildTopIconNavigation(),
-            Expanded(child: _buildConversationList()),
+            Expanded(
+              child: _buildConversationList(),
+            ),
           ],
         ),
       ),
@@ -1222,7 +1221,11 @@ class _MessageScreenState extends State<MessageScreen> {
                   color: backgroundColor ?? Colors.grey[100],
                   borderRadius: BorderRadius.circular(25),
                 ),
-                child: Icon(icon, color: iconColor ?? Colors.black87, size: 24),
+                child: Icon(
+                  icon,
+                  color: iconColor ?? Colors.black87,
+                  size: 24,
+                ),
               ),
               if (badgeCount > 0)
                 Positioned(
@@ -1254,7 +1257,10 @@ class _MessageScreenState extends State<MessageScreen> {
           const SizedBox(height: 8),
           Text(
             label,
-            style: const TextStyle(fontSize: 12, color: Colors.black87),
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black87,
+            ),
           ),
         ],
       ),
@@ -1322,7 +1328,9 @@ class _MessageScreenState extends State<MessageScreen> {
     } else if (index == 2) {
       // 发布
       Navigator.of(context)
-          .push(MaterialPageRoute(builder: (context) => const NoteEditorPage()))
+          .push(
+            MaterialPageRoute(builder: (context) => const NoteEditorPage()),
+          )
           .then((_) {
             setState(() {
               _currentIndex = 1;
@@ -1410,7 +1418,13 @@ class _MessageScreenState extends State<MessageScreen> {
             strokeWidth: 2,
           ),
           SizedBox(height: 16),
-          Text('加载中...', style: TextStyle(color: Colors.grey, fontSize: 14)),
+          Text(
+            '加载中...',
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 14,
+            ),
+          ),
         ],
       ),
     );
@@ -1421,16 +1435,26 @@ class _MessageScreenState extends State<MessageScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.message_outlined, size: 64, color: Colors.grey[400]),
+          Icon(
+            Icons.message_outlined,
+            size: 64,
+            color: Colors.grey[400],
+          ),
           const SizedBox(height: 16),
           Text(
             _isSearching ? '没有找到相关聊天' : '暂无聊天记录',
-            style: TextStyle(color: Colors.grey[600], fontSize: 16),
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 16,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             _isSearching ? '尝试其他关键词' : '开始与同学聊天吧',
-            style: TextStyle(color: Colors.grey[500], fontSize: 14),
+            style: TextStyle(
+              color: Colors.grey[500],
+              fontSize: 14,
+            ),
           ),
         ],
       ),
@@ -1464,7 +1488,9 @@ class _MessageScreenState extends State<MessageScreen> {
     ).then((_) async {
       // 返回时批量标记为已读并刷新未读数量
       try {
-        await ApiService.markAllNotificationsAsReadByTypes(['FOLLOW']);
+        await ApiService.markAllNotificationsAsReadByTypes([
+          'FOLLOW',
+        ]);
       } catch (e) {
         // 忽略错误
       }
@@ -1475,9 +1501,7 @@ class _MessageScreenState extends State<MessageScreen> {
   void _navigateToCommentsAndMentions() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const CommentsAndMentionsScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const CommentsAndMentionsScreen()),
     ).then((_) async {
       // 返回时批量标记为已读并刷新未读数量
       try {

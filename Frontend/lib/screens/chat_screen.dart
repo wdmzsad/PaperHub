@@ -15,15 +15,18 @@ import 'package:flutter/material.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
 import '../services/chat_service.dart';
+import '../services/api_service.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
 
 class ChatScreen extends StatefulWidget {
-  final Conversation conversation;
+  final Conversation? conversation;
+  final String? conversationId;
 
   const ChatScreen({
     Key? key,
-    required this.conversation,
+    this.conversation,
+    this.conversationId,
   }) : super(key: key);
 
   @override
@@ -37,12 +40,89 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _isTyping = false;
   String _typingUser = '';
+  bool _loadingConversation = false;
+  Conversation? _loadedConversation;
 
   @override
   void initState() {
     super.initState();
-    _chatService.setCurrentConversation(widget.conversation);
+    _initializeConversation();
     _scrollController.addListener(_scrollListener);
+  }
+
+  void _initializeConversation() async {
+    // If conversation object is provided directly, use it
+    if (widget.conversation != null) {
+      _chatService.setCurrentConversation(widget.conversation!);
+      return;
+    }
+
+    // If only conversationId is provided, load the conversation from API
+    if (widget.conversationId != null) {
+      setState(() {
+        _loadingConversation = true;
+      });
+
+      try {
+        // Load conversation details from API
+        final result = await ApiService.getConversations();
+        if (result['statusCode'] == 200) {
+          final List<dynamic> data = result['body'];
+          final conversations = data.map((json) => Conversation.fromJson(json)).toList();
+
+          // Find the conversation with matching ID
+          final conversation = conversations.firstWhere(
+            (c) => c.id == widget.conversationId,
+            orElse: () => Conversation(
+              id: widget.conversationId!,
+              name: 'Unknown User',
+              type: ConversationType.private,
+              participants: [],
+              updatedAt: DateTime.now(),
+            ),
+          );
+
+          setState(() {
+            _loadedConversation = conversation;
+            _loadingConversation = false;
+          });
+
+          _chatService.setCurrentConversation(conversation);
+        } else {
+          // Fallback: create a basic conversation object
+          final fallbackConversation = Conversation(
+            id: widget.conversationId!,
+            name: 'Unknown User',
+            type: ConversationType.private,
+            participants: [],
+            updatedAt: DateTime.now(),
+          );
+
+          setState(() {
+            _loadedConversation = fallbackConversation;
+            _loadingConversation = false;
+          });
+
+          _chatService.setCurrentConversation(fallbackConversation);
+        }
+      } catch (e) {
+        // Fallback on error
+        final fallbackConversation = Conversation(
+          id: widget.conversationId!,
+          name: 'Unknown User',
+          type: ConversationType.private,
+          participants: [],
+          updatedAt: DateTime.now(),
+        );
+
+        setState(() {
+          _loadedConversation = fallbackConversation;
+          _loadingConversation = false;
+        });
+
+        _chatService.setCurrentConversation(fallbackConversation);
+      }
+    }
   }
 
   @override
@@ -55,16 +135,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _scrollListener() {
     // 当用户滚动到底部时，标记消息为已读
-    if (_scrollController.offset >= _scrollController.position.maxScrollExtent - 100) {
-      _chatService.markAsRead(widget.conversation.id);
+    final conversation = widget.conversation ?? _loadedConversation;
+    if (conversation != null && _scrollController.offset >= _scrollController.position.maxScrollExtent - 100) {
+      _chatService.markAsRead(conversation.id);
     }
   }
 
   void _onSendMessage(String content) {
     if (content.trim().isEmpty) return;
 
+    final conversation = widget.conversation ?? _loadedConversation;
+    if (conversation == null) return;
+
     _chatService.sendMessage(
-      conversationId: widget.conversation.id,
+      conversationId: conversation.id,
       content: content.trim(),
     );
 
@@ -109,7 +193,7 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           Expanded(
-            child: _buildMessageList(),
+            child: _loadingConversation ? _buildLoadingView() : _buildMessageList(),
           ),
           _buildInputArea(),
         ],
@@ -118,6 +202,27 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final conversation = widget.conversation ?? _loadedConversation;
+
+    if (conversation == null) {
+      return AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          '加载中...',
+          style: TextStyle(
+            color: Colors.black87,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0,
@@ -127,14 +232,14 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       title: Row(
         children: [
-          _buildAppBarAvatar(),
+          _buildAppBarAvatar(conversation),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.conversation.displayName,
+                  conversation.displayName,
                   style: const TextStyle(
                     color: Colors.black87,
                     fontSize: 16,
@@ -149,11 +254,11 @@ class _ChatScreenState extends State<ChatScreen> {
                       fontSize: 12,
                     ),
                   )
-                else if (widget.conversation.type == ConversationType.private)
+                else if (conversation.type == ConversationType.private)
                   Text(
-                    widget.conversation.isOnline ? '在线' : '离线',
+                    conversation.isOnline ? '在线' : '离线',
                     style: TextStyle(
-                      color: widget.conversation.isOnline
+                      color: conversation.isOnline
                           ? const Color(0xFF4CAF50)
                           : Colors.grey[500],
                       fontSize: 12,
@@ -161,7 +266,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   )
                 else
                   Text(
-                    '${widget.conversation.participants.length} 位成员',
+                    '${conversation.participants.length} 位成员',
                     style: TextStyle(
                       color: Colors.grey[500],
                       fontSize: 12,
@@ -181,7 +286,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildAppBarAvatar() {
+  Widget _buildAppBarAvatar(Conversation conversation) {
     return Container(
       width: 36,
       height: 36,
@@ -189,23 +294,23 @@ class _ChatScreenState extends State<ChatScreen> {
         borderRadius: BorderRadius.circular(9),
         color: Colors.grey[200],
       ),
-      child: widget.conversation.displayAvatar != null
+      child: conversation.displayAvatar != null
           ? ClipRRect(
               borderRadius: BorderRadius.circular(9),
               child: Image.network(
-                widget.conversation.displayAvatar!,
+                conversation.displayAvatar!,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
-                  return _buildDefaultAvatar();
+                  return _buildDefaultAvatar(conversation);
                 },
               ),
             )
-          : _buildDefaultAvatar(),
+          : _buildDefaultAvatar(conversation),
     );
   }
 
-  Widget _buildDefaultAvatar() {
-    final name = widget.conversation.displayName;
+  Widget _buildDefaultAvatar(Conversation conversation) {
+    final name = conversation.displayName;
     final firstChar = name.isNotEmpty ? name[0] : '?';
 
     return Container(
@@ -416,19 +521,22 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showChatInfo() {
+    final conversation = widget.conversation ?? _loadedConversation;
+    if (conversation == null) return;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(widget.conversation.displayName),
+        title: Text(conversation.displayName),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (widget.conversation.type == ConversationType.private)
-              Text('状态: ${widget.conversation.isOnline ? "在线" : "离线"}')
+            if (conversation.type == ConversationType.private)
+              Text('状态: ${conversation.isOnline ? "在线" : "离线"}')
             else
-              Text('成员数: ${widget.conversation.participants.length}'),
+              Text('成员数: ${conversation.participants.length}'),
             const SizedBox(height: 8),
-            Text('创建时间: ${_formatDateHeader(widget.conversation.updatedAt)}'),
+            Text('创建时间: ${_formatDateHeader(conversation.updatedAt)}'),
           ],
         ),
         actions: [
@@ -442,11 +550,14 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _confirmClearChat() {
+    final conversation = widget.conversation ?? _loadedConversation;
+    if (conversation == null) return;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('清空聊天记录'),
-        content: Text('确定要清空与 ${widget.conversation.displayName} 的聊天记录吗？此操作不可恢复。'),
+        content: Text('确定要清空与 ${conversation.displayName} 的聊天记录吗？此操作不可恢复。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),

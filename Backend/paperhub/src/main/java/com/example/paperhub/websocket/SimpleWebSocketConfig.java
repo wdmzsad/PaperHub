@@ -13,14 +13,20 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @EnableWebSocket
 public class SimpleWebSocketConfig implements WebSocketConfigurer {
     private final SimpleWebSocketHandler webSocketHandler;
+    private final ChatWebSocketHandler chatWebSocketHandler;
 
-    public SimpleWebSocketConfig(SimpleWebSocketHandler webSocketHandler) {
+    public SimpleWebSocketConfig(SimpleWebSocketHandler webSocketHandler,
+                                ChatWebSocketHandler chatWebSocketHandler) {
         this.webSocketHandler = webSocketHandler;
+        this.chatWebSocketHandler = chatWebSocketHandler;
     }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(webSocketHandler, "/ws/posts/{postId}")
+            .setAllowedOrigins("*");
+
+        registry.addHandler(chatWebSocketHandler, "/ws/chat/{userId}")
             .setAllowedOrigins("*");
     }
 }

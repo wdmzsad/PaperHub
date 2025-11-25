@@ -70,14 +70,14 @@ class Conversation {
   /// 获取显示标题（私聊显示对方名称，群聊显示群名）
   String get displayName {
     return type == ConversationType.private && participants.isNotEmpty
-        ? participants.firstWhere((p) => !p.isMe).name
+        ? participants.firstWhere((p) => !p.isMe, orElse: () => participants.first).name
         : name;
   }
 
   /// 获取显示头像
   String? get displayAvatar {
     if (type == ConversationType.private && participants.isNotEmpty) {
-      return participants.firstWhere((p) => !p.isMe).avatar;
+      return participants.firstWhere((p) => !p.isMe, orElse: () => participants.first).avatar;
     }
     return avatar;
   }

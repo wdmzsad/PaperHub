@@ -142,14 +142,23 @@ class ChatService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // TODO: 替换为实际的API调用
-      await Future.delayed(const Duration(seconds: 1));
-      _initMockData();
+      final result = await ApiService.getConversations();
 
-      _conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      _syncUnreadBadges();
+      if (result['statusCode'] == 200) {
+        final List<dynamic> data = result['body'];
+        _conversations = data.map((json) => Conversation.fromJson(json)).toList();
+
+        _conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        _syncUnreadBadges();
+      } else {
+        debugPrint('加载会话列表失败: ${result['body']['message']}');
+        // 失败时使用模拟数据作为降级方案
+        _initMockData();
+      }
     } catch (e) {
       debugPrint('加载会话列表失败: $e');
+      // 异常时使用模拟数据作为降级方案
+      _initMockData();
     } finally {
       _isLoadingConversations = false;
       notifyListeners();
@@ -162,48 +171,61 @@ class ChatService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // TODO: 替换为实际的API调用
-      await Future.delayed(const Duration(milliseconds: 500));
+      final result = await ApiService.getConversationMessages(conversationId);
 
-      // 模拟消息数据
-      _messages = [
-        Message(
-          id: 'msg1',
-          conversationId: conversationId,
-          senderId: 'other',
-          senderName: '张同学',
-          senderAvatar: 'https://via.placeholder.com/50',
-          content: '你好！最近在忙什么？',
-          createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-          isMe: false,
-        ),
-        Message(
-          id: 'msg2',
-          conversationId: conversationId,
-          senderId: 'me',
-          senderName: '我',
-          senderAvatar: 'https://via.placeholder.com/50',
-          content: '在写论文，有点头疼',
-          createdAt: DateTime.now().subtract(const Duration(hours: 1, minutes: 50)),
-          isMe: true,
-        ),
-        Message(
-          id: 'msg3',
-          conversationId: conversationId,
-          senderId: 'other',
-          senderName: '张同学',
-          senderAvatar: 'https://via.placeholder.com/50',
-          content: '论文写得怎么样了？',
-          createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
-          isMe: false,
-        ),
-      ];
+      if (result['statusCode'] == 200) {
+        final Map<String, dynamic> data = result['body'];
+        final List<dynamic> content = data['content'] ?? [];
+        _messages = content.map((json) => Message.fromJson(json)).toList();
+      } else {
+        debugPrint('加载消息失败: ${result['body']['message']}');
+        // 失败时使用模拟数据作为降级方案
+        _initMockMessages(conversationId);
+      }
     } catch (e) {
       debugPrint('加载消息失败: $e');
+      // 异常时使用模拟数据作为降级方案
+      _initMockMessages(conversationId);
     } finally {
       _isLoadingMessages = false;
       notifyListeners();
     }
+  }
+
+  /// 初始化模拟消息数据（降级方案）
+  void _initMockMessages(String conversationId) {
+    _messages = [
+      Message(
+        id: 'msg1',
+        conversationId: conversationId,
+        senderId: 'other',
+        senderName: '张同学',
+        senderAvatar: 'https://via.placeholder.com/50',
+        content: '你好！最近在忙什么？',
+        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+        isMe: false,
+      ),
+      Message(
+        id: 'msg2',
+        conversationId: conversationId,
+        senderId: 'me',
+        senderName: '我',
+        senderAvatar: 'https://via.placeholder.com/50',
+        content: '在写论文，有点头疼',
+        createdAt: DateTime.now().subtract(const Duration(hours: 1, minutes: 50)),
+        isMe: true,
+      ),
+      Message(
+        id: 'msg3',
+        conversationId: conversationId,
+        senderId: 'other',
+        senderName: '张同学',
+        senderAvatar: 'https://via.placeholder.com/50',
+        content: '论文写得怎么样了？',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
+        isMe: false,
+      ),
+    ];
   }
 
   /// 发送消息
@@ -229,19 +251,27 @@ class ChatService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // TODO: 替换为实际的API调用
-      await Future.delayed(const Duration(milliseconds: 800));
+      final result = await ApiService.sendMessage(
+        conversationId,
+        content,
+        type: _convertMessageType(type),
+      );
 
-      // 更新消息状态为已发送
-      final updatedMessage = newMessage.copyWith(status: MessageStatus.sent);
-      final index = _messages.indexWhere((m) => m.id == newMessage.id);
-      if (index != -1) {
-        _messages[index] = updatedMessage;
-        notifyListeners();
+      if (result['statusCode'] == 200) {
+        // 更新消息状态为已发送
+        final updatedMessage = newMessage.copyWith(status: MessageStatus.sent);
+        final index = _messages.indexWhere((m) => m.id == newMessage.id);
+        if (index != -1) {
+          _messages[index] = updatedMessage;
+          notifyListeners();
+        }
+
+        // 更新会话的最后消息
+        _updateLastMessage(conversationId, updatedMessage);
+      } else {
+        debugPrint('发送消息失败: ${result['body']['message']}');
+        throw Exception(result['body']['message'] ?? '发送消息失败');
       }
-
-      // 更新会话的最后消息
-      _updateLastMessage(conversationId, updatedMessage);
     } catch (e) {
       debugPrint('发送消息失败: $e');
 
@@ -252,6 +282,23 @@ class ChatService extends ChangeNotifier {
         _messages[index] = failedMessage;
         notifyListeners();
       }
+      rethrow;
+    }
+  }
+
+  /// 转换前端消息类型为后端消息类型
+  String _convertMessageType(MessageType type) {
+    switch (type) {
+      case MessageType.text:
+        return 'TEXT';
+      case MessageType.voice:
+        return 'VOICE';
+      case MessageType.image:
+        return 'IMAGE';
+      case MessageType.file:
+        return 'FILE';
+      default:
+        return 'TEXT';
     }
   }
 
@@ -259,6 +306,37 @@ class ChatService extends ChangeNotifier {
   void setCurrentConversation(Conversation conversation) {
     _currentConversation = conversation;
     loadMessages(conversation.id);
+  }
+
+  /// 创建或获取私聊会话
+  Future<Conversation?> createOrGetPrivateConversation(String targetUserId) async {
+    try {
+      final result = await ApiService.createOrGetConversation(targetUserId);
+
+      if (result['statusCode'] == 200) {
+        final conversation = Conversation.fromJson(result['body']);
+
+        // 添加到会话列表
+        final existingIndex = _conversations.indexWhere((c) => c.id == conversation.id);
+        if (existingIndex == -1) {
+          _conversations.add(conversation);
+        } else {
+          _conversations[existingIndex] = conversation;
+        }
+
+        // 重新排序
+        _conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        notifyListeners();
+
+        return conversation;
+      } else {
+        debugPrint('创建会话失败: ${result['body']['message']}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('创建会话失败: $e');
+      return null;
+    }
   }
 
   /// 更新会话的最后消息
@@ -279,14 +357,17 @@ class ChatService extends ChangeNotifier {
   /// 标记消息为已读
   Future<void> markAsRead(String conversationId) async {
     try {
-      // TODO: 替换为实际的API调用
-      await Future.delayed(const Duration(milliseconds: 300));
+      final result = await ApiService.markConversationAsRead(conversationId);
 
-      final index = _conversations.indexWhere((c) => c.id == conversationId);
-      if (index != -1 && _conversations[index].unreadCount > 0) {
-        _conversations[index] = _conversations[index].copyWith(unreadCount: 0);
-        notifyListeners();
-        _syncUnreadBadges();
+      if (result['statusCode'] == 200) {
+        final index = _conversations.indexWhere((c) => c.id == conversationId);
+        if (index != -1 && _conversations[index].unreadCount > 0) {
+          _conversations[index] = _conversations[index].copyWith(unreadCount: 0);
+          notifyListeners();
+          _syncUnreadBadges();
+        }
+      } else {
+        debugPrint('标记已读失败: ${result['body']['message']}');
       }
     } catch (e) {
       debugPrint('标记已读失败: $e');

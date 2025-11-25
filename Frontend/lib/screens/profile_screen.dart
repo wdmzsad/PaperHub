@@ -11,6 +11,7 @@ import '../pages/login_page.dart';
 import '../pages/note_editor_page.dart';
 import '../services/api_service.dart';
 import '../services/local_storage.dart';
+import '../services/chat_service.dart';
 import '../widgets/bottom_navigation.dart';
 import '../widgets/post_card.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -385,6 +386,39 @@ class _ProfilePageState extends State<ProfilePage>
       });
       _showSnack('操作失败：$e');
     }
+  }
+
+  void _startPrivateChat() {
+    if (_profile == null || _isViewingSelf) return;
+
+    final targetUserId = _profile!.id;
+
+    // Show loading indicator
+    setState(() {
+      _saving = true;
+    });
+
+    ChatService().createOrGetPrivateConversation(targetUserId).then((conversation) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+
+      if (conversation != null) {
+        // Navigate to chat interface
+        Navigator.of(context).pushNamed('/chat/${conversation.id}');
+      } else {
+        _showSnack('创建会话失败，请稍后重试');
+      }
+    }).catchError((error) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+      _showSnack('创建会话失败：$error');
+    });
   }
 
   void _openPostDetail(Post post) {
@@ -816,15 +850,28 @@ class _ProfilePageState extends State<ProfilePage>
                       icon: const Icon(Icons.edit, color: Colors.white),
                     )
                   else
-                    ElevatedButton(
-                      onPressed: _toggleFollow,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: (_isFollowing ?? false)
-                            ? Colors.white.withOpacity(0.2)
-                            : Colors.blueAccent,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: Text((_isFollowing ?? false) ? '已关注' : '关注'),
+                    Row(
+                      children: [
+                        ElevatedButton(
+                          onPressed: _toggleFollow,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: (_isFollowing ?? false)
+                                ? Colors.white.withOpacity(0.2)
+                                : Colors.blueAccent,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: Text((_isFollowing ?? false) ? '已关注' : '关注'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: _startPrivateChat,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                          ),
+                          child: const Text('私聊'),
+                        ),
+                      ],
                     ),
                 ],
               ),

@@ -14,5 +14,6 @@
             "database": "paperHub",
             "username": "team"
         }
-    ]
+    ],
+    "cmake.sourceDirectory": "D:/hw_software/Projects/paperhub-main/Frontend/linux"
 }

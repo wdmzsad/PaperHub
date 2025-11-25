@@ -877,6 +877,109 @@ class ApiService {
     );
   }
 
+  // ==================== 聊天相关API ====================
+
+  /// 获取会话列表
+  /// GET /api/conversations
+  static Future<Map<String, dynamic>> getConversations() async {
+    return await _makeRequest(
+      () => http.get(
+        Uri.parse('$baseUrl/api/conversations'),
+        headers: _buildHeaders(),
+      ),
+      '/api/conversations',
+    );
+  }
+
+  /// 创建或获取私聊会话
+  /// POST /api/conversations
+  static Future<Map<String, dynamic>> createOrGetConversation(String targetUserId) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/api/conversations'),
+        headers: _buildHeaders(),
+        body: jsonEncode({'targetUserId': int.tryParse(targetUserId) ?? 0}),
+      ),
+      '/api/conversations',
+    );
+  }
+
+  /// 获取会话消息列表
+  /// GET /api/conversations/{conversationId}/messages
+  static Future<Map<String, dynamic>> getConversationMessages(
+    String conversationId, {
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/api/conversations/$conversationId/messages').replace(
+      queryParameters: {
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/api/conversations/$conversationId/messages',
+    );
+  }
+
+  /// 发送消息
+  /// POST /api/conversations/{conversationId}/messages
+  static Future<Map<String, dynamic>> sendMessage(
+    String conversationId,
+    String content, {
+    String type = 'TEXT',
+    String? fileUrl,
+    String? fileName,
+    int? fileSize,
+  }) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/api/conversations/$conversationId/messages'),
+        headers: _buildHeaders(),
+        body: jsonEncode({
+          'content': content,
+          'type': type,
+          if (fileUrl != null) 'fileUrl': fileUrl,
+          if (fileName != null) 'fileName': fileName,
+          if (fileSize != null) 'fileSize': fileSize,
+        }),
+      ),
+      '/api/conversations/$conversationId/messages',
+    );
+  }
+
+  /// 标记会话为已读
+  /// PUT /api/conversations/{conversationId}/read
+  static Future<Map<String, dynamic>> markConversationAsRead(String conversationId) async {
+    return await _makeRequest(
+      () => http.put(
+        Uri.parse('$baseUrl/api/conversations/$conversationId/read'),
+        headers: _buildHeaders(),
+      ),
+      '/api/conversations/$conversationId/read',
+    );
+  }
+
+  /// 上传聊天文件
+  /// POST /api/upload/chat-file
+  static Future<Map<String, dynamic>> uploadChatFile(
+    List<int> fileBytes,
+    String fileName,
+  ) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/api/upload/chat-file'),
+    );
+    request.headers.addAll(_buildHeaders(json: false));
+    request.files.add(
+      http.MultipartFile.fromBytes('file', fileBytes, filename: fileName),
+    );
+    final streamedResp = await request.send();
+    final resp = await http.Response.fromStream(streamedResp);
+    return _parseResponse(resp);
+  }
+
   static Map<String, dynamic> _parseResponse(http.Response resp) {
     try {
       // 处理空响应体

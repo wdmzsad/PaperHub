@@ -6,6 +6,7 @@ import 'pages/forgot_password_page.dart';
 import 'pages/reset_password_page.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/chat_screen.dart';
 import 'services/local_storage.dart';
 
 void main() {
@@ -35,6 +36,13 @@ class PaperHubApp extends StatelessWidget {
           final userId = name.substring('/user/'.length);
           return MaterialPageRoute(
             builder: (_) => ProfilePage(userId: userId),
+            settings: settings,
+          );
+        }
+        if (name.startsWith('/chat/')) {
+          final conversationId = name.substring('/chat/'.length);
+          return MaterialPageRoute(
+            builder: (_) => ChatScreen(conversationId: conversationId),
             settings: settings,
           );
         }
