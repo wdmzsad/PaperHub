@@ -40,6 +40,7 @@ class Comment {
   bool isLiked;
   final DateTime createdAt;
   final List<Comment> replies;  // 子回复列表
+  final List<Author> mentions;  // 被@的用户列表
   bool _expanded = true;  // UI 状态：是否展开子回复
 
   bool get isExpanded => _expanded;
@@ -56,6 +57,7 @@ class Comment {
     this.likesCount = 0,
     this.isLiked = false,
     this.replies = const [],
+    this.mentions = const [],
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
@@ -107,6 +109,24 @@ class Comment {
       );
     }
     
+    // 解析被@的用户列表
+    List<Author> mentions = [];
+    if (json['mentions'] != null) {
+      final mentionsJson = json['mentions'] as List<dynamic>? ?? [];
+      mentions = mentionsJson.map((m) {
+        final mentionJson = m as Map<String, dynamic>;
+        final mentionIdValue = mentionJson['id'];
+        final mentionId = mentionIdValue is String ? mentionIdValue : mentionIdValue.toString();
+        return Author(
+          id: mentionId,
+          name: mentionJson['name'] as String? ?? 
+                (mentionJson['email'] as String? ?? '未知用户'),
+          avatar: mentionJson['avatar'] as String? ?? '',
+          affiliation: mentionJson['affiliation'] as String?,
+        );
+      }).toList();
+    }
+    
     return Comment(
       id: id,
       author: Author(
@@ -125,6 +145,7 @@ class Comment {
               ?.map((e) => Comment.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      mentions: mentions,
       createdAt: json['createdAt'] == null
           ? DateTime.now()
           : DateTime.parse(json['createdAt'].toString()),

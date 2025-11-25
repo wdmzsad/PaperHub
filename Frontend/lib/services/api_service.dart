@@ -361,6 +361,28 @@ class ApiService {
     );
   }
 
+  /// 搜索用户（用于@功能）
+  /// GET /users/search?q=name&type=following|all
+  static Future<Map<String, dynamic>> searchUsers({
+    required String query,
+    String type = 'all', // 'following' 或 'all'
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/users/search').replace(
+      queryParameters: {
+        'q': query,
+        'type': type,
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/users/search',
+    );
+  }
+
   static Future<Map<String, dynamic>> getUserPosts(
     String userId, {
     int page = 1,
@@ -697,6 +719,7 @@ class ApiService {
     String content, {
     String? parentId,
     String? replyToId,
+    List<String>? mentionIds,
   }) async {
     try {
       return await _makeRequest(
@@ -708,6 +731,7 @@ class ApiService {
                 'content': content,
                 if (parentId != null) 'parentId': parentId,
                 if (replyToId != null) 'replyToId': replyToId,
+                if (mentionIds != null && mentionIds.isNotEmpty) 'mentionIds': mentionIds,
               }),
             )
             .timeout(

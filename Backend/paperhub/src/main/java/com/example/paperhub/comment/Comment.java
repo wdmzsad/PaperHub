@@ -49,6 +49,10 @@ public class Comment {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
+    // 被@的用户ID列表（JSON格式存储，如 "[1,2,3]"）
+    @Column(name = "mention_ids", columnDefinition = "TEXT")
+    private String mentionIds;
+
     // Getters and Setters
     public Long getId() {
         return id;
@@ -120,6 +124,14 @@ public class Comment {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getMentionIds() {
+        return mentionIds;
+    }
+
+    public void setMentionIds(String mentionIds) {
+        this.mentionIds = mentionIds;
     }
 }
 

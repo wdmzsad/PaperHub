@@ -1,6 +1,7 @@
 // lib/screens/post_detail_screen.dart
 // merge request 测试 1104: 单个帖子界面
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/post_model.dart';
@@ -12,6 +13,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import '../widgets/pdf_iframe_view.dart';
 import '../services/local_storage.dart';
 import '../config/app_env.dart';
+import 'profile_screen.dart';
 
 /*
 ================================================================================
@@ -269,6 +271,14 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   bool _saveInFlight = false;
   bool _isDeleting = false;
   String? _currentUserId;
+  
+  // @功能相关状态
+  bool _showMentionList = false;
+  List<Author> _mentionCandidates = [];
+  String _mentionQuery = '';
+  int _mentionStartIndex = -1; // @符号在文本中的位置
+  Map<String, Author> _selectedMentions = {}; // 已选择的@用户映射：用户名 -> 用户对象
+  bool _isAutoAddingMention = false; // 标记是否正在自动添加@用户名（用于区分自动添加和手动输入）
   // ========= 外部链接跳转方法=========
   Future<void> _openExternalLink(String url) async {
     final trimmed = url.trim();
@@ -345,11 +355,17 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       }
     });
 
+    // 监听评论输入框的文本变化，检测@输入
+    _commentController.addListener(_onCommentTextChanged);
+
     // 从后端获取最新的帖子信息
     _loadPostDetail();
 
     // 加载评论
     _loadComments();
+    
+    // 获取当前用户ID
+    _loadCurrentUserId();
 
     // WebSocket 实时点赞监听
     _initWebSocket();
@@ -450,10 +466,621 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   @override
   void dispose() {
     _heartCtrl.dispose();
+    _commentController.removeListener(_onCommentTextChanged);
     _commentController.dispose();
     _commentFocusNode.dispose();
     _wsChannel?.sink.close();
     super.dispose();
+  }
+
+  Future<void> _loadCurrentUserId() async {
+    try {
+      final resp = await ApiService.getCurrentUserProfile();
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>;
+        setState(() {
+          _currentUserId = body['id']?.toString();
+        });
+      }
+    } catch (e) {
+      // 忽略错误
+    }
+  }
+
+  void _onCommentTextChanged() {
+    final text = _commentController.text;
+    final cursorPosition = _commentController.selection.baseOffset;
+    
+    if (cursorPosition < 0 || cursorPosition > text.length) {
+      setState(() {
+        _showMentionList = false;
+        _mentionQuery = '';
+        _mentionStartIndex = -1;
+      });
+      return;
+    }
+    
+    // 如果正在自动添加@用户名，不处理文本变化（避免误判为单选模式）
+    if (_isAutoAddingMention) {
+      print('[@功能] 正在自动添加@用户名，跳过文本变化处理');
+      return;
+    }
+    
+    // 解析评论内容中实际存在的@用户名（格式：@A @B @C，有空格）
+    // 使用与提交时相同的正则表达式，确保一致性
+    final RegExp mentionRegex = RegExp(r'@([^\s@]+)');
+    final Set<String> actualMentionedNames = {};
+    for (final match in mentionRegex.allMatches(text)) {
+      final userName = match.group(1)!.trim();
+      if (userName.isNotEmpty && !userName.startsWith('@')) {
+        actualMentionedNames.add(userName.toLowerCase());
+      }
+    }
+    print('[@功能] _onCommentTextChanged: 解析到的@用户名: ${actualMentionedNames.toList()}');
+    
+    // 移除评论内容中不存在的@用户
+    final keysToRemove = <String>[];
+    for (final key in _selectedMentions.keys) {
+      if (!actualMentionedNames.contains(key)) {
+        keysToRemove.add(key);
+      }
+    }
+    if (keysToRemove.isNotEmpty) {
+      setState(() {
+        for (final key in keysToRemove) {
+          _selectedMentions.remove(key);
+        }
+      });
+      print('[@功能] 移除了不存在的@用户: $keysToRemove');
+    }
+    
+    // 当选择列表为空且没有检测到@时，关闭横栏
+    if (_selectedMentions.isEmpty && _mentionStartIndex == -1) {
+      setState(() {
+        _showMentionList = false;
+        _mentionQuery = '';
+        _mentionStartIndex = -1;
+      });
+    }
+    
+    // 查找最近的@符号（用于检测是否正在输入@）
+    // 在多选模式下，如果@后面跟着已选择的用户名，说明是自动添加的，不处理
+    int atIndex = -1;
+    for (int i = cursorPosition - 1; i >= 0; i--) {
+      if (text[i] == '@') {
+        // 检查这个@后面是否跟着已选择的用户名
+        bool isMentioned = false;
+        if (i + 1 < text.length) {
+          for (final user in _selectedMentions.values) {
+            if (text.length >= i + 1 + user.name.length && 
+                text.substring(i + 1, i + 1 + user.name.length) == user.name) {
+              isMentioned = true;
+              break;
+            }
+          }
+        }
+        if (!isMentioned) {
+          atIndex = i;
+          break;
+        }
+      } else if (text[i] == ' ' || text[i] == '\n') {
+        break; // 遇到空格或换行，说明不在@上下文中
+      }
+    }
+    
+    if (atIndex != -1) {
+      // 检测到@符号
+      final query = text.substring(atIndex + 1, cursorPosition).trim();
+      print('[@功能] 检测到@符号，位置: $atIndex, 查询: "$query"');
+      
+      setState(() {
+        _mentionStartIndex = atIndex;
+        _mentionQuery = query;
+        _showMentionList = true;
+      });
+      
+      if (query.isEmpty) {
+        // 多选模式：@后面没有内容，显示关注用户列表
+        print('[@功能] 多选模式：显示关注用户列表');
+        if (_mentionCandidates.isEmpty || _mentionQuery != '') {
+          // 如果候选列表为空或之前是搜索模式，重新加载关注用户
+          _mentionCandidates = []; // 先清空
+          _searchMentionUsers(''); // 加载关注用户列表（type='following'）
+        }
+      } else {
+        // 单选模式：@后面有内容，搜索所有用户
+        print('[@功能] 单选模式：搜索所有用户，查询: "$query"');
+        _mentionCandidates = []; // 先清空
+        _searchMentionUsers(query); // 搜索所有用户（type='all'）
+      }
+    } else {
+      // 如果没有检测到@符号
+      // 检查光标位置：如果光标在已选择的@用户名后面，且用户正在输入普通文字，应该关闭@功能
+      bool isTypingAfterMentions = false;
+      if (_selectedMentions.isNotEmpty && cursorPosition > 0) {
+        // 检查光标前面是否有@用户名
+        final textBeforeCursor = text.substring(0, cursorPosition);
+        final RegExp mentionRegex = RegExp(r'@([^\s@]+)');
+        final matches = mentionRegex.allMatches(textBeforeCursor);
+        
+        if (matches.isNotEmpty) {
+          // 找到最后一个@用户名
+          final lastMatch = matches.last;
+          final lastMentionEnd = lastMatch.end;
+          
+          // 如果光标在最后一个@用户名之后，且中间有非@字符，说明用户在输入普通文字
+          if (cursorPosition > lastMentionEnd) {
+            final textAfterLastMention = textBeforeCursor.substring(lastMentionEnd);
+            // 如果@用户名后面有非@非空格的字符，说明用户在输入普通文字，应该关闭@功能
+            if (textAfterLastMention.isNotEmpty && !textAfterLastMention.trim().isEmpty) {
+              isTypingAfterMentions = true;
+            }
+          }
+        }
+      }
+      
+      if (isTypingAfterMentions) {
+        // 用户在@用户名后输入了普通文字，关闭@功能
+        print('[@功能] 检测到在@用户名后输入普通文字，关闭@功能');
+        setState(() {
+          _showMentionList = false;
+          _mentionQuery = '';
+          _mentionStartIndex = -1;
+        });
+      } else if (_selectedMentions.isNotEmpty) {
+        // 如果没有检测到@符号，但已选择了用户，且光标不在@用户名后输入普通文字
+        // 保持显示横栏（多选模式），但只在光标紧跟在@用户名后面时
+        // 如果光标位置不在@上下文中，关闭横栏
+        final textBeforeCursor = text.substring(0, cursorPosition);
+        final RegExp mentionRegex = RegExp(r'@([^\s@]+)');
+        final matches = mentionRegex.allMatches(textBeforeCursor);
+        
+        bool shouldKeepOpen = false;
+        if (matches.isNotEmpty) {
+          final lastMatch = matches.last;
+          final lastMentionEnd = lastMatch.end;
+          // 检查光标位置：如果光标在@用户名后面，且紧跟在@用户名或空格后面，保持打开
+          // 格式是@A @B @C，所以光标应该在@用户名后面，或者在空格后面（但空格后面不应该保持打开）
+          final textAfterLastMention = cursorPosition > lastMentionEnd 
+              ? textBeforeCursor.substring(lastMentionEnd, cursorPosition)
+              : '';
+          
+          // 如果光标紧跟在@用户名后面（没有空格），或者光标在@用户名后的空格位置，保持打开
+          // 但如果光标在空格后面（有非空格字符），应该关闭
+          if (cursorPosition == lastMentionEnd) {
+            // 光标紧跟在@用户名后面，保持打开
+            shouldKeepOpen = true;
+          } else if (textAfterLastMention.trim().isEmpty && textAfterLastMention.length <= 1) {
+            // 光标在@用户名后的空格位置（最多一个空格），保持打开
+            shouldKeepOpen = true;
+          }
+          // 其他情况（光标在空格后面有字符），不保持打开
+        }
+        
+        if (shouldKeepOpen) {
+          setState(() {
+            _mentionQuery = '';
+            _mentionStartIndex = -1;
+            _showMentionList = true; // 保持显示横栏
+            // 如果候选列表为空，重新加载关注用户列表
+            if (_mentionCandidates.isEmpty) {
+              _searchMentionUsers(''); // 加载关注用户列表
+            }
+          });
+        } else {
+          // 光标不在@上下文中，关闭横栏
+          setState(() {
+            _showMentionList = false;
+            _mentionQuery = '';
+            _mentionStartIndex = -1;
+          });
+        }
+      } else {
+        // 如果没有@符号且没有选择用户，关闭横栏
+        setState(() {
+          _showMentionList = false;
+          _mentionQuery = '';
+          _mentionStartIndex = -1;
+        });
+      }
+    }
+  }
+
+  Future<void> _searchMentionUsers(String query) async {
+    try {
+      Map<String, dynamic> resp;
+      
+      if (query.isEmpty) {
+        // 如果查询为空，显示关注的人
+        resp = await ApiService.searchUsers(query: '', type: 'following', pageSize: 10);
+      } else {
+        // 搜索所有匹配的用户
+        resp = await ApiService.searchUsers(query: query, type: 'all', pageSize: 10);
+      }
+      
+      if (resp['statusCode'] == 200 && mounted) {
+        final body = resp['body'] as Map<String, dynamic>?;
+        if (body != null) {
+          final users = (body['users'] as List? ?? [])
+              .map((u) {
+                try {
+                  // 后端返回的是displayName字段，不是name
+                  String userName = u['displayName']?.toString() ?? '';
+                  if (userName.isEmpty) {
+                    // 如果displayName为空，使用email作为fallback
+                    userName = u['email']?.toString() ?? '';
+                    // 如果email也不为空，取@前面的部分
+                    if (userName.isNotEmpty && userName.contains('@')) {
+                      userName = userName.split('@')[0];
+                    }
+                  }
+                  print('[@功能] 解析用户: id=${u['id']}, displayName=$userName, email=${u['email']}');
+                  return Author(
+                    id: u['id']?.toString() ?? '',
+                    name: userName,
+                    avatar: u['avatar']?.toString() ?? '',
+                    affiliation: u['affiliation']?.toString(),
+                  );
+                } catch (e) {
+                  print('解析用户数据失败: $e, 数据: $u');
+                  return null;
+                }
+              })
+              .where((u) => u != null && u!.name.isNotEmpty)
+              .cast<Author>()
+              .toList();
+          
+          if (mounted) {
+            setState(() {
+              _mentionCandidates = users;
+            });
+          }
+        }
+      } else {
+        print('搜索用户失败: statusCode=${resp['statusCode']}, body=${resp['body']}');
+      }
+    } catch (e, stackTrace) {
+      print('搜索用户异常: $e');
+      print('堆栈跟踪: $stackTrace');
+      // 忽略错误，不显示给用户
+    }
+  }
+
+  void _selectMentionUser(Author user) {
+    print('[@功能] _selectMentionUser 被调用，用户: ${user.name}, _mentionStartIndex: $_mentionStartIndex, _mentionQuery: "$_mentionQuery"');
+    
+    final userNameLower = user.name.toLowerCase();
+    final isCurrentlySelected = _selectedMentions.containsKey(userNameLower);
+    
+    if (isCurrentlySelected) {
+      // 如果已经选择，取消选择
+      _toggleMentionUser(user);
+      return;
+    }
+    
+    try {
+      final text = _commentController.text;
+      final cursorPosition = _commentController.selection.baseOffset;
+      
+      // 判断是单选模式还是多选模式
+      final isMultiSelectMode = _mentionQuery.isEmpty; // @后面没有内容 = 多选模式
+      
+      if (_mentionStartIndex != -1 && _mentionStartIndex < text.length) {
+        // 正在输入@状态
+        final beforeAt = text.substring(0, _mentionStartIndex);
+        final afterCursor = cursorPosition < text.length 
+            ? text.substring(cursorPosition) 
+            : '';
+        
+        String newText;
+        int newCursorPosition;
+        
+        if (isMultiSelectMode) {
+          // 多选模式：替换@为@用户名，或追加@用户名（格式：@A @B @C，每个后面加空格）
+          if (_selectedMentions.isEmpty) {
+            // 第一个选择：替换@为@用户名 + 空格
+            newText = '$beforeAt@${user.name} $afterCursor';
+            newCursorPosition = beforeAt.length + user.name.length + 2; // +2 for '@' and ' '
+          } else {
+            // 后续选择：在已有@用户名后追加 @用户名 + 空格（格式：@A @B @C @D）
+            // 查找最后一个@用户名（可能后面有空格）
+            final lastMentionMatch = RegExp(r'@([^\s@]+)\s*').allMatches(text).lastOrNull;
+            if (lastMentionMatch != null) {
+              final lastMentionEnd = lastMentionMatch.end;
+              final beforeLastMention = text.substring(0, lastMentionEnd);
+              final afterLastMention = text.substring(lastMentionEnd);
+              newText = '$beforeLastMention@${user.name} $afterLastMention';
+              newCursorPosition = lastMentionEnd + user.name.length + 2; // +2 for '@' and ' '
+            } else {
+              newText = '$beforeAt@${user.name} $afterCursor';
+              newCursorPosition = beforeAt.length + user.name.length + 2; // +2 for '@' and ' '
+            }
+          }
+        } else {
+          // 单选模式：替换@到光标位置的内容为@用户名，然后关闭横栏
+          // 注意：单选模式选择的用户也要累积到_selectedMentions中，支持叠加
+          newText = '$beforeAt@${user.name} $afterCursor';
+          newCursorPosition = beforeAt.length + user.name.length + 2; // +2 for '@' and ' '
+        }
+        
+        // 设置自动添加标志，避免触发_onCommentTextChanged时误判
+        _isAutoAddingMention = true;
+        _commentController.text = newText;
+        _commentController.selection = TextSelection.collapsed(offset: newCursorPosition);
+        
+        // 添加到已选择列表（单选和多选都累积）
+        setState(() {
+          _selectedMentions[userNameLower] = user;
+          if (isMultiSelectMode) {
+            // 多选模式：保持横栏打开，重置@位置
+            _mentionQuery = '';
+            _mentionStartIndex = -1;
+            _showMentionList = true; // 确保横栏保持打开
+          } else {
+            // 单选模式：关闭横栏，但保留已选择的用户（支持叠加）
+            _showMentionList = false;
+            _mentionQuery = '';
+            _mentionStartIndex = -1;
+          }
+        });
+        
+        // 延迟重置标志，确保_onCommentTextChanged不会误判
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) {
+            setState(() {
+              _isAutoAddingMention = false;
+            });
+          }
+        });
+        
+        print('[@功能] 成功选择了用户: ${user.name}（${isMultiSelectMode ? "多选" : "单选"}模式），当前已选择: ${_selectedMentions.keys.toList()}');
+        print('[@功能] _showMentionList: $_showMentionList');
+      } else {
+        // 不在输入@状态：在文本末尾追加@用户名 + 空格（多选模式）
+        print('[@功能] 不在输入@状态，在末尾追加@用户名（多选模式）');
+        
+        final newText = '${text}@${user.name} ';
+        final newCursorPosition = newText.length;
+        
+        // 设置自动添加标志，避免触发_onCommentTextChanged时误判
+        _isAutoAddingMention = true;
+        _commentController.text = newText;
+        _commentController.selection = TextSelection.collapsed(offset: newCursorPosition);
+        
+        // 添加到已选择列表
+        setState(() {
+          _selectedMentions[userNameLower] = user;
+          // 不在输入@状态时追加，保持横栏打开（多选模式）
+          _showMentionList = true;
+          _mentionQuery = '';
+          _mentionStartIndex = -1;
+        });
+        
+        // 延迟重置标志，确保_onCommentTextChanged不会误判
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) {
+            setState(() {
+              _isAutoAddingMention = false;
+            });
+          }
+        });
+        
+        print('[@功能] 成功选择了用户: ${user.name}（追加），当前已选择: ${_selectedMentions.keys.toList()}');
+        print('[@功能] _showMentionList: $_showMentionList');
+      }
+    } catch (e, stackTrace) {
+      print('[@功能] 选择用户时出错: $e');
+      print('[@功能] 堆栈跟踪: $stackTrace');
+    }
+  }
+  
+  void _toggleMentionUser(Author user) {
+    final userNameLower = user.name.toLowerCase();
+    final isCurrentlySelected = _selectedMentions.containsKey(userNameLower);
+    
+    if (isCurrentlySelected) {
+      // 取消选择：从评论框中删除@用户名（格式：@A @B @C，删除@B后变成@A @C）
+      final text = _commentController.text;
+      final RegExp mentionRegex = RegExp(r'@([^\s@]+)\s*');
+      
+      // 查找所有@用户名，找到匹配的并删除（包括后面的空格）
+      String newText = text;
+      for (final match in mentionRegex.allMatches(text)) {
+        final mentionedName = match.group(1)!.trim();
+        
+        if (mentionedName.toLowerCase() == userNameLower) {
+          // 找到匹配的@用户名，删除它（包括@和后面的空格）
+          final startIndex = match.start;
+          final endIndex = match.end;
+          
+          newText = text.substring(0, startIndex) + text.substring(endIndex);
+          break; // 只删除第一个匹配的
+        }
+      }
+      
+      // 设置自动添加标志，避免触发_onCommentTextChanged时误判
+      _isAutoAddingMention = true;
+      _commentController.text = newText;
+      
+      // 延迟重置标志
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          setState(() {
+            _isAutoAddingMention = false;
+          });
+        }
+      });
+      
+      // 从已选择列表移除
+      setState(() {
+        _selectedMentions.remove(userNameLower);
+        
+        // 如果选择列表为空，关闭横栏
+        if (_selectedMentions.isEmpty) {
+          _showMentionList = false;
+          _mentionQuery = '';
+          _mentionStartIndex = -1;
+        }
+      });
+      
+      print('[@功能] 取消选择用户: ${user.name}，已从评论框删除，剩余: ${_selectedMentions.keys.toList()}');
+    } else {
+      // 选择：调用_selectMentionUser
+      _selectMentionUser(user);
+    }
+  }
+
+  /// 构建包含@提及的评论内容（可点击的@链接）
+  Widget _buildCommentContentWithMentions(String content, List<Author> mentions) {
+    final List<TextSpan> spans = [];
+    // 使用与提交时相同的正则表达式，匹配@后面跟着非@非空格的字符（格式：@A @B @C，有空格）
+    final RegExp mentionRegex = RegExp(r'@([^\s@]+)');
+    int lastIndex = 0;
+
+    // 建立@用户名到用户ID的映射
+    final Map<String, String> mentionMap = {};
+    for (final mention in mentions) {
+      mentionMap[mention.name.toLowerCase()] = mention.id;
+    }
+    
+    print('[@功能] _buildCommentContentWithMentions: content="$content", mentions=${mentions.map((m) => m.name).toList()}');
+    print('[@功能] mentionMap: $mentionMap');
+
+    for (final match in mentionRegex.allMatches(content)) {
+      // 添加@之前的文本
+      if (match.start > lastIndex) {
+        spans.add(TextSpan(
+          text: content.substring(lastIndex, match.start),
+          style: const TextStyle(fontSize: 13, color: Colors.black87),
+        ));
+      }
+
+      // 添加@提及（可点击）
+      final mentionText = match.group(0)!; // 包含@的完整文本，如 "@用户名"
+      final userName = match.group(1)!; // 用户名部分
+      
+      print('[@功能] 匹配到@用户名: "$userName"');
+      
+      // 从mentions列表中查找对应的用户ID
+      final userId = mentionMap[userName.toLowerCase()];
+      
+      if (userId != null) {
+        // 如果用户ID存在，显示为可点击的蓝色链接
+        print('[@功能] 找到用户ID: $userId，创建可点击链接');
+        spans.add(TextSpan(
+          text: mentionText,
+          style: const TextStyle(
+            fontSize: 13,
+            color: Colors.blue,
+            fontWeight: FontWeight.w500,
+          ),
+          recognizer: TapGestureRecognizer()
+            ..onTap = () {
+              // 使用用户ID直接跳转
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProfilePage(userId: userId),
+                ),
+              );
+            },
+        ));
+      } else {
+        // 如果用户ID不存在（用户直接输入@用户名，没有从列表选择），显示为普通文本
+        print('[@功能] 未找到用户ID，显示为普通文本');
+        spans.add(TextSpan(
+          text: mentionText,
+          style: const TextStyle(
+            fontSize: 13,
+            color: Colors.black87,
+          ),
+        ));
+      }
+
+      lastIndex = match.end;
+    }
+
+    // 添加剩余的文本
+    if (lastIndex < content.length) {
+      spans.add(TextSpan(
+        text: content.substring(lastIndex),
+        style: const TextStyle(fontSize: 13, color: Colors.black87),
+      ));
+    }
+
+    return RichText(
+      text: TextSpan(children: spans),
+    );
+  }
+
+  /// 通过用户名导航到用户主页
+  Future<void> _navigateToUserProfileByName(String userName) async {
+    try {
+      print('[@功能] 尝试查找用户: $userName');
+      // 先搜索用户（搜索name和email）
+      final resp = await ApiService.searchUsers(query: userName, type: 'all', pageSize: 20);
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>?;
+        if (body != null) {
+          final users = (body['users'] as List? ?? []);
+          print('[@功能] 搜索到 ${users.length} 个用户');
+          
+          // 精确匹配：先尝试匹配displayName，再尝试匹配email前缀
+          for (final user in users) {
+            final displayName = user['displayName']?.toString() ?? '';
+            final email = user['email']?.toString() ?? '';
+            final emailPrefix = email.contains('@') ? email.split('@')[0] : '';
+            
+            // 精确匹配displayName或email前缀
+            if (displayName.toLowerCase() == userName.toLowerCase() || 
+                emailPrefix.toLowerCase() == userName.toLowerCase()) {
+              final userId = user['id']?.toString();
+              if (userId != null && mounted) {
+                print('[@功能] 找到匹配用户: id=$userId, displayName=$displayName');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfilePage(userId: userId),
+                  ),
+                );
+                return;
+              }
+            }
+          }
+          
+          // 如果没有精确匹配，使用第一个结果
+          if (users.isNotEmpty) {
+            final user = users[0];
+            final userId = user['id']?.toString();
+            if (userId != null && mounted) {
+              print('[@功能] 使用第一个搜索结果: id=$userId');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProfilePage(userId: userId),
+                ),
+              );
+              return;
+            }
+          }
+        }
+      }
+      // 如果搜索失败，显示提示
+      print('[@功能] 未找到用户: $userName');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('未找到用户: $userName')),
+        );
+      }
+    } catch (e, stackTrace) {
+      print('[@功能] 导航到用户主页失败: $e');
+      print('[@功能] 堆栈跟踪: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('查找用户失败: $e')),
+        );
+      }
+    }
   }
 
   void _startReply(Comment comment, {String? parentId}) {
@@ -676,17 +1303,34 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       // 从顶层删除
       final tIdx = _comments.indexWhere((c) => c.id == commentId);
       if (tIdx != -1) {
+        final deletedComment = _comments[tIdx];
+        final deletedCount = 1 + deletedComment.replies.length;
         _comments.removeAt(tIdx);
-        commentCount = (commentCount > 0) ? commentCount - 1 : 0;
+        commentCount = (commentCount >= deletedCount) ? commentCount - deletedCount : 0;
         widget.post.commentsCount = commentCount;
         return;
       }
 
       // 从子回复中删除
-      for (var parent in _comments) {
+      for (int i = 0; i < _comments.length; i++) {
+        final parent = _comments[i];
         final rIdx = parent.replies.indexWhere((r) => r.id == commentId);
         if (rIdx != -1) {
-          parent.replies.removeAt(rIdx);
+          // 重新创建父评论，移除被删除的回复
+          final updatedReplies = parent.replies.where((r) => r.id != commentId).toList();
+          _comments[i] = Comment(
+            id: parent.id,
+            author: parent.author,
+            content: parent.content,
+            parentId: parent.parentId,
+            replyTo: parent.replyTo,
+            likesCount: parent.likesCount,
+            isLiked: parent.isLiked,
+            replies: updatedReplies,
+            createdAt: parent.createdAt,
+          );
+          commentCount = (commentCount > 0) ? commentCount - 1 : 0;
+          widget.post.commentsCount = commentCount;
           return;
         }
       }
@@ -859,13 +1503,44 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     });
 
     try {
+      // 解析评论内容中实际存在的@用户名，正确匹配每个@用户名（格式：@A @B @C，有空格）
+      // 使用更精确的正则表达式，匹配@后面跟着非@非空格的字符
+      final RegExp mentionRegex = RegExp(r'@([^\s@]+)');
+      final Set<String> actualMentionedNames = {};
+      for (final match in mentionRegex.allMatches(text)) {
+        final userName = match.group(1)!.trim();
+        if (userName.isNotEmpty && !userName.startsWith('@')) {
+          actualMentionedNames.add(userName.toLowerCase());
+        }
+      }
+      
+      // 从_selectedMentions中提取所有在评论内容中实际存在的@用户的ID
+      final List<String> mentionIds = [];
+      for (final entry in _selectedMentions.entries) {
+        if (actualMentionedNames.contains(entry.key)) {
+          mentionIds.add(entry.value.id);
+        }
+      }
+      
+      // 如果_selectedMentions中没有匹配到，尝试从文本中直接解析（处理手动输入的情况）
+      // 但这种情况下的@用户名不会被识别为有效的mention，因为不在_selectedMentions中
+      
+      print('[@功能] 提交评论，文本: "$text"');
+      print('[@功能] 解析到的@用户名: ${actualMentionedNames.toList()}');
+      print('[@功能] _selectedMentions中的用户: ${_selectedMentions.keys.toList()}');
+      print('[@功能] 最终mentionIds: $mentionIds');
+      
       // 调用真实后端 API 创建评论
       final resp = await ApiService.createComment(
         widget.post.id,
         text,
         parentId: parentId,
         replyToId: replyTo?.id,
+        mentionIds: mentionIds.isNotEmpty ? mentionIds : null,
       );
+      
+      // 清空已选择的@用户列表
+      _selectedMentions.clear();
 
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
@@ -873,9 +1548,20 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       print('创建评论响应: status=$status, body=$body'); // 调试日志
 
       if (status >= 200 && status < 300 && body != null) {
-        // 评论创建成功，等待 WebSocket 推送来更新列表（避免重复添加）
-        // 如果 WebSocket 没有推送，则手动刷新评论列表
-        _commentController.clear();
+      // 评论创建成功，等待 WebSocket 推送来更新列表（避免重复添加）
+      // 如果 WebSocket 没有推送，则手动刷新评论列表
+        setState(() {
+          _commentController.clear();
+          _selectedMentions.clear();
+          _showMentionList = false;
+          _mentionQuery = '';
+          _mentionStartIndex = -1;
+          _mentionCandidates.clear(); // 清空候选列表
+        });
+        
+        // 失去焦点，关闭键盘
+        _commentFocusNode.unfocus();
+        
         if (_currentReplyTo != null) {
           _cancelReply(); // 清除回复状态
         }
@@ -949,11 +1635,11 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   }
 
   void _openMoreActions() {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => SafeArea(
-        child: Wrap(
-          children: [
+            showModalBottomSheet(
+              context: context,
+              builder: (_) => SafeArea(
+                child: Wrap(
+                  children: [
             if (_isOwner)
               ListTile(
                 leading: const Icon(Icons.delete_forever, color: Colors.red),
@@ -966,30 +1652,30 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                   _confirmDeletePost();
                 },
               ),
-            ListTile(
-              leading: const Icon(Icons.flag),
-              title: const Text('举报'),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('已举报（演示）')),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.copy),
-              title: const Text('复制链接'),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('链接已复制（演示）')),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
+                    ListTile(
+                      leading: const Icon(Icons.flag),
+                      title: const Text('举报'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('已举报（演示）')),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.copy),
+                      title: const Text('复制链接'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('链接已复制（演示）')),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
   }
 
   Future<void> _confirmDeletePost() async {
@@ -1045,71 +1731,71 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     }
   }
 
-  Widget _buildMediaGallery() { 
+  Widget _buildMediaGallery() {
     // 根据帖子记录的宽高比自适应高度 
     final ratio = widget.post.imageAspectRatio == 0 ? 1.5 : widget.post.imageAspectRatio; 
-    return GestureDetector( 
-      onDoubleTap: _toggleLike, 
-      child: Stack( 
-        alignment: Alignment.center, 
-        children: [ 
+    return GestureDetector(
+      onDoubleTap: _toggleLike,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
           AspectRatio( 
             aspectRatio: ratio, 
-            child: PageView( 
+            child: PageView(
               children: _imageMedia.isNotEmpty ? _imageMedia.map((m) { 
-                // 判断是网络图片还是本地文件 
-                ImageProvider imageProvider; 
-                if (m.startsWith('http')) { 
-                  imageProvider = NetworkImage(m); 
+                      // 判断是网络图片还是本地文件
+                      ImageProvider imageProvider;
+                      if (m.startsWith('http')) {
+                        imageProvider = NetworkImage(m);
                   } 
                 else { 
-                  imageProvider = FileImage(File(m)); 
-                } 
-                return Image( 
-                  image: imageProvider, 
-                  fit: BoxFit.cover, 
-                  width: double.infinity, 
-                  errorBuilder: (_, __, ___) { 
-                    return Container( 
-                      color: Colors.grey[200], 
-                      child: const Center( 
-                        child: Icon( 
-                          Icons.broken_image, 
-                          size: 48, 
-                          color: Colors.grey, 
-                        ), 
-                      ), 
-                    ); 
-                  }, 
-                ); 
+                        imageProvider = FileImage(File(m));
+                      }
+                      return Image(
+                        image: imageProvider,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        errorBuilder: (_, __, ___) {
+                          return Container(
+                            color: Colors.grey[200],
+                            child: const Center(
+                              child: Icon(
+                                Icons.broken_image,
+                                size: 48,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          );
+                        },
+                      );
               }).toList() : [ 
-                Container( 
-                  color: Colors.grey[200], 
-                  child: const Center( 
-                    child: Icon( 
-                      Icons.image_not_supported, 
-                      size: 48, 
-                      color: Colors.grey, 
-                    ), 
-                  ), 
-                ), 
-              ],
-            ), 
+                      Container(
+                        color: Colors.grey[200],
+                        child: const Center(
+                          child: Icon(
+                            Icons.image_not_supported,
+                            size: 48,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                    ],
+            ),
           ), // 喜欢动画 
-          Positioned( 
+          Positioned(
             child: _showBigHeart ? ScaleTransition( 
-              scale: _heartScale, 
-              child: const Icon( 
-                Icons.favorite, 
-                color: Colors.redAccent, 
-                size: 100, 
-                ), 
+                    scale: _heartScale,
+                    child: const Icon(
+                      Icons.favorite,
+                      color: Colors.redAccent,
+                      size: 100,
+                    ),
               ) : const SizedBox.shrink(), 
-            ), 
-          ], 
-        ), 
-      ); 
-    }
+          ),
+        ],
+      ),
+    );
+  }
 
 
   Widget _buildAuthorRow() {
@@ -1469,6 +2155,81 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     );
   }
 
+  Future<void> _deleteComment(Comment comment, {required bool isTopLevel, Comment? parentComment}) async {
+    // 确认删除
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除评论'),
+        content: Text(isTopLevel 
+            ? '确定要删除这条评论吗？删除后所有回复也会被删除。'
+            : '确定要删除这条回复吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _isDeleting = true;
+    });
+
+    try {
+      final resp = await ApiService.deleteComment(widget.post.id, comment.id);
+      if (resp['statusCode'] == 204 || resp['statusCode'] == 200) {
+        // 从列表中移除评论
+        setState(() {
+          if (isTopLevel) {
+            // 计算需要减少的评论数（包括所有子回复）
+            final deletedCount = 1 + comment.replies.length;
+            _comments.removeWhere((c) => c.id == comment.id);
+            commentCount = (commentCount >= deletedCount) ? commentCount - deletedCount : 0;
+            widget.post.commentsCount = commentCount;
+          } else if (parentComment != null) {
+            // 找到父评论的索引
+            final parentIndex = _comments.indexWhere((c) => c.id == parentComment.id);
+            if (parentIndex != -1) {
+              // 重新创建父评论，移除被删除的回复
+              final updatedReplies = parentComment.replies.where((r) => r.id != comment.id).toList();
+              _comments[parentIndex] = Comment(
+                id: parentComment.id,
+                author: parentComment.author,
+                content: parentComment.content,
+                parentId: parentComment.parentId,
+                replyTo: parentComment.replyTo,
+                likesCount: parentComment.likesCount,
+                isLiked: parentComment.isLiked,
+                replies: updatedReplies,
+                createdAt: parentComment.createdAt,
+              );
+              commentCount = (commentCount > 0) ? commentCount - 1 : 0;
+              widget.post.commentsCount = commentCount;
+            }
+          }
+        });
+        _showSnack('评论已删除');
+      } else {
+        _showSnack('删除失败，请稍后重试');
+      }
+    } catch (e) {
+      _showSnack('删除失败: $e');
+    } finally {
+      setState(() {
+        _isDeleting = false;
+      });
+    }
+  }
+
   Widget _buildActionBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -1570,12 +2331,27 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                     vertical: 4,
                   ),
                   leading: _buildAvatarWidget(c.author.avatar, 16),
-                  title: Text(
+                  title: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
                     c.author.name,
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
+                        ),
+                      ),
+                      // 删除按钮（只有作者自己可以看到）
+                      if (_currentUserId != null && c.author.id == _currentUserId)
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          color: Colors.red[300],
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => _deleteComment(c, isTopLevel: true),
+                        ),
+                    ],
                   ),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1591,7 +2367,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                             ),
                           ),
                         ),
-                      Text(c.content, style: const TextStyle(fontSize: 13)),
+                      _buildCommentContentWithMentions(c.content, c.mentions),
                       Row(
                         children: [
                           Text(
@@ -1643,12 +2419,27 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                             vertical: 4,
                           ),
                           leading: _buildAvatarWidget(reply.author.avatar, 14),
-                          title: Text(
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
                             reply.author.name,
                             style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                             ),
+                                ),
+                              ),
+                              // 删除按钮（只有作者自己可以看到）
+                              if (_currentUserId != null && reply.author.id == _currentUserId)
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, size: 16),
+                                  color: Colors.red[300],
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  onPressed: () => _deleteComment(reply, isTopLevel: false, parentComment: c),
+                                ),
+                            ],
                           ),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1664,10 +2455,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                     ),
                                   ),
                                 ),
-                              Text(
-                                reply.content,
-                                style: const TextStyle(fontSize: 13),
-                              ),
+                              _buildCommentContentWithMentions(reply.content, reply.mentions),
                               Row(
                                 children: [
                                   Text(
@@ -1789,6 +2577,206 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // @用户选择列表 - 横向滚动，显示在输入框上方（类似小红书风格）
+            // 只有当_showMentionList为true时才显示列表（避免提交后还显示）
+            if (_showMentionList && (_selectedMentions.isNotEmpty || _mentionCandidates.isNotEmpty))
+              Container(
+                height: 100,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    bottom: BorderSide(color: Colors.grey[200]!, width: 0.5),
+                  ),
+                ),
+                child: _mentionCandidates.isEmpty && _selectedMentions.isEmpty
+                    ? const Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              '搜索用户中...',
+                              style: TextStyle(color: Colors.grey, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        itemCount: _selectedMentions.length + _mentionCandidates.where((u) => !_selectedMentions.containsKey(u.name.toLowerCase())).length,
+                        itemBuilder: (context, index) {
+                          // 先显示已选择的用户（带对勾），再显示未选择的候选用户
+                          if (index < _selectedMentions.length) {
+                            final user = _selectedMentions.values.elementAt(index);
+                            return Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => _toggleMentionUser(user),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  width: 65,
+                                  margin: const EdgeInsets.only(right: 10),
+                                  child: Stack(
+                                    children: [
+                                      Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.blue,
+                                                width: 2,
+                                              ),
+                                            ),
+                                            child: CircleAvatar(
+                                              radius: 24,
+                                              backgroundImage: user.avatar.isNotEmpty && 
+                                                  (user.avatar.startsWith('http://') || user.avatar.startsWith('https://'))
+                                                  ? NetworkImage(user.avatar)
+                                                  : null,
+                                              backgroundColor: Colors.blue[50],
+                                              child: user.avatar.isEmpty || 
+                                                  (!user.avatar.startsWith('http://') && !user.avatar.startsWith('https://'))
+                                                  ? Text(
+                                                      user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                                                      style: const TextStyle(
+                                                        fontSize: 18,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: Colors.blue,
+                                                      ),
+                                                    )
+                                                  : null,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Container(
+                                            constraints: const BoxConstraints(maxWidth: 65),
+                                            child: Text(
+                                              user.name,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.blue,
+                                                fontWeight: FontWeight.w500,
+                                                height: 1.2,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      // 对勾标记
+                                      Positioned(
+                                        top: 0,
+                                        right: 0,
+                                        child: Container(
+                                          width: 20,
+                                          height: 20,
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: Colors.white, width: 2),
+                                          ),
+                                          child: const Icon(
+                                            Icons.check,
+                                            size: 12,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          } else {
+                            // 显示未选择的候选用户（过滤掉已选择的）
+                            final unselectedCandidates = _mentionCandidates.where((u) => !_selectedMentions.containsKey(u.name.toLowerCase())).toList();
+                            final user = unselectedCandidates[index - _selectedMentions.length];
+                            return Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () {
+                                  print('[@功能] 点击了用户: ${user.name}');
+                                  // _selectMentionUser 内部已经处理了单选/多选模式的逻辑
+                                  _selectMentionUser(user);
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  width: 65,
+                                  margin: const EdgeInsets.only(right: 10),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.grey[300]!,
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: CircleAvatar(
+                                          radius: 24,
+                                          backgroundImage: user.avatar.isNotEmpty && 
+                                              (user.avatar.startsWith('http://') || user.avatar.startsWith('https://'))
+                                              ? NetworkImage(user.avatar)
+                                              : null,
+                                          backgroundColor: Colors.grey[200],
+                                          child: user.avatar.isEmpty || 
+                                              (!user.avatar.startsWith('http://') && !user.avatar.startsWith('https://'))
+                                              ? Text(
+                                                  user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                                                  style: const TextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.white,
+                                                  ),
+                                                )
+                                              : null,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        constraints: const BoxConstraints(maxWidth: 65),
+                                        child: Text(
+                                          user.name,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.black,
+                                            fontWeight: FontWeight.w500,
+                                            height: 1.2,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+              ),
             if (_currentReplyTo != null)
               Container(
                 padding: const EdgeInsets.symmetric(

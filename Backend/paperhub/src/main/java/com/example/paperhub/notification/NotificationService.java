@@ -111,6 +111,29 @@ public class NotificationService {
     }
 
     /**
+     * 创建@通知
+     */
+    @Transactional
+    public void createMentionNotification(User actor, Long postId, Long commentId, User mentionedUser) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+        Comment comment = commentId != null ? commentRepository.findById(commentId)
+                .orElse(null) : null;
+        
+        // 不给自己发通知
+        if (actor.getId().equals(mentionedUser.getId())) {
+            return;
+        }
+        
+        // 如果@的是帖子作者，且已经通过createCommentNotification发送了COMMENT通知，则不再发送MENTION通知
+        if (mentionedUser.getId().equals(post.getAuthor().getId())) {
+            return;
+        }
+        
+        createNotification(actor, mentionedUser, NotificationType.MENTION, post, comment);
+    }
+
+    /**
      * 创建关注通知
      */
     @Transactional
