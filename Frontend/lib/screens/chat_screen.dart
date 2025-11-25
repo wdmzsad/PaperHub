@@ -48,6 +48,24 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _initializeConversation();
     _scrollController.addListener(_scrollListener);
+    // 监听ChatService的状态变化
+    _chatService.addListener(_onChatServiceChanged);
+  }
+
+  @override
+  void dispose() {
+    _chatService.removeListener(_onChatServiceChanged);
+    _scrollController.removeListener(_scrollListener);
+    _scrollController.dispose();
+    _textController.dispose();
+    super.dispose();
+  }
+
+  void _onChatServiceChanged() {
+    // 当ChatService状态变化时，强制重建UI
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _initializeConversation() async {
@@ -125,13 +143,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _scrollController.removeListener(_scrollListener);
-    _scrollController.dispose();
-    _textController.dispose();
-    super.dispose();
-  }
 
   void _scrollListener() {
     // 当用户滚动到底部时，标记消息为已读

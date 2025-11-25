@@ -152,13 +152,15 @@ class ChatService extends ChangeNotifier {
         _syncUnreadBadges();
       } else {
         debugPrint('加载会话列表失败: ${result['body']['message']}');
-        // 失败时使用模拟数据作为降级方案
-        _initMockData();
+        // 失败时显示空列表
+        _conversations = [];
+        _syncUnreadBadges();
       }
     } catch (e) {
       debugPrint('加载会话列表失败: $e');
-      // 异常时使用模拟数据作为降级方案
-      _initMockData();
+      // 异常时显示空列表
+      _conversations = [];
+      _syncUnreadBadges();
     } finally {
       _isLoadingConversations = false;
       notifyListeners();
@@ -179,13 +181,13 @@ class ChatService extends ChangeNotifier {
         _messages = content.map((json) => Message.fromJson(json)).toList();
       } else {
         debugPrint('加载消息失败: ${result['body']['message']}');
-        // 失败时使用模拟数据作为降级方案
-        _initMockMessages(conversationId);
+        // 失败时显示空消息列表
+        _messages = [];
       }
     } catch (e) {
       debugPrint('加载消息失败: $e');
-      // 异常时使用模拟数据作为降级方案
-      _initMockMessages(conversationId);
+      // 异常时显示空消息列表
+      _messages = [];
     } finally {
       _isLoadingMessages = false;
       notifyListeners();
@@ -308,13 +310,31 @@ class ChatService extends ChangeNotifier {
     loadMessages(conversation.id);
   }
 
+  /// 将后端返回的ConversationResponse转换为前端的Conversation模型
+  Conversation _convertConversationResponseToConversation(Map<String, dynamic> responseBody) {
+    return Conversation(
+      id: responseBody['id']?.toString() ?? '', // 将数字ID转换为字符串
+      name: responseBody['displayName'] ?? '', // 使用displayName作为name
+      avatar: responseBody['displayAvatar'], // 使用displayAvatar作为avatar
+      type: ConversationType.private, // 私聊会话固定为private类型
+      lastMessage: null, // 新会话没有最后一条消息
+      unreadCount: responseBody['unreadCount'] ?? 0,
+      updatedAt: DateTime.parse(responseBody['updatedAt'] ?? DateTime.now().toIso8601String()),
+      participants: [], // 新会话暂时没有参与者信息
+      isOnline: responseBody['isOnline'] ?? false,
+      isTyping: false,
+    );
+  }
+
   /// 创建或获取私聊会话
   Future<Conversation?> createOrGetPrivateConversation(String targetUserId) async {
     try {
       final result = await ApiService.createOrGetConversation(targetUserId);
 
       if (result['statusCode'] == 200) {
-        final conversation = Conversation.fromJson(result['body']);
+        // 将后端返回的ConversationResponse转换为前端的Conversation模型
+        final responseBody = result['body'];
+        final conversation = _convertConversationResponseToConversation(responseBody);
 
         // 添加到会话列表
         final existingIndex = _conversations.indexWhere((c) => c.id == conversation.id);
@@ -326,6 +346,10 @@ class ChatService extends ChangeNotifier {
 
         // 重新排序
         _conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+        // 自动设置为当前会话
+        setCurrentConversation(conversation);
+
         notifyListeners();
 
         return conversation;

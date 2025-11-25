@@ -17,7 +17,7 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
 
     @Query("SELECT c FROM Conversation c JOIN ConversationParticipant cp1 ON c.id = cp1.conversation.id " +
            "JOIN ConversationParticipant cp2 ON c.id = cp2.conversation.id " +
-           "WHERE cp1.userId = :userId1 AND cp2.userId = :userId2 AND c.type = 'PRIVATE'")
+           "WHERE cp1.userId = :userId1 AND cp2.userId = :userId2 AND c.type = com.example.paperhub.chat.ConversationType.PRIVATE")
     Optional<Conversation> findPrivateConversationBetweenUsers(
             @Param("userId1") Long userId1,
             @Param("userId2") Long userId2);

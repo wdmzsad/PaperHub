@@ -18,6 +18,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'home_screen.dart';
 import 'message_screen.dart';
 import 'post_detail_screen.dart';
+import 'chat_screen.dart';
 
 class ProfilePage extends StatefulWidget {
   final String? userId;
@@ -406,8 +407,12 @@ class _ProfilePageState extends State<ProfilePage>
       }
 
       if (conversation != null) {
-        // Navigate to chat interface
-        Navigator.of(context).pushNamed('/chat/${conversation.id}');
+        // Navigate to chat interface with the full conversation object
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(conversation: conversation),
+          ),
+        );
       } else {
         _showSnack('创建会话失败，请稍后重试');
       }

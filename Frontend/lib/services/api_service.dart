@@ -882,9 +882,10 @@ class ApiService {
   /// 获取会话列表
   /// GET /api/conversations
   static Future<Map<String, dynamic>> getConversations() async {
+    final uri = Uri.parse('$baseUrl/api/conversations');
     return await _makeRequest(
       () => http.get(
-        Uri.parse('$baseUrl/api/conversations'),
+        uri,
         headers: _buildHeaders(),
       ),
       '/api/conversations',
@@ -894,9 +895,10 @@ class ApiService {
   /// 创建或获取私聊会话
   /// POST /api/conversations
   static Future<Map<String, dynamic>> createOrGetConversation(String targetUserId) async {
+    final uri = Uri.parse('$baseUrl/api/conversations');
     return await _makeRequest(
       () => http.post(
-        Uri.parse('$baseUrl/api/conversations'),
+        uri,
         headers: _buildHeaders(),
         body: jsonEncode({'targetUserId': int.tryParse(targetUserId) ?? 0}),
       ),
@@ -914,7 +916,7 @@ class ApiService {
     final uri = Uri.parse('$baseUrl/api/conversations/$conversationId/messages').replace(
       queryParameters: {
         'page': page.toString(),
-        'pageSize': pageSize.toString(),
+        'size': pageSize.toString(),
       },
     );
     return await _makeRequest(
@@ -933,9 +935,10 @@ class ApiService {
     String? fileName,
     int? fileSize,
   }) async {
+    final uri = Uri.parse('$baseUrl/api/conversations/$conversationId/messages');
     return await _makeRequest(
       () => http.post(
-        Uri.parse('$baseUrl/api/conversations/$conversationId/messages'),
+        uri,
         headers: _buildHeaders(),
         body: jsonEncode({
           'content': content,
@@ -952,9 +955,10 @@ class ApiService {
   /// 标记会话为已读
   /// PUT /api/conversations/{conversationId}/read
   static Future<Map<String, dynamic>> markConversationAsRead(String conversationId) async {
+    final uri = Uri.parse('$baseUrl/api/conversations/$conversationId/read');
     return await _makeRequest(
       () => http.put(
-        Uri.parse('$baseUrl/api/conversations/$conversationId/read'),
+        uri,
         headers: _buildHeaders(),
       ),
       '/api/conversations/$conversationId/read',

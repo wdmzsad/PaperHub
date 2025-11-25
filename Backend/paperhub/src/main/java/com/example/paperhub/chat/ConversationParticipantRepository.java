@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -18,6 +19,7 @@ public interface ConversationParticipantRepository extends JpaRepository<Convers
     Optional<ConversationParticipant> findByConversationIdAndUserId(Long conversationId, Long userId);
 
     @Modifying
+    @Transactional
     @Query("UPDATE ConversationParticipant cp SET cp.lastReadAt = :lastReadAt " +
            "WHERE cp.conversation.id = :conversationId AND cp.userId = :userId")
     void updateLastReadAt(@Param("conversationId") Long conversationId,

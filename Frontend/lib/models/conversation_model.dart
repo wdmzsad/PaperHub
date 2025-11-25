@@ -32,9 +32,9 @@ class Conversation {
 
   factory Conversation.fromJson(Map<String, dynamic> json) {
     return Conversation(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
-      avatar: json['avatar'],
+      id: json['id']?.toString() ?? '',
+      name: json['displayName'] ?? '',
+      avatar: json['displayAvatar'],
       type: ConversationType.values.firstWhere(
         (e) => e.toString() == 'ConversationType.${json['type']}',
         orElse: () => ConversationType.private,
@@ -135,7 +135,7 @@ class ConversationParticipant {
 
   factory ConversationParticipant.fromJson(Map<String, dynamic> json) {
     return ConversationParticipant(
-      id: json['id'] ?? '',
+      id: json['id']?.toString() ?? '',
       name: json['name'] ?? '',
       avatar: json['avatar'],
       isMe: json['isMe'] ?? false,
