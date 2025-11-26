@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/message_model.dart';
+import 'dart:html' as html if (dart.library.io) 'dart:io';
 
 class MessageBubble extends StatelessWidget {
   final Message message;
@@ -636,9 +637,19 @@ class MessageBubble extends StatelessWidget {
   }
 
   Future<void> _openFile(String url) async {
+    final fileName = message.fileName ?? _getFileName(url);
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+    // Web平台：使用download属性
+    try {
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', fileName)
+        ..click();
+    } catch (e) {
+      // 非Web平台：直接打开URL
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
     }
   }
 }

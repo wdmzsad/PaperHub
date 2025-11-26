@@ -168,9 +168,11 @@ class ChatService extends ChangeNotifier {
   }
 
   /// 获取指定会话的消息列表
-  Future<void> loadMessages(String conversationId) async {
-    _isLoadingMessages = true;
-    notifyListeners();
+  Future<void> loadMessages(String conversationId, {bool silent = false}) async {
+    if (!silent) {
+      _isLoadingMessages = true;
+      notifyListeners();
+    }
 
     try {
       final result = await ApiService.getConversationMessages(conversationId);
@@ -178,19 +180,22 @@ class ChatService extends ChangeNotifier {
       if (result['statusCode'] == 200) {
         final Map<String, dynamic> data = result['body'];
         final List<dynamic> content = data['content'] ?? [];
-        // 后端返回的消息是按时间降序（最新的在前），需要反转以显示最早的在顶部
         _messages = content.map((json) => Message.fromJson(json)).toList().reversed.toList();
       } else {
         debugPrint('加载消息失败: ${result['body']['message']}');
-        // 失败时显示空消息列表
-        _messages = [];
+        if (!silent) {
+          _messages = [];
+        }
       }
     } catch (e) {
       debugPrint('加载消息失败: $e');
-      // 异常时显示空消息列表
-      _messages = [];
+      if (!silent) {
+        _messages = [];
+      }
     } finally {
-      _isLoadingMessages = false;
+      if (!silent) {
+        _isLoadingMessages = false;
+      }
       notifyListeners();
     }
   }

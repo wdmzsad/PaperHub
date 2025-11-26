@@ -11,6 +11,7 @@
 /// - 遵循PaperHub设计语言
 /// - 清晰的消息气泡区分
 /// - 流畅的动画效果
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
@@ -42,18 +43,24 @@ class _ChatScreenState extends State<ChatScreen> {
   String _typingUser = '';
   bool _loadingConversation = false;
   Conversation? _loadedConversation;
+  bool _initialLoadComplete = false;
+  int _previousMessageCount = 0;
+
+  // 轮询配置
+  Timer? _pollingTimer;
+  static const Duration _pollingInterval = Duration(seconds: 2);
 
   @override
   void initState() {
     super.initState();
     _initializeConversation();
     _scrollController.addListener(_scrollListener);
-    // 监听ChatService的状态变化
     _chatService.addListener(_onChatServiceChanged);
   }
 
   @override
   void dispose() {
+    _pollingTimer?.cancel();
     _chatService.removeListener(_onChatServiceChanged);
     _scrollController.removeListener(_scrollListener);
     _scrollController.dispose();
@@ -62,33 +69,49 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _onChatServiceChanged() {
-    // 当ChatService状态变化时，强制重建UI
-    if (mounted) {
+    if (mounted && !_chatService.isLoadingMessages) {
+      final currentCount = _chatService.messages.length;
+      final shouldScroll = currentCount > _previousMessageCount && _isNearBottom();
+
       setState(() {});
+
+      if (shouldScroll) {
+        _scrollToBottom();
+      }
+      _previousMessageCount = currentCount;
     }
   }
 
+  bool _isNearBottom() {
+    if (!_scrollController.hasClients) return true;
+    final position = _scrollController.position;
+    return position.maxScrollExtent - position.pixels < 100;
+  }
+
   void _initializeConversation() async {
-    // If conversation object is provided directly, use it
     if (widget.conversation != null) {
       _chatService.setCurrentConversation(widget.conversation!);
+      await _chatService.loadMessages(widget.conversation!.id);
+      setState(() {
+        _initialLoadComplete = true;
+        _previousMessageCount = _chatService.messages.length;
+      });
+      _scrollToBottom();
+      _startPolling();
       return;
     }
 
-    // If only conversationId is provided, load the conversation from API
     if (widget.conversationId != null) {
       setState(() {
         _loadingConversation = true;
       });
 
       try {
-        // Load conversation details from API
         final result = await ApiService.getConversations();
         if (result['statusCode'] == 200) {
           final List<dynamic> data = result['body'];
           final conversations = data.map((json) => Conversation.fromJson(json)).toList();
 
-          // Find the conversation with matching ID
           final conversation = conversations.firstWhere(
             (c) => c.id == widget.conversationId,
             orElse: () => Conversation(
@@ -106,8 +129,14 @@ class _ChatScreenState extends State<ChatScreen> {
           });
 
           _chatService.setCurrentConversation(conversation);
+          await _chatService.loadMessages(conversation.id);
+          setState(() {
+            _initialLoadComplete = true;
+            _previousMessageCount = _chatService.messages.length;
+          });
+          _scrollToBottom();
+          _startPolling();
         } else {
-          // Fallback: create a basic conversation object
           final fallbackConversation = Conversation(
             id: widget.conversationId!,
             name: 'Unknown User',
@@ -122,9 +151,15 @@ class _ChatScreenState extends State<ChatScreen> {
           });
 
           _chatService.setCurrentConversation(fallbackConversation);
+          await _chatService.loadMessages(fallbackConversation.id);
+          setState(() {
+            _initialLoadComplete = true;
+            _previousMessageCount = _chatService.messages.length;
+          });
+          _scrollToBottom();
+          _startPolling();
         }
       } catch (e) {
-        // Fallback on error
         final fallbackConversation = Conversation(
           id: widget.conversationId!,
           name: 'Unknown User',
@@ -139,6 +174,13 @@ class _ChatScreenState extends State<ChatScreen> {
         });
 
         _chatService.setCurrentConversation(fallbackConversation);
+        await _chatService.loadMessages(fallbackConversation.id);
+        setState(() {
+          _initialLoadComplete = true;
+          _previousMessageCount = _chatService.messages.length;
+        });
+        _scrollToBottom();
+        _startPolling();
       }
     }
   }
@@ -150,6 +192,19 @@ class _ChatScreenState extends State<ChatScreen> {
     if (conversation != null && _scrollController.offset >= _scrollController.position.maxScrollExtent - 100) {
       _chatService.markAsRead(conversation.id);
     }
+  }
+
+  void _startPolling() {
+    _pollingTimer = Timer.periodic(_pollingInterval, (timer) {
+      _refreshMessages();
+    });
+  }
+
+  Future<void> _refreshMessages() async {
+    final conversation = widget.conversation ?? _loadedConversation;
+    if (conversation == null || !_initialLoadComplete) return;
+
+    await _chatService.loadMessages(conversation.id, silent: true);
   }
 
   void _onSendMessage(String content) {
@@ -164,6 +219,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
 
     _textController.clear();
+    _previousMessageCount = _chatService.messages.length;
     _scrollToBottom();
   }
 
@@ -186,6 +242,7 @@ class _ChatScreenState extends State<ChatScreen> {
       fileSize: fileSize,
     );
 
+    _previousMessageCount = _chatService.messages.length;
     _scrollToBottom();
   }
 
@@ -372,7 +429,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildMessageList() {
-    if (_chatService.isLoadingMessages) {
+    if (!_initialLoadComplete) {
       return _buildLoadingView();
     }
 
