@@ -959,6 +959,8 @@ class ApiService {
     List<String> mediaUrls, {
     String type = 'IMAGE',
     String content = '',
+    String? fileName,
+    int? fileSize,
   }) async {
     final uri = Uri.parse('$baseUrl/api/conversations/$conversationId/messages');
     return await _makeRequest(
@@ -969,6 +971,8 @@ class ApiService {
           'content': content,
           'type': type,
           'mediaUrls': mediaUrls,
+          if (fileName != null) 'fileName': fileName,
+          if (fileSize != null) 'fileSize': fileSize,
         }),
       ),
       '/api/conversations/$conversationId/messages',

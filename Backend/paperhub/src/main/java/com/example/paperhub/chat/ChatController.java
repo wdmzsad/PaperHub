@@ -125,7 +125,9 @@ public class ChatController {
                 user.getId(),
                 request.getContent(),
                 request.getType() != null ? request.getType() : MessageType.IMAGE,
-                request.getMediaUrls()
+                request.getMediaUrls(),
+                request.getFileName(),
+                request.getFileSize()
             );
         } else {
             // 否则使用旧的方法

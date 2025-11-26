@@ -204,7 +204,7 @@ public class ChatService {
      */
     @Transactional
     public Message sendMessageWithMedia(Long conversationId, Long senderId, String content,
-                                       MessageType type, List<String> mediaUrls) {
+                                       MessageType type, List<String> mediaUrls, String fileName, Long fileSize) {
         if (!conversationParticipantRepository.existsByConversationIdAndUserId(conversationId, senderId)) {
             return null;
         }
@@ -220,6 +220,14 @@ public class ChatService {
         message.setContent(content);
         message.setType(type);
         message.setMediaUrls(mediaUrls != null ? mediaUrls : new ArrayList<>());
+
+        // 设置文件元数据
+        if (mediaUrls != null && !mediaUrls.isEmpty()) {
+            message.setFileUrl(mediaUrls.get(0));
+        }
+        message.setFileName(fileName);
+        message.setFileSize(fileSize);
+
         message.setCreatedAt(LocalDateTime.now());
 
         Message savedMessage = messageRepository.save(message);

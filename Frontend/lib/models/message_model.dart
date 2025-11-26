@@ -10,6 +10,9 @@ class Message {
   final String content;
   final MessageType type;
   final List<String> mediaUrls;
+  final String? fileUrl;
+  final String? fileName;
+  final int? fileSize;
   final DateTime createdAt;
   final MessageStatus status;
   final bool isMe;
@@ -23,12 +26,35 @@ class Message {
     required this.content,
     this.type = MessageType.text,
     this.mediaUrls = const [],
+    this.fileUrl,
+    this.fileName,
+    this.fileSize,
     required this.createdAt,
     this.status = MessageStatus.sent,
     this.isMe = false,
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
+    String typeStr = (json['type'] ?? 'TEXT').toString().toUpperCase();
+    MessageType messageType = MessageType.text;
+
+    switch (typeStr) {
+      case 'IMAGE':
+        messageType = MessageType.image;
+        break;
+      case 'FILE':
+        messageType = MessageType.file;
+        break;
+      case 'VOICE':
+        messageType = MessageType.voice;
+        break;
+      case 'SYSTEM':
+        messageType = MessageType.system;
+        break;
+      default:
+        messageType = MessageType.text;
+    }
+
     return Message(
       id: json['id']?.toString() ?? '',
       conversationId: json['conversationId']?.toString() ?? '',
@@ -36,13 +62,13 @@ class Message {
       senderName: json['senderName'] ?? '',
       senderAvatar: json['senderAvatar'] ?? '',
       content: json['content'] ?? '',
-      type: MessageType.values.firstWhere(
-        (e) => e.toString() == 'MessageType.${json['type']}'.toLowerCase(),
-        orElse: () => MessageType.text,
-      ),
+      type: messageType,
       mediaUrls: json['mediaUrls'] != null
           ? List<String>.from(json['mediaUrls'])
           : [],
+      fileUrl: json['fileUrl'],
+      fileName: json['fileName'],
+      fileSize: json['fileSize'],
       createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
       status: MessageStatus.values.firstWhere(
         (e) => e.toString() == 'MessageStatus.${json['status']}',
@@ -62,6 +88,9 @@ class Message {
       'content': content,
       'type': type.toString().split('.').last.toUpperCase(),
       'mediaUrls': mediaUrls,
+      if (fileUrl != null) 'fileUrl': fileUrl,
+      if (fileName != null) 'fileName': fileName,
+      if (fileSize != null) 'fileSize': fileSize,
       'createdAt': createdAt.toIso8601String(),
       'status': status.toString().split('.').last,
       'isMe': isMe,
@@ -77,6 +106,9 @@ class Message {
     String? content,
     MessageType? type,
     List<String>? mediaUrls,
+    String? fileUrl,
+    String? fileName,
+    int? fileSize,
     DateTime? createdAt,
     MessageStatus? status,
     bool? isMe,
@@ -90,6 +122,9 @@ class Message {
       content: content ?? this.content,
       type: type ?? this.type,
       mediaUrls: mediaUrls ?? this.mediaUrls,
+      fileUrl: fileUrl ?? this.fileUrl,
+      fileName: fileName ?? this.fileName,
+      fileSize: fileSize ?? this.fileSize,
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
       isMe: isMe ?? this.isMe,

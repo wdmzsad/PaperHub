@@ -167,7 +167,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
   }
 
-  void _onSendMedia(List<String> mediaUrls, String messageType) {
+  void _onSendMedia(List<String> mediaUrls, String messageType, String fileName, int fileSize) {
     final conversation = widget.conversation ?? _loadedConversation;
     if (conversation == null) return;
 
@@ -182,6 +182,8 @@ class _ChatScreenState extends State<ChatScreen> {
       conversationId: conversation.id,
       mediaUrls: mediaUrls,
       type: type,
+      fileName: fileName,
+      fileSize: fileSize,
     );
 
     _scrollToBottom();

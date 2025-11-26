@@ -17,7 +17,7 @@ import '../config/app_env.dart';
 class ChatInput extends StatefulWidget {
   final TextEditingController controller;
   final Function(String) onSend;
-  final Function(List<String> mediaUrls, String messageType)? onSendMedia;
+  final Function(List<String> mediaUrls, String messageType, String fileName, int fileSize)? onSendMedia;
   final String hintText;
   final bool enabled;
   final int maxLines;
@@ -283,7 +283,7 @@ class _ChatInputState extends State<ChatInput> {
       Navigator.pop(context);
 
       if (url != null && widget.onSendMedia != null) {
-        widget.onSendMedia!([url], messageType);
+        widget.onSendMedia!([url], messageType, fileName, bytes.length);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('上传失败，未获取到文件URL')),

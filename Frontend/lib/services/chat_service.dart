@@ -296,6 +296,8 @@ class ChatService extends ChangeNotifier {
     required List<String> mediaUrls,
     String content = '',
     MessageType type = MessageType.image,
+    String? fileName,
+    int? fileSize,
   }) async {
     final newMessage = Message(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -321,6 +323,8 @@ class ChatService extends ChangeNotifier {
         mediaUrls,
         type: _convertMessageType(type),
         content: content,
+        fileName: fileName,
+        fileSize: fileSize,
       );
 
       if (result['statusCode'] == 200) {

@@ -6,6 +6,7 @@
 /// - 支持不同消息类型
 /// - 头像和时间显示
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/message_model.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -180,47 +181,56 @@ class MessageBubble extends StatelessWidget {
           : CrossAxisAlignment.start,
       children: [
         ...message.mediaUrls.map(
-          (url) => Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.6,
-              maxHeight: 300,
-            ),
-            margin: const EdgeInsets.only(bottom: 4),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.grey[100],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                url,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    height: 200,
-                    color: Colors.grey[200],
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                            : null,
+          (url) => GestureDetector(
+            onTap: () => _showImagePreview(context, url),
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.6,
+                maxHeight: 300,
+              ),
+              margin: const EdgeInsets.only(bottom: 4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.grey[100],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      height: 200,
+                      color: Colors.grey[200],
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                              : null,
+                        ),
                       ),
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    height: 200,
-                    color: Colors.grey[200],
-                    child: const Icon(
-                      Icons.broken_image,
-                      size: 48,
-                      color: Colors.grey,
-                    ),
-                  );
-                },
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      height: 200,
+                      color: Colors.grey[200],
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                          const SizedBox(height: 8),
+                          Text(
+                            '图片加载失败',
+                            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -247,76 +257,186 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildFileMessage(BuildContext context) {
-    if (message.mediaUrls.isEmpty) {
-      return _buildTextMessage(context);
-    }
+  void _showImagePreview(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    );
+                  },
+                ),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-    return Column(
-      crossAxisAlignment: message.isMe
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: [
-        ...message.mediaUrls.map(
-          (url) => Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.7,
+  Widget _buildFileMessage(BuildContext context) {
+    final fileUrl = message.fileUrl ?? (message.mediaUrls.isNotEmpty ? message.mediaUrls.first : null);
+    if (fileUrl == null) return _buildTextMessage(context);
+
+    final fileName = message.fileName ?? _getFileName(fileUrl);
+    final fileSize = message.fileSize;
+
+    return GestureDetector(
+      onTap: () => _openFile(fileUrl),
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.7,
+        ),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: message.isMe ? const Color(0xFF1976D2) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
             ),
-            margin: const EdgeInsets.only(bottom: 4),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: message.isMe ? const Color(0xFF1976D2) : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _getFileIconFromName(fileName),
+              color: message.isMe ? Colors.white : const Color(0xFF1976D2),
+              size: 32,
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.insert_drive_file_outlined,
-                  color: message.isMe ? Colors.white : Colors.grey[600],
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    url.split('/').last,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    fileName,
                     style: TextStyle(
                       color: message.isMe ? Colors.white : Colors.black87,
                       fontSize: 14,
+                      fontWeight: FontWeight.w500,
                     ),
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (message.content.isNotEmpty)
-          Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.7,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: message.isMe ? const Color(0xFF1976D2) : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              message.content,
-              style: TextStyle(
-                color: message.isMe ? Colors.white : Colors.black87,
-                fontSize: 14,
+                  const SizedBox(height: 4),
+                  Text(
+                    fileSize != null ? _formatFileSize(fileSize) : _getFileExtension(fileName).toUpperCase(),
+                    style: TextStyle(
+                      color: message.isMe ? Colors.white70 : Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.download,
+              color: message.isMe ? Colors.white70 : Colors.grey[400],
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getFileIcon(String url) {
+    String ext = _getFileExtension(url).toLowerCase();
+    switch (ext) {
+      case 'pdf':
+        return Icons.picture_as_pdf;
+      case 'doc':
+      case 'docx':
+        return Icons.description;
+      case 'xls':
+      case 'xlsx':
+        return Icons.table_chart;
+      case 'ppt':
+      case 'pptx':
+        return Icons.slideshow;
+      case 'zip':
+      case 'rar':
+      case '7z':
+        return Icons.folder_zip;
+      case 'txt':
+        return Icons.text_snippet;
+      default:
+        return Icons.insert_drive_file;
+    }
+  }
+
+  String _getFileName(String url) {
+    return url.split('/').last.split('?').first;
+  }
+
+  String _getFileExtension(String url) {
+    String fileName = _getFileName(url);
+    if (fileName.contains('.')) {
+      return fileName.split('.').last;
+    }
+    return 'file';
+  }
+
+  void _showFilePreview(BuildContext context, String fileUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(_getFileName(fileUrl)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_getFileIcon(fileUrl), size: 64, color: const Color(0xFF1976D2)),
+            const SizedBox(height: 16),
+            Text('文件类型: ${_getFileExtension(fileUrl).toUpperCase()}'),
+            const SizedBox(height: 8),
+            Text(
+              '点击下载按钮保存文件',
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('关闭'),
           ),
-      ],
+          ElevatedButton.icon(
+            onPressed: () {
+              // TODO: 实现文件下载
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('文件下载功能开发中')),
+              );
+            },
+            icon: const Icon(Icons.download),
+            label: const Text('下载'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -477,6 +597,48 @@ class MessageBubble extends StatelessWidget {
       return '昨天 ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
     } else {
       return '${dateTime.month}/${dateTime.day}';
+    }
+  }
+
+  IconData _getFileIconFromName(String fileName) {
+    String ext = _getFileExtension(fileName).toLowerCase();
+    switch (ext) {
+      case 'pdf':
+        return Icons.picture_as_pdf;
+      case 'doc':
+      case 'docx':
+        return Icons.description;
+      case 'xls':
+      case 'xlsx':
+        return Icons.table_chart;
+      case 'ppt':
+      case 'pptx':
+        return Icons.slideshow;
+      case 'zip':
+      case 'rar':
+      case '7z':
+        return Icons.folder_zip;
+      case 'txt':
+        return Icons.text_snippet;
+      default:
+        return Icons.insert_drive_file;
+    }
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) {
+      return '$bytes B';
+    } else if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    } else {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+  }
+
+  Future<void> _openFile(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 }
