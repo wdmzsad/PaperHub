@@ -8,7 +8,8 @@ public class CommentDtos {
     public record CreateCommentReq(
         @NotBlank String content,
         Long parentId,  // 可选，用于回复
-        Long replyToId  // 可选，被回复的用户ID
+        Long replyToId,  // 可选，被回复的用户ID
+        java.util.List<Long> mentionIds  // 可选，被@的用户ID列表
     ) {}
 
     // 更新评论请求
@@ -31,7 +32,8 @@ public class CommentDtos {
         int likesCount,
         boolean isLiked,
         String createdAt,
-        java.util.List<CommentResp> replies
+        java.util.List<CommentResp> replies,
+        java.util.List<AuthorInfo> mentions  // 被@的用户列表
     ) {}
     
     // 评论列表响应

@@ -293,5 +293,60 @@ public class UserController {
                 pageSize
         ));
     }
+
+    /**
+     * 搜索用户（用于@功能）
+     * GET /users/search?q=name&type=following|all
+     * type=following: 只搜索关注的人
+     * type=all: 搜索所有用户
+     */
+    @GetMapping("/search")
+    public ResponseEntity<UserDtos.UserListResp> searchUsers(
+            @RequestParam String q,
+            @RequestParam(defaultValue = "all") String type,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @AuthenticationPrincipal User currentUser) {
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(new UserDtos.UserListResp(
+                    List.of(), 0, page, pageSize));
+        }
+
+        List<User> users;
+        if ("following".equals(type)) {
+            // 只搜索关注的人
+            Page<UserFollow> followingPage = followService.getFollowing(
+                    currentUser.getId(), PageRequest.of(page, pageSize));
+            users = followingPage.getContent().stream()
+                    .map(UserFollow::getFollowing)
+                    .filter(u -> {
+                        String name = u.getName();
+                        if (name == null || name.isEmpty()) {
+                            name = u.getEmail();
+                        }
+                        return name != null && name.toLowerCase().contains(q.toLowerCase());
+                    })
+                    .toList();
+            return ResponseEntity.ok(new UserDtos.UserListResp(
+                    users.stream().map(u -> userService.toProfile(u, currentUser)).toList(),
+                    users.size(),
+                    page,
+                    pageSize
+            ));
+        } else {
+            // 搜索所有用户
+            List<User> allUsers = userRepository.findByNameContainingIgnoreCase(q);
+            // 分页处理
+            int start = page * pageSize;
+            int end = Math.min(start + pageSize, allUsers.size());
+            users = start < allUsers.size() ? allUsers.subList(start, end) : List.of();
+            return ResponseEntity.ok(new UserDtos.UserListResp(
+                    users.stream().map(u -> userService.toProfile(u, currentUser)).toList(),
+                    allUsers.size(),
+                    page,
+                    pageSize
+            ));
+        }
+    }
 }
 

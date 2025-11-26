@@ -2,6 +2,7 @@ package com.example.paperhub.comment;
 
 import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
+import com.example.paperhub.like.CommentLikeRepository;
 import com.example.paperhub.notification.NotificationService;
 import com.example.paperhub.post.Post;
 import com.example.paperhub.post.PostRepository;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -24,18 +26,21 @@ public class CommentService {
     private final UserRepository userRepository;
     private final PostService postService;
     private final NotificationService notificationService;
+    private final CommentLikeRepository commentLikeRepository;
 
     public CommentService(
             CommentRepository commentRepository,
             PostRepository postRepository,
             UserRepository userRepository,
             PostService postService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            CommentLikeRepository commentLikeRepository) {
         this.commentRepository = commentRepository;
         this.postRepository = postRepository;
         this.userRepository = userRepository;
         this.postService = postService;
         this.notificationService = notificationService;
+        this.commentLikeRepository = commentLikeRepository;
     }
 
     /**
@@ -55,7 +60,7 @@ public class CommentService {
      * 创建评论
      */
     @Transactional
-    public Comment createComment(Long postId, String content, User author, Long parentId, Long replyToId) {
+    public Comment createComment(Long postId, String content, User author, Long parentId, Long replyToId, List<Long> mentionIds) {
         Post post = postRepository.findById(postId)
             .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
         
@@ -65,6 +70,13 @@ public class CommentService {
         comment.setContent(content);
         comment.setCreatedAt(Instant.now());
         comment.setUpdatedAt(Instant.now());
+        
+        // 存储被@的用户ID列表（JSON格式）
+        if (mentionIds != null && !mentionIds.isEmpty()) {
+            comment.setMentionIds(mentionIds.stream()
+                .map(String::valueOf)
+                .collect(Collectors.joining(",")));
+        }
 
         // 如果是回复
         if (parentId != null) {
@@ -88,6 +100,22 @@ public class CommentService {
         // 创建通知
         try {
             notificationService.createCommentNotification(author, postId, saved.getId(), replyToId != null ? userRepository.findById(replyToId).orElse(null) : null);
+            
+            // 创建@通知
+            if (mentionIds != null && !mentionIds.isEmpty()) {
+                for (Long mentionId : mentionIds) {
+                    if (mentionId != null && !mentionId.equals(author.getId())) {
+                        try {
+                            User mentionedUser = userRepository.findById(mentionId).orElse(null);
+                            if (mentionedUser != null) {
+                                notificationService.createMentionNotification(author, postId, saved.getId(), mentionedUser);
+                            }
+                        } catch (Exception e) {
+                            System.err.println("创建@通知失败: " + e.getMessage());
+                        }
+                    }
+                }
+            }
         } catch (Exception e) {
             // 通知创建失败不影响评论操作
             System.err.println("创建评论通知失败: " + e.getMessage());
@@ -130,16 +158,58 @@ public class CommentService {
             throw new IllegalArgumentException("无权删除此评论");
         }
 
-        // 如果有子回复，需要先删除子回复
+        // 判断是否为顶层评论
+        boolean isTopLevel = comment.getParent() == null;
+        
+        if (isTopLevel) {
+            // 如果是顶层评论，收集所有子回复（包括嵌套的）
+            List<Long> allCommentIds = new ArrayList<>();
+            allCommentIds.add(commentId);
+            collectAllReplyIds(commentId, allCommentIds);
+            
+            // 先删除所有相关评论的点赞记录
+            if (!allCommentIds.isEmpty()) {
+                commentLikeRepository.deleteByCommentIdIn(allCommentIds);
+            }
+            
+            // 递归删除所有子回复（从最深层开始）
+            deleteCommentRecursively(commentId);
+            
+            // 更新帖子的评论数（减少所有删除的评论数）
+            int totalDeleted = allCommentIds.size();
+            for (int i = 0; i < totalDeleted; i++) {
+                postService.decrementCommentsCount(comment.getPost().getId());
+            }
+        } else {
+            // 如果是楼中楼，只删除该评论的点赞记录和评论本身
+            commentLikeRepository.deleteByCommentIdIn(List.of(commentId));
+            commentRepository.delete(comment);
+            
+            // 更新帖子的评论数
+            postService.decrementCommentsCount(comment.getPost().getId());
+        }
+    }
+    
+    /**
+     * 递归收集所有子回复的ID
+     */
+    private void collectAllReplyIds(Long parentId, List<Long> commentIds) {
+        List<Comment> replies = commentRepository.findByParentIdOrderByCreatedAtAsc(parentId);
+        for (Comment reply : replies) {
+            commentIds.add(reply.getId());
+            collectAllReplyIds(reply.getId(), commentIds); // 递归收集嵌套回复
+        }
+    }
+    
+    /**
+     * 递归删除评论及其所有子回复（点赞记录已在外部批量删除）
+     */
+    private void deleteCommentRecursively(Long commentId) {
         List<Comment> replies = commentRepository.findByParentIdOrderByCreatedAtAsc(commentId);
         for (Comment reply : replies) {
-            commentRepository.delete(reply);
+            deleteCommentRecursively(reply.getId()); // 先递归删除子回复
         }
-
-        commentRepository.delete(comment);
-        
-        // 更新帖子的评论数
-        postService.decrementCommentsCount(comment.getPost().getId());
+        commentRepository.deleteById(commentId); // 再删除自己
     }
 
     /**

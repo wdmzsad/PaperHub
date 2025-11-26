@@ -11,6 +11,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,11 +23,13 @@ public class CommentController {
     private final CommentService commentService;
     private final LikeService likeService;
     private final WebSocketService webSocketService;
+    private final com.example.paperhub.auth.UserRepository userRepository;
 
-    public CommentController(CommentService commentService, LikeService likeService, WebSocketService webSocketService) {
+    public CommentController(CommentService commentService, LikeService likeService, WebSocketService webSocketService, com.example.paperhub.auth.UserRepository userRepository) {
         this.commentService = commentService;
         this.likeService = likeService;
         this.webSocketService = webSocketService;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -81,12 +84,14 @@ public class CommentController {
                 return ResponseEntity.status(401).body(error);
             }
             
+            List<Long> mentionIds = req.mentionIds() != null ? req.mentionIds() : List.of();
             Comment comment = commentService.createComment(
                 postId,
                 req.content(),
                 user,
                 req.parentId(),
-                req.replyToId()
+                req.replyToId(),
+                mentionIds
             );
             
             System.out.println("评论创建成功，ID: " + comment.getId());
@@ -94,7 +99,7 @@ public class CommentController {
             // 加载子回复
             List<Comment> replies = commentService.getReplies(comment.getId());
             
-            CommentDtos.CommentResp resp = convertToCommentRespWithReplies(comment, user.getId(), replies);
+            CommentDtos.CommentResp resp = convertToCommentRespWithReplies(comment, user.getId(), replies, mentionIds);
             
             // 推送WebSocket消息
             try {
@@ -135,7 +140,9 @@ public class CommentController {
         Comment comment = commentService.updateComment(commentId, req.content(), user);
         List<Comment> replies = commentService.getReplies(comment.getId());
         
-        CommentDtos.CommentResp resp = convertToCommentRespWithReplies(comment, user.getId(), replies);
+        // 从Comment实体中解析mentionIds
+        List<Long> mentionIds = parseMentionIds(comment.getMentionIds());
+        CommentDtos.CommentResp resp = convertToCommentRespWithReplies(comment, user.getId(), replies, mentionIds);
         
         // 推送WebSocket消息
         webSocketService.sendCommentUpdated(postId, resp);
@@ -272,10 +279,27 @@ public class CommentController {
      */
     private CommentDtos.CommentResp convertToCommentResp(Comment comment, Long userId) {
         List<Comment> replies = commentService.getReplies(comment.getId());
-        return convertToCommentRespWithReplies(comment, userId, replies);
+        // 从Comment实体中解析mentionIds
+        List<Long> mentionIds = parseMentionIds(comment.getMentionIds());
+        return convertToCommentRespWithReplies(comment, userId, replies, mentionIds);
+    }
+    
+    private List<Long> parseMentionIds(String mentionIdsStr) {
+        if (mentionIdsStr == null || mentionIdsStr.trim().isEmpty()) {
+            return List.of();
+        }
+        try {
+            return java.util.Arrays.stream(mentionIdsStr.split(","))
+                .filter(s -> !s.trim().isEmpty())
+                .map(Long::parseLong)
+                .collect(Collectors.toList());
+        } catch (Exception e) {
+            System.err.println("解析mentionIds失败: " + e.getMessage());
+            return List.of();
+        }
     }
 
-    private CommentDtos.CommentResp convertToCommentRespWithReplies(Comment comment, Long userId, List<Comment> replies) {
+    private CommentDtos.CommentResp convertToCommentRespWithReplies(Comment comment, Long userId, List<Comment> replies, List<Long> mentionIds) {
         User author = comment.getAuthor();
         String authorName = author.getName() != null && !author.getName().isEmpty() 
             ? author.getName() 
@@ -353,10 +377,32 @@ public class CommentController {
                     reply.getLikesCount(),
                     replyIsLiked,
                     reply.getCreatedAt().atOffset(ZoneOffset.UTC).toString(),
-                    List.of() // 回复的回复不再嵌套
+                    List.of(), // 回复的回复不再嵌套
+                    List.of() // 回复暂时不支持@功能
                 );
             })
             .collect(Collectors.toList());
+
+        // 构建被@的用户信息列表
+        List<CommentDtos.AuthorInfo> mentionInfos = new ArrayList<>();
+        if (mentionIds != null && !mentionIds.isEmpty()) {
+            for (Long mentionId : mentionIds) {
+                userRepository.findById(mentionId).ifPresent(mentionedUser -> {
+                    String mentionedUserName = mentionedUser.getName() != null && !mentionedUser.getName().isEmpty()
+                        ? mentionedUser.getName()
+                        : (mentionedUser.getEmail().contains("@")
+                            ? mentionedUser.getEmail().substring(0, mentionedUser.getEmail().indexOf("@"))
+                            : mentionedUser.getEmail());
+                    mentionInfos.add(new CommentDtos.AuthorInfo(
+                        mentionedUser.getId(),
+                        mentionedUser.getEmail(),
+                        mentionedUserName,
+                        resolveAvatar(mentionedUser.getAvatar()),
+                        mentionedUser.getAffiliation()
+                    ));
+                });
+            }
+        }
 
         return new CommentDtos.CommentResp(
             comment.getId().toString(),
@@ -367,7 +413,8 @@ public class CommentController {
             comment.getLikesCount(),
             isLiked,
             comment.getCreatedAt().atOffset(ZoneOffset.UTC).toString(),
-            replyList
+            replyList,
+            mentionInfos
         );
     }
     private String resolveAvatar(String avatar) {
