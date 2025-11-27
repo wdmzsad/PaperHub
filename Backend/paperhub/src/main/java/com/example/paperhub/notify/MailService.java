@@ -2,6 +2,7 @@
 package com.example.paperhub.notify;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -11,6 +12,9 @@ import jakarta.mail.internet.MimeMessage;
 public class MailService {
     @Autowired
     private JavaMailSender mailSender;
+
+    @Value("${spring.mail.username}")
+    private String from;
 
     public void sendVerificationMail(String to, String code) {
         send("【PaperHub注册验证码】", String.format("您的邮箱验证码为：%s，5分钟内有效。", code), to);
@@ -27,7 +31,7 @@ public class MailService {
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(text, false);
-            helper.setFrom("paperhub2025@163.com");
+            helper.setFrom(from);
             mailSender.send(msg);
         } catch (Exception e) {
             System.err.println("发邮件失败: " + e.getMessage());
