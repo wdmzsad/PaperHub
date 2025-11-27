@@ -23,6 +23,121 @@
 import 'package:flutter/material.dart';
 import '../models/post_model.dart';
 
+/// 点赞按钮组件（独立的状态管理，避免影响整个卡片重建）
+class _LikeButton extends StatefulWidget {
+  final Post post;
+  final Future<bool> Function(Post post)? onLikeTap;
+
+  const _LikeButton({
+    Key? key,
+    required this.post,
+    this.onLikeTap,
+  }) : super(key: key);
+
+  @override
+  State<_LikeButton> createState() => _LikeButtonState();
+}
+
+class _LikeButtonState extends State<_LikeButton> {
+  late bool _isLiked;
+  late int _likesCount;
+  bool _isProcessing = false;
+  DateTime? _lastTapTime;
+
+  @override
+  void initState() {
+    super.initState();
+    _isLiked = widget.post.isLiked;
+    _likesCount = widget.post.likesCount;
+  }
+
+  @override
+  void didUpdateWidget(_LikeButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 如果帖子对象更新（例如从详情页返回），同步状态
+    if (oldWidget.post.id != widget.post.id ||
+        oldWidget.post.isLiked != widget.post.isLiked ||
+        oldWidget.post.likesCount != widget.post.likesCount) {
+      _isLiked = widget.post.isLiked;
+      _likesCount = widget.post.likesCount;
+    }
+  }
+
+  Future<void> _handleLike() async {
+    // 防抖：500ms 内的重复点击忽略
+    final now = DateTime.now();
+    if (_lastTapTime != null &&
+        now.difference(_lastTapTime!) < const Duration(milliseconds: 500)) {
+      return;
+    }
+    _lastTapTime = now;
+
+    if (_isProcessing || widget.onLikeTap == null) return;
+
+    // 乐观更新
+    setState(() {
+      _isProcessing = true;
+      _isLiked = !_isLiked;
+      _likesCount += _isLiked ? 1 : -1;
+    });
+
+    try {
+      final success = await widget.onLikeTap!(widget.post);
+      if (!success && mounted) {
+        // 如果失败，回滚状态
+        setState(() {
+          _isLiked = !_isLiked;
+          _likesCount += _isLiked ? 1 : -1;
+        });
+      }
+    } catch (e) {
+      // 发生错误，回滚状态
+      if (mounted) {
+        setState(() {
+          _isLiked = !_isLiked;
+          _likesCount += _isLiked ? 1 : -1;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _handleLike,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            _isLiked ? Icons.favorite : Icons.favorite_border,
+            size: 16,
+            color: _isLiked ? Colors.red : Colors.grey[500],
+          ),
+          const SizedBox(width: 4),
+          Text(
+            _formatLikeCount(_likesCount),
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[700],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatLikeCount(int count) {
+    return PostCard._formatLikeCountStatic(count);
+  }
+}
+
 /// 单个 Post 的展示卡片
 class PostCard extends StatelessWidget {
   /// 业务数据：包含标题、作者、媒体列表、标签等
@@ -37,12 +152,16 @@ class PostCard extends StatelessWidget {
   /// 点击作者时的回调
   final VoidCallback? onAuthorTap;
 
+  /// 点击点赞时的回调（返回是否点赞成功，用于乐观更新）
+  final Future<bool> Function(Post post)? onLikeTap;
+
   const PostCard({
     Key? key,
     required this.post,
     required this.onTap,
     this.maxImageHeight = 250,
     this.onAuthorTap,
+    this.onLikeTap,
   }) : super(key: key);
 
   @override
@@ -108,11 +227,12 @@ class PostCard extends StatelessWidget {
                 // 用户信息 + tags 区域
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                  child: GestureDetector(
-                    onTap: onAuthorTap,
-                    child: Row(
-                      children: [
-                        CircleAvatar(
+                  child: Row(
+                    children: [
+                      // 头像（仅头像可点击）
+                      GestureDetector(
+                        onTap: onAuthorTap,
+                        child: CircleAvatar(
                           radius: 12,
                           backgroundColor: Colors.grey[300],
                           child: ClipOval(
@@ -132,43 +252,43 @@ class PostCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                post.author.name,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              post.author.name,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                post.tags.isNotEmpty
-                                    ? '#${post.tags.first}'
-                                    : '',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              post.tags.isNotEmpty
+                                  ? '#${post.tags.first}'
+                                  : '',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey,
                               ),
-                            ],
-                          ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        Icon(
-                          Icons.more_horiz,
-                          size: 18,
-                          color: Colors.grey[500],
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      // 点赞图标 + 点赞数
+                      _LikeButton(
+                        post: post,
+                        onLikeTap: onLikeTap,
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -177,6 +297,37 @@ class PostCard extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// 格式化点赞数：超过999进行缩写显示（如1.2k）
+  static String _formatLikeCountStatic(int count) {
+    if (count < 1000) {
+      return count.toString();
+    } else if (count < 10000) {
+      // 1k - 9.9k
+      final kValue = count / 1000.0;
+      if (kValue % 1 == 0) {
+        return '${kValue.toInt()}k';
+      } else {
+        return '${kValue.toStringAsFixed(1)}k';
+      }
+    } else if (count < 1000000) {
+      // 10k - 999k
+      final kValue = count / 1000.0;
+      if (kValue % 1 == 0) {
+        return '${kValue.toInt()}k';
+      } else {
+        return '${kValue.toStringAsFixed(1)}k';
+      }
+    } else {
+      // 1M+
+      final mValue = count / 1000000.0;
+      if (mValue % 1 == 0) {
+        return '${mValue.toInt()}M';
+      } else {
+        return '${mValue.toStringAsFixed(1)}M';
+      }
+    }
   }
 
   /// 构建封面图内容：

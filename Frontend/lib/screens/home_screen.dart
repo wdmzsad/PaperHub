@@ -59,6 +59,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _hasMore = true; //  是否还有更多数据
   /// 已加载到页面上的帖子列表。
   final List<Post> _posts = [];
+  
+  /// 点赞操作防抖集合（防止重复请求）
+  final Set<String> _likeInFlight = {};
 
   /// 顶部 tab 选择（0=发现，1=分区）。
   int _selectedTab = 0; //  0=发现, 1=分区
@@ -270,11 +273,33 @@ class _HomeScreenState extends State<HomeScreen> {
         });
         return;
       }
+      // 从详情页返回时，只更新当前帖子的点赞状态，不刷新整个列表
       final currentPostIndex = _posts.indexWhere((p) => p.id == post.id);
       if (currentPostIndex != -1) {
-        _loadInitialPosts();
+        // 重新获取单个帖子详情，同步点赞状态
+        _syncPostLikeStatus(post.id);
       }
     });
+  }
+
+  /// 同步单个帖子的点赞状态（不影响其他帖子）
+  Future<void> _syncPostLikeStatus(String postId) async {
+    try {
+      final resp = await ApiService.getPost(postId);
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>;
+        final updatedPost = Post.fromJson(body);
+        final postIndex = _posts.indexWhere((p) => p.id == postId);
+        if (postIndex != -1) {
+          setState(() {
+            _posts[postIndex].likesCount = updatedPost.likesCount;
+            _posts[postIndex].isLiked = updatedPost.isLiked;
+          });
+        }
+      }
+    } catch (e) {
+      // 忽略错误，不影响用户体验
+    }
   }
 
   /// 顶部搜索图标点击 -> 打开搜索页
@@ -287,6 +312,48 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _openUserProfile(String userId) {
     Navigator.of(context).pushNamed('/user/$userId');
+  }
+
+  /// 处理帖子点赞（乐观更新，不阻塞UI）
+  Future<bool> _handlePostLike(Post post) async {
+    // 防止重复请求
+    if (_likeInFlight.contains(post.id)) {
+      return false;
+    }
+
+    _likeInFlight.add(post.id);
+
+    try {
+      final resp = post.isLiked
+          ? await ApiService.unlikePost(post.id)
+          : await ApiService.likePost(post.id);
+
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>?;
+        final updatedLikesCount = (body?['likesCount'] as num?)?.toInt();
+        final updatedIsLiked = body?['isLiked'] as bool?;
+
+        // 更新帖子状态（只更新单个帖子，不刷新整个列表）
+        final postIndex = _posts.indexWhere((p) => p.id == post.id);
+        if (postIndex != -1) {
+          setState(() {
+            _posts[postIndex].likesCount =
+                updatedLikesCount ?? _posts[postIndex].likesCount;
+            _posts[postIndex].isLiked =
+                updatedIsLiked ?? !_posts[postIndex].isLiked;
+          });
+        }
+
+        return true;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      print('点赞失败: $e');
+      return false;
+    } finally {
+      _likeInFlight.remove(post.id);
+    }
   }
 
   @override
@@ -396,6 +463,7 @@ class _HomeScreenState extends State<HomeScreen> {
           post: _posts[index],
           onTap: () => _onPostTap(_posts[index]),
           onAuthorTap: () => _openUserProfile(_posts[index].author.id),
+          onLikeTap: _handlePostLike,
         );
       },
     );
@@ -492,7 +560,7 @@ class _HomeScreenState extends State<HomeScreen> {
         } else if (index == 3) {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const ProfilePage()),
+            MaterialPageRoute(builder: (context) => const ProfilePage(isMainPage: true)),
           ).then((_) {
             // 当从个人页面返回时，恢复首页高亮
             setState(() {

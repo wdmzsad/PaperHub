@@ -433,14 +433,46 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
     );
   }
 
-  void _openUserProfile(String userId) {
+  Future<void> _openUserProfile(String userId) async {
     if (userId.isEmpty) return;
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ProfilePage(userId: userId),
       ),
     );
+    // 从用户主页返回时，刷新关注状态
+    await _refreshFollowStatus();
+  }
+
+  /// 刷新所有用户的关注状态
+  Future<void> _refreshFollowStatus() async {
+    if (_notifications.isEmpty) return;
+    
+    // 重新检查每个用户的关注状态
+    final currentUserId = _currentUserId ??= LocalStorage.instance.read('userId');
+    if (currentUserId == null || currentUserId.isEmpty) return;
+
+    final actorIds = _notifications
+        .map((n) => n.actor.id)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    
+    if (actorIds.isEmpty) return;
+
+    // 清除缓存，强制重新查询
+    _followStatusCache.clear();
+    
+    // 重新确定哪些用户已关注
+    final resolvedFollowBackIds = await _determineFollowBackIds(_notifications);
+    
+    if (mounted) {
+      setState(() {
+        _followedUserIds
+          ..clear()
+          ..addAll(resolvedFollowBackIds);
+      });
+    }
   }
 
   Future<void> _handleFollowBack(NotificationItem notification) async {
@@ -1340,7 +1372,7 @@ class _MessageScreenState extends State<MessageScreen> {
       // 我的
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => const ProfilePage()),
+        MaterialPageRoute(builder: (context) => const ProfilePage(isMainPage: true)),
       ).then((_) {
         // 当从个人页面返回时，恢复消息页面高亮
         setState(() {

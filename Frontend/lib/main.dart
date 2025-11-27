@@ -28,7 +28,7 @@ class PaperHubApp extends StatelessWidget {
         '/forgot': (ctx) => ForgotPasswordPage(),
         '/reset': (ctx) => ResetPasswordPage(),
         '/home': (ctx) => const HomeScreen(),
-        '/me': (ctx) => const ProfilePage(),
+        '/me': (ctx) => const ProfilePage(isMainPage: true),
       },
       onGenerateRoute: (settings) {
         final name = settings.name ?? '';
