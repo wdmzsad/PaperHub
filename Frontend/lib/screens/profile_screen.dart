@@ -22,7 +22,14 @@ import 'chat_screen.dart';
 
 class ProfilePage extends StatefulWidget {
   final String? userId;
-  const ProfilePage({super.key, this.userId});
+  /// 是否作为主页面显示（显示底部导航栏和菜单按钮）
+  final bool isMainPage;
+  
+  const ProfilePage({
+    super.key, 
+    this.userId,
+    this.isMainPage = false,
+  });
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -676,7 +683,10 @@ class _ProfilePageState extends State<ProfilePage>
       child: Scaffold(
         drawer: _buildDrawer(),
         backgroundColor: const Color(0xFFF5F5F5),
-        bottomNavigationBar: _isViewingSelf ? _buildBottomNavigationBar() : null,
+        // 只有从底部导航栏进入自己的主页时才显示底部导航栏
+        bottomNavigationBar: (_isViewingSelf && widget.isMainPage) 
+            ? _buildBottomNavigationBar() 
+            : null,
         body: SafeArea(
           child: RefreshIndicator(
             onRefresh: _handleRefresh,
@@ -769,18 +779,31 @@ class _ProfilePageState extends State<ProfilePage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  if (_isViewingSelf)
+                  // 左上角：如果是主页面显示菜单按钮，否则显示返回按钮
+                  if (_isViewingSelf && widget.isMainPage)
                     Builder(
                       builder: (ctx) => IconButton(
                         icon: const Icon(Icons.menu, color: Colors.white),
                         onPressed: () => Scaffold.of(ctx).openDrawer(),
                       ),
                     )
-                  else
+                  else if (Navigator.canPop(context))
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
                       onPressed: () => Navigator.of(context).pop(),
+                    )
+                  else
+                    const SizedBox(width: 48), // 占位保持布局一致
+                  
+                  // 右上角：如果不是主页面但是自己的主页，显示菜单按钮
+                  if (_isViewingSelf && !widget.isMainPage && Navigator.canPop(context))
+                    Builder(
+                      builder: (ctx) => IconButton(
+                        icon: const Icon(Icons.menu, color: Colors.white),
+                        onPressed: () => Scaffold.of(ctx).openDrawer(),
+                      ),
                     ),
                 ],
               ),
@@ -1108,11 +1131,15 @@ class _ProfilePageState extends State<ProfilePage>
             context,
             MaterialPageRoute(builder: (_) => const NoteEditorPage()),
           ).then((_) => setState(() => _currentIndex = 0));
-        } else if (index == 3 && !_isViewingSelf) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ProfilePage()),
-          ).then((_) => setState(() => _currentIndex = 3));
+        } else if (index == 3) {
+          if (!_isViewingSelf) {
+            // 从其他页面进入自己的主页，显示为主页面
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfilePage(isMainPage: true)),
+            ).then((_) => setState(() => _currentIndex = 3));
+          }
+          // 如果已经是自己的主页，不做任何操作
         }
       },
       context: context,

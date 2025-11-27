@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/post_model.dart';
+import '../models/user_profile.dart';
 import '../services/api_service.dart';
 import 'dart:io';
 import 'package:url_launcher/url_launcher.dart';
@@ -271,6 +272,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   bool _saveInFlight = false;
   bool _isDeleting = false;
   String? _currentUserId;
+  bool? _isFollowingAuthor; // 是否关注了作者
+  bool _followInFlight = false; // 关注操作进行中
   
   // @功能相关状态
   bool _showMentionList = false;
@@ -371,6 +374,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     _initWebSocket();
 
     _currentUserId = LocalStorage.instance.read('userId');
+    
+    // 检查是否已关注作者
+    _checkFollowStatus();
   }
 
   /// 从后端加载帖子详情
@@ -396,6 +402,92 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     } catch (e) {
       // 如果加载失败，使用传入的post对象
       // 不显示错误，因为已经有初始数据
+    }
+  }
+
+  /// 检查是否已关注作者
+  Future<void> _checkFollowStatus() async {
+    if (_currentUserId == null || widget.post.author.id.isEmpty) {
+      return;
+    }
+    
+    // 如果是查看自己的帖子，不需要显示关注按钮
+    if (_currentUserId == widget.post.author.id) {
+      setState(() {
+        _isFollowingAuthor = null; // null表示不显示关注按钮
+      });
+      return;
+    }
+
+    try {
+      final resp = await ApiService.getUserProfile(widget.post.author.id);
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>;
+        final profile = UserProfile.fromJson(body);
+        if (mounted) {
+          setState(() {
+            _isFollowingAuthor = profile.isFollowing ?? false;
+          });
+        }
+      }
+    } catch (e) {
+      // 如果获取失败，默认显示未关注
+      if (mounted) {
+        setState(() {
+          _isFollowingAuthor = false;
+        });
+      }
+    }
+  }
+
+  /// 切换关注状态
+  Future<void> _toggleFollow() async {
+    if (_followInFlight || _isFollowingAuthor == null) return;
+    
+    final authorId = widget.post.author.id;
+    if (authorId.isEmpty || _currentUserId == authorId) return;
+
+    final prev = _isFollowingAuthor!;
+    final next = !prev;
+    
+    setState(() {
+      _followInFlight = true;
+      _isFollowingAuthor = next;
+    });
+
+    try {
+      final resp = next
+          ? await ApiService.followUser(authorId)
+          : await ApiService.unfollowUser(authorId);
+      
+      if (resp['statusCode'] != 200) {
+        throw Exception(
+          (resp['body'] as Map<String, dynamic>?)?['message'] ?? '操作失败',
+        );
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(next ? '已关注 ${widget.post.author.name}' : '已取消关注'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      // 回滚状态
+      if (mounted) {
+        setState(() {
+          _isFollowingAuthor = prev;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('操作失败：$e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _followInFlight = false;
+        });
+      }
     }
   }
 
@@ -1482,8 +1574,16 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     }
   }
 
-  void _openUserProfile(String userId) {
-    Navigator.of(context).pushNamed('/user/$userId');
+  Future<void> _openUserProfile(String userId) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ProfilePage(userId: userId),
+      ),
+    );
+    // 从用户主页返回时，刷新关注状态（特别是如果用户在该页面取关了作者）
+    if (userId == widget.post.author.id && _currentUserId != userId) {
+      await _checkFollowStatus();
+    }
   }
 
   void _onShare() {
@@ -1799,6 +1899,25 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
 
   Widget _buildAuthorRow() {
+    // 如果是查看自己的帖子，不显示关注按钮
+    if (_isFollowingAuthor == null) {
+      return ListTile(
+        onTap: () => _openUserProfile(widget.post.author.id),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+        leading: _buildAvatarWidget(widget.post.author.avatar, 20),
+        title: Text(
+          widget.post.author.name,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          '${widget.post.author.affiliation ?? ''} • ${_formatRelative(widget.post.createdAt)}',
+          style: const TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+      );
+    }
+
+    final isFollowing = _isFollowingAuthor ?? false;
+    
     return ListTile(
       onTap: () => _openUserProfile(widget.post.author.id),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1812,18 +1931,29 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         style: const TextStyle(fontSize: 12, color: Colors.grey),
       ),
       trailing: ElevatedButton(
-        onPressed: () {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('关注（演示）')));
-        },
+        onPressed: _followInFlight ? null : _toggleFollow,
         style: ElevatedButton.styleFrom(
+          backgroundColor: isFollowing ? Colors.grey[300] : const Color(0xFF1976D2),
+          foregroundColor: isFollowing ? Colors.grey[700] : Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
+          elevation: 0,
         ),
-        child: const Text('+ 关注', style: TextStyle(fontSize: 13)),
+        child: _followInFlight
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Text(
+                isFollowing ? '已关注' : '+ 关注',
+                style: const TextStyle(fontSize: 13),
+              ),
       ),
     );
   }
