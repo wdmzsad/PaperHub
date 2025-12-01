@@ -116,18 +116,21 @@ class _FollowListScreenState extends State<FollowListScreen>
               userId: widget.userId,
               type: 'following',
               onRelationshipChanged: _handleRelationshipChanged,
+              onProfileReturned: _reloadAllTabs,
             ),
             _FollowTab(
               key: _tabKeys[1],
               userId: widget.userId,
               type: 'followers',
               onRelationshipChanged: _handleRelationshipChanged,
+              onProfileReturned: _reloadAllTabs,
             ),
             _FollowTab(
               key: _tabKeys[2],
               userId: widget.userId,
               type: 'mutual',
               onRelationshipChanged: _handleRelationshipChanged,
+              onProfileReturned: _reloadAllTabs,
             ),
           ],
         ),
@@ -143,6 +146,14 @@ class _FollowListScreenState extends State<FollowListScreen>
       if (tabType == sourceType) continue;
       key.currentState?.applyExternalUpdate(user);
     }
+  }
+
+  /// 从个人主页返回后，可能发生了关注关系变化，统一刷新所有Tab
+  void _reloadAllTabs() {
+    for (final key in _tabKeys) {
+      key.currentState?.reload();
+    }
+    _hasRelationshipChanges = true;
   }
 
   String _tabTypeForIndex(int index) {
@@ -162,12 +173,15 @@ class _FollowTab extends StatefulWidget {
   final String userId;
   final String type; // 'following', 'followers', 'mutual'
   final void Function(String sourceType, UserSummary user)? onRelationshipChanged;
+  /// 从某个用户的个人主页返回时回调，用于让上层统一刷新其他Tab
+  final VoidCallback? onProfileReturned;
 
   const _FollowTab({
     Key? key,
     required this.userId,
     required this.type,
     this.onRelationshipChanged,
+    this.onProfileReturned,
   }) : super(key: key);
 
   @override
@@ -305,6 +319,7 @@ class _FollowTabState extends State<_FollowTab>
     await _loadUsers(loadMore: true);
   }
 
+  /// 对外提供的刷新接口，供上层在需要时强制刷新当前Tab
   void reload() {
     _loadUsers();
   }
@@ -443,6 +458,7 @@ class _FollowTabState extends State<_FollowTab>
                 user: user,
                 type: widget.type,
                 onStateChanged: () => _loadUsers(),
+                onProfileReturned: widget.onProfileReturned,
                 onRelationshipChanged: (updated) =>
                     widget.onRelationshipChanged?.call(widget.type, updated),
                 onFollowChanged: _handleLocalChange,
@@ -471,7 +487,10 @@ class _UserListItem extends StatelessWidget {
   final String type;
   final ValueChanged<UserSummary>? onRelationshipChanged;
   final ValueChanged<UserSummary>? onFollowChanged;
+  /// 当前列表项所在的Tab刷新回调
   final VoidCallback? onStateChanged;
+  /// 从个人主页返回时通知上层（FollowListScreen）统一刷新所有Tab
+  final VoidCallback? onProfileReturned;
 
   const _UserListItem({
     Key? key,
@@ -480,6 +499,7 @@ class _UserListItem extends StatelessWidget {
     this.onRelationshipChanged,
     this.onFollowChanged,
     this.onStateChanged,
+    this.onProfileReturned,
   }) : super(key: key);
 
   @override
@@ -492,7 +512,10 @@ class _UserListItem extends StatelessWidget {
             builder: (_) => ProfilePage(userId: user.id),
           ),
         ).then((_) {
+          // 返回后刷新当前Tab
           onStateChanged?.call();
+          // 同时通知上层刷新其他Tab，避免关注/互关列表不同步
+          onProfileReturned?.call();
         });
       },
       child: Container(
