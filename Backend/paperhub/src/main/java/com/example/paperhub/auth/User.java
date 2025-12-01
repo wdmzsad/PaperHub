@@ -35,6 +35,25 @@ public class User {
     @Column(name = "profile_background")//主页背景图URL
     private String profileBackground;
 
+    // ============ 隐私设置相关字段 ============
+    /**
+     * 是否隐藏关注列表（true 时除本人外他人无法查看其关注列表）
+     */
+    @Column(name = "hide_following", nullable = false)
+    private boolean hideFollowing = false;
+
+    /**
+     * 是否隐藏粉丝列表（true 时除本人外他人无法查看其粉丝列表）
+     */
+    @Column(name = "hide_followers", nullable = false)
+    private boolean hideFollowers = false;
+
+    /**
+     * 收藏是否公开（false 时除本人外他人无法查看其收藏列表）
+     */
+    @Column(name = "public_favorites", nullable = false)
+    private boolean publicFavorites = true;
+
     @Column(name = "verified", nullable = false)//验证状态列
     private boolean verified = false;
 
@@ -78,6 +97,15 @@ public class User {
     public void setResearchDirections(String researchDirections) { this.researchDirections = researchDirections; }
     public String getProfileBackground() { return profileBackground; }
     public void setProfileBackground(String profileBackground) { this.profileBackground = profileBackground; }
+
+    public boolean isHideFollowing() { return hideFollowing; }
+    public void setHideFollowing(boolean hideFollowing) { this.hideFollowing = hideFollowing; }
+
+    public boolean isHideFollowers() { return hideFollowers; }
+    public void setHideFollowers(boolean hideFollowers) { this.hideFollowers = hideFollowers; }
+
+    public boolean isPublicFavorites() { return publicFavorites; }
+    public void setPublicFavorites(boolean publicFavorites) { this.publicFavorites = publicFavorites; }
 }
 
 

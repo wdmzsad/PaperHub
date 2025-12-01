@@ -49,12 +49,15 @@ public class UserService {
         long followingCount = followRepository.countByFollowerId(user.getId());
         long followersCount = followRepository.countByFollowingId(user.getId());
         long favoritesCount = favoriteRepository.countByUserId(user.getId());
+        long favoritesReceived = favoriteRepository.countByPostAuthorId(user.getId());
         long postsCount = postRepository.countByAuthorId(user.getId());
         long likesReceived = postLikeRepository.countByAuthorId(user.getId());
 
         boolean isFollowing = false;
+        boolean isFollowerToViewer = false;
         if (viewer != null && !viewer.getId().equals(user.getId())) {
             isFollowing = followRepository.existsByFollowerIdAndFollowingId(viewer.getId(), user.getId());
+            isFollowerToViewer = followRepository.existsByFollowerIdAndFollowingId(user.getId(), viewer.getId());
         }
 
         return new UserDtos.ProfileResp(
@@ -69,8 +72,13 @@ public class UserService {
                 (int) followersCount,
                 (int) postsCount,
                 (int) favoritesCount,
+                (int) favoritesReceived,
                 (int) likesReceived,
-                isFollowing
+                isFollowing,
+                isFollowerToViewer,
+                user.isHideFollowing(),
+                user.isHideFollowers(),
+                user.isPublicFavorites()
         );
     }
 

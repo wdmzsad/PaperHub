@@ -18,7 +18,13 @@ class UserProfile {
   final int postsCount;
   final int favoritesCount;
   final int likesCount;
+  final int favoritesReceivedCount;
   final bool? isFollowing;
+  final bool? isFollower;
+  // 隐私设置：由后端返回，用于控制前端可见性
+  final bool hideFollowing;
+  final bool hideFollowers;
+  final bool publicFavorites;
 
   const UserProfile({
     required this.id,
@@ -33,7 +39,12 @@ class UserProfile {
     this.postsCount = 0,
     this.favoritesCount = 0,
     this.likesCount = 0,
+    this.favoritesReceivedCount = 0,
     this.isFollowing,
+    this.isFollower,
+    this.hideFollowing = false,
+    this.hideFollowers = false,
+    this.publicFavorites = true,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -71,7 +82,13 @@ class UserProfile {
       postsCount: _parseCount(json['posts'] ?? json['postsCount']),
       favoritesCount: _parseCount(json['favorites'] ?? json['favoritesCount']),
       likesCount: _parseCount(json['likes'] ?? json['likesCount']),
+      favoritesReceivedCount:
+          _parseCount(json['favoritesReceived'] ?? json['favoritesReceivedCount']),
       isFollowing: json['isFollowing'] as bool?,
+      isFollower: json['isFollower'] as bool?,
+      hideFollowing: json['hideFollowing'] as bool? ?? false,
+      hideFollowers: json['hideFollowers'] as bool? ?? false,
+      publicFavorites: json['publicFavorites'] as bool? ?? true,
     );
   }
 
@@ -89,7 +106,12 @@ class UserProfile {
     'posts': postsCount,
     'favorites': favoritesCount,
     'likes': likesCount,
+    'favoritesReceived': favoritesReceivedCount,
     if (isFollowing != null) 'isFollowing': isFollowing,
+    if (isFollower != null) 'isFollower': isFollower,
+    'hideFollowing': hideFollowing,
+    'hideFollowers': hideFollowers,
+    'publicFavorites': publicFavorites,
   };
 
   UserProfile copyWith({
@@ -103,7 +125,12 @@ class UserProfile {
     int? postsCount,
     int? favoritesCount,
     int? likesCount,
+    int? favoritesReceivedCount,
     bool? isFollowing,
+    bool? isFollower,
+    bool? hideFollowing,
+    bool? hideFollowers,
+    bool? publicFavorites,
   }) {
     return UserProfile(
       id: id,
@@ -118,7 +145,13 @@ class UserProfile {
       postsCount: postsCount ?? this.postsCount,
       favoritesCount: favoritesCount ?? this.favoritesCount,
       likesCount: likesCount ?? this.likesCount,
+      favoritesReceivedCount:
+          favoritesReceivedCount ?? this.favoritesReceivedCount,
       isFollowing: isFollowing ?? this.isFollowing,
+      isFollower: isFollower ?? this.isFollower,
+      hideFollowing: hideFollowing ?? this.hideFollowing,
+      hideFollowers: hideFollowers ?? this.hideFollowers,
+      publicFavorites: publicFavorites ?? this.publicFavorites,
     );
   }
 }
