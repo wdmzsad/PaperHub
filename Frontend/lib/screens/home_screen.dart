@@ -113,10 +113,33 @@ class _HomeScreenState extends State<HomeScreen> {
         final total = body['total'] as int? ?? 0;
 
         print('获取到 ${postsData.length} 条帖子'); // 调试日志
+        
+        // 调试：打印第一条帖子的原始 JSON 数据（查看后端返回的字段）
+        if (postsData.isNotEmpty) {
+          print('=== 第一条帖子的原始 JSON 数据 ===');
+          print(postsData[0]);
+          print('================================');
+        }
 
         final newPosts = postsData
             .map((p) => Post.fromJson(p as Map<String, dynamic>))
             .toList();
+
+        // 调试：打印每个帖子的 imageAspectRatio
+        print('=== 帖子 imageAspectRatio 调试信息 ===');
+        for (var post in newPosts) {
+          print('Post ID: ${post.id}');
+          print('  - imageAspectRatio: ${post.imageAspectRatio}');
+          print('  - imageNaturalWidth: ${post.imageNaturalWidth}');
+          print('  - imageNaturalHeight: ${post.imageNaturalHeight}');
+          print('  - media count: ${post.media.length}');
+          if (post.media.isNotEmpty) {
+            print('  - first media URL: ${post.media.first}');
+          }
+          print('  - 计算出的宽高比: ${post.imageNaturalWidth / post.imageNaturalHeight}');
+          print('---');
+        }
+        print('=====================================');
 
         setState(() {
           _posts.clear();
@@ -570,23 +593,6 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       },
       context: context,
-    );
-  }
-
-  /// 发布弹窗（占位）
-  void _showPublishDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('发布笔记'),
-        content: const Text('发布功能开发中...'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
     );
   }
 
