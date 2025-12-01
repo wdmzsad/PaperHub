@@ -26,16 +26,36 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   Future<void> _loadPrivacySettings() async {
     setState(() => _loading = true);
     try {
-      // TODO: 从后端获取隐私设置
-      // 目前使用本地存储作为临时方案
-      final hideFollowing = LocalStorage.instance.read('privacy_hide_following') == 'true';
-      final hideFollowers = LocalStorage.instance.read('privacy_hide_followers') == 'true';
-      final publicFavorites = LocalStorage.instance.read('privacy_public_favorites') != 'false';
+      // 优先从后端获取隐私设置
+      final resp = await ApiService.getPrivacySettings();
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>? ?? {};
+        final hideFollowing =
+            (body['hideFollowing'] as bool?) ?? (LocalStorage.instance.read('privacy_hide_following') == 'true');
+        final hideFollowers =
+            (body['hideFollowers'] as bool?) ?? (LocalStorage.instance.read('privacy_hide_followers') == 'true');
+        final publicFavorites =
+            (body['publicFavorites'] as bool?) ?? (LocalStorage.instance.read('privacy_public_favorites') != 'false');
+
+        setState(() {
+          _hideFollowing = hideFollowing;
+          _hideFollowers = hideFollowers;
+          _publicFavorites = publicFavorites;
+          _loading = false;
+        });
+        return;
+      }
+
+      // 后端失败时回退到本地缓存
+      final hideFollowingLocal = LocalStorage.instance.read('privacy_hide_following') == 'true';
+      final hideFollowersLocal = LocalStorage.instance.read('privacy_hide_followers') == 'true';
+      final publicFavoritesLocal =
+          LocalStorage.instance.read('privacy_public_favorites') != 'false';
 
       setState(() {
-        _hideFollowing = hideFollowing;
-        _hideFollowers = hideFollowers;
-        _publicFavorites = publicFavorites;
+        _hideFollowing = hideFollowingLocal;
+        _hideFollowers = hideFollowersLocal;
+        _publicFavorites = publicFavoritesLocal;
         _loading = false;
       });
     } catch (e) {
@@ -45,8 +65,18 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
 
   Future<void> _savePrivacySettings() async {
     try {
-      // TODO: 保存到后端
-      // 目前使用本地存储作为临时方案
+      // 先保存到后端
+      final resp = await ApiService.updatePrivacySettings(
+        hideFollowing: _hideFollowing,
+        hideFollowers: _hideFollowers,
+        publicFavorites: _publicFavorites,
+      );
+      if (resp['statusCode'] != 200) {
+        final message = (resp['body'] as Map<String, dynamic>?)?['message'] ?? '未知错误';
+        throw Exception(message);
+      }
+
+      // 再更新本地缓存，作为兜底
       await LocalStorage.instance.write('privacy_hide_following', _hideFollowing.toString());
       await LocalStorage.instance.write('privacy_hide_followers', _hideFollowers.toString());
       await LocalStorage.instance.write('privacy_public_favorites', _publicFavorites.toString());

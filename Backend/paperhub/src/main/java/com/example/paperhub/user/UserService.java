@@ -75,7 +75,10 @@ public class UserService {
                 (int) favoritesReceived,
                 (int) likesReceived,
                 isFollowing,
-                isFollowerToViewer
+                isFollowerToViewer,
+                user.isHideFollowing(),
+                user.isHideFollowers(),
+                user.isPublicFavorites()
         );
     }
 

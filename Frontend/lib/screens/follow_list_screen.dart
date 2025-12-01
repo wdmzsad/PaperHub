@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import '../models/user_summary.dart';
 import '../services/api_service.dart';
+import '../services/local_storage.dart';
 import 'profile_screen.dart';
 
 class FollowListScreen extends StatefulWidget {
@@ -24,23 +25,34 @@ class _FollowListScreenState extends State<FollowListScreen>
   late TabController _tabController;
   int _currentTabIndex = 0;
   bool _hasRelationshipChanges = false;
-  final List<GlobalKey<_FollowTabState>> _tabKeys = List.generate(
-    3,
-    (_) => GlobalKey<_FollowTabState>(),
-  );
+  late final bool _isViewingSelf;
+  late final List<GlobalKey<_FollowTabState>> _tabKeys;
 
   @override
   void initState() {
     super.initState();
+
+    final currentUserId = LocalStorage.instance.read('userId')?.toString();
+    _isViewingSelf = currentUserId != null && currentUserId == widget.userId;
+
+    final tabCount = _isViewingSelf ? 3 : 2;
+    _tabKeys = List.generate(
+      tabCount,
+      (_) => GlobalKey<_FollowTabState>(),
+    );
     
-    // 根据初始tab设置当前索引
+    // 根据初始tab设置当前索引（在仅两栏时忽略 mutual）
     if (widget.initialTab == 'followers') {
       _currentTabIndex = 1;
-    } else if (widget.initialTab == 'mutual') {
+    } else if (widget.initialTab == 'mutual' && _isViewingSelf) {
       _currentTabIndex = 2;
     }
-    
-    _tabController = TabController(length: 3, vsync: this, initialIndex: _currentTabIndex);
+
+    _tabController = TabController(
+      length: _tabKeys.length,
+      vsync: this,
+      initialIndex: _currentTabIndex,
+    );
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) {
         setState(() {
@@ -99,10 +111,10 @@ class _FollowListScreenState extends State<FollowListScreen>
                 fontSize: 15,
                 fontWeight: FontWeight.normal,
               ),
-              tabs: const [
-                Tab(text: '关注'),
-                Tab(text: '粉丝'),
-                Tab(text: '互相关注'),
+              tabs: [
+                const Tab(text: '关注'),
+                const Tab(text: '粉丝'),
+                if (_isViewingSelf) const Tab(text: '互相关注'),
               ],
             ),
           ),
@@ -125,13 +137,14 @@ class _FollowListScreenState extends State<FollowListScreen>
               onRelationshipChanged: _handleRelationshipChanged,
               onProfileReturned: _reloadAllTabs,
             ),
-            _FollowTab(
-              key: _tabKeys[2],
-              userId: widget.userId,
-              type: 'mutual',
-              onRelationshipChanged: _handleRelationshipChanged,
-              onProfileReturned: _reloadAllTabs,
-            ),
+            if (_isViewingSelf)
+              _FollowTab(
+                key: _tabKeys[2],
+                userId: widget.userId,
+                type: 'mutual',
+                onRelationshipChanged: _handleRelationshipChanged,
+                onProfileReturned: _reloadAllTabs,
+              ),
           ],
         ),
       ),
@@ -157,14 +170,10 @@ class _FollowListScreenState extends State<FollowListScreen>
   }
 
   String _tabTypeForIndex(int index) {
-    switch (index) {
-      case 0:
-        return 'following';
-      case 1:
-        return 'followers';
-      default:
-        return 'mutual';
-    }
+    if (index == 0) return 'following';
+    if (index == 1) return 'followers';
+    // 仅在查看自己的时候才会存在第三个互相关注 Tab
+    return 'mutual';
   }
 }
 
@@ -198,6 +207,7 @@ class _FollowTabState extends State<_FollowTab>
   int _page = 0;
   final int _pageSize = 20;
   final ScrollController _scrollController = ScrollController();
+  String? _forbiddenMessage;
 
   @override
   void initState() {
@@ -220,7 +230,7 @@ class _FollowTabState extends State<_FollowTab>
   }
 
   Future<void> _loadUsers({bool loadMore = false}) async {
-    if (_isFetching || (loadMore && !_hasMore)) return;
+    if (_isFetching || (loadMore && (!_hasMore || _forbiddenMessage != null))) return;
     setState(() {
       _isFetching = true;
       if (loadMore) {
@@ -231,6 +241,8 @@ class _FollowTabState extends State<_FollowTab>
         if (_users.isEmpty) {
           _refreshing = false;
         }
+        // 手动刷新时清除之前的禁止访问提示，重新尝试
+        _forbiddenMessage = null;
       }
     });
 
@@ -287,6 +299,15 @@ class _FollowTabState extends State<_FollowTab>
             _page = 1;
           }
           _hasMore = _users.length < total;
+        });
+      } else if (resp['statusCode'] == 403) {
+        // 隐私限制：对方隐藏了该列表
+        final message =
+            (resp['body'] as Map<String, dynamic>?)?['message'] ?? '对方已隐藏该列表';
+        setState(() {
+          _forbiddenMessage = message;
+          _users = [];
+          _hasMore = false;
         });
       } else {
         final message =
@@ -399,6 +420,23 @@ class _FollowTabState extends State<_FollowTab>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+
+    if (_forbiddenMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          child: Text(
+            _forbiddenMessage!,
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 15,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
     if (_isFetching && _users.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(),
@@ -504,6 +542,9 @@ class _UserListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentUserId = LocalStorage.instance.read('userId')?.toString();
+    final isMe = currentUserId != null && currentUserId == user.id;
+
     return InkWell(
       onTap: () {
         Navigator.push(
@@ -577,13 +618,15 @@ class _UserListItem extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            _FollowActionButton(
-              key: ValueKey('follow-btn-${type}-${user.id}'),
-              user: user,
-              listType: type,
-              onStateChanged: onStateChanged,
-              onFollowChanged: onFollowChanged,
-            ),
+            // 如果这一项就是当前登录用户自己，则不显示关注按钮
+            if (!isMe)
+              _FollowActionButton(
+                key: ValueKey('follow-btn-${type}-${user.id}'),
+                user: user,
+                listType: type,
+                onStateChanged: onStateChanged,
+                onFollowChanged: onFollowChanged,
+              ),
           ],
         ),
       ),

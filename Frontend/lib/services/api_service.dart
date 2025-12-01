@@ -240,6 +240,17 @@ class ApiService {
     );
   }
 
+  /// 获取当前用户的隐私设置
+  static Future<Map<String, dynamic>> getPrivacySettings() async {
+    return await _makeRequest(
+      () => http.get(
+        Uri.parse('$baseUrl/users/me/privacy'),
+        headers: _buildHeaders(),
+      ),
+      '/users/me/privacy',
+    );
+  }
+
   static Future<Map<String, dynamic>> getUserProfile(String userId) async {
     return await _makeRequest(
       () => http.get(
@@ -271,6 +282,27 @@ class ApiService {
       body: jsonEncode(payload),
     );
     return _parseResponse(resp);
+  }
+
+  /// 更新当前用户的隐私设置
+  static Future<Map<String, dynamic>> updatePrivacySettings({
+    required bool hideFollowing,
+    required bool hideFollowers,
+    required bool publicFavorites,
+  }) async {
+    final payload = <String, dynamic>{
+      'hideFollowing': hideFollowing,
+      'hideFollowers': hideFollowers,
+      'publicFavorites': publicFavorites,
+    };
+    return await _makeRequest(
+      () => http.put(
+        Uri.parse('$baseUrl/users/me/privacy'),
+        headers: _buildHeaders(),
+        body: jsonEncode(payload),
+      ),
+      '/users/me/privacy',
+    );
   }
 
   static Future<Map<String, dynamic>> uploadAvatarBytes(

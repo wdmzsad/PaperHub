@@ -109,9 +109,10 @@ class _ProfilePageState extends State<ProfilePage>
         _isFollowing = _profile!.isFollowing;
         _loading = false;
       });
+      // 根据隐私设置决定是否加载收藏列表
       await Future.wait([
         _loadUserPosts(refresh: true),
-        _loadFavoritePosts(refresh: true),
+        if (_canViewFavorites) _loadFavoritePosts(refresh: true),
       ]);
     } catch (e) {
       setState(() {
@@ -122,6 +123,14 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Future<void> _handleRefresh() => _loadProfile(forceNetwork: true);
+
+  bool get _canViewFavorites {
+    if (_profile == null) return false;
+    // 自己总是可以看到自己的收藏
+    if (_isViewingSelf) return true;
+    // 查看他人主页时，只有对方公开收藏才可以看到
+    return _profile!.publicFavorites;
+  }
 
   void _showSnack(String message) {
     if (!mounted) return;
@@ -553,6 +562,8 @@ class _ProfilePageState extends State<ProfilePage>
 
   Future<void> _loadFavoritePosts({bool refresh = false}) async {
     if (_profile == null) return;
+    // 如果正在查看他人主页且对方未公开收藏，则不加载收藏
+    if (!_isViewingSelf && !_canViewFavorites) return;
     if (_loadingFavorites) return;
     setState(() {
       _loadingFavorites = true;
@@ -1053,12 +1064,24 @@ class _ProfilePageState extends State<ProfilePage>
                   hasMore: _hasMoreAuthored,
                   loader: _loadUserPosts,
                 ),
-                _buildPostGridContent(
-                  posts: _favoritePosts,
-                  isLoading: _loadingFavorites,
-                  hasMore: _hasMoreFavorites,
-                  loader: _loadFavoritePosts,
-                ),
+                _canViewFavorites
+                    ? _buildPostGridContent(
+                        posts: _favoritePosts,
+                        isLoading: _loadingFavorites,
+                        hasMore: _hasMoreFavorites,
+                        loader: _loadFavoritePosts,
+                      )
+                    : Center(
+                        child: Text(
+                          _isViewingSelf
+                              ? '你目前未公开收藏给其他用户'
+                              : '对方已隐藏收藏',
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
               ],
             ),
           ),

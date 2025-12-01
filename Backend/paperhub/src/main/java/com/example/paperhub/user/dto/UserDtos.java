@@ -26,7 +26,11 @@ public class UserDtos {
             int favoritesReceivedCount,
             int likesCount,
             Boolean isFollowing,
-            Boolean isFollower
+            Boolean isFollower,
+            // 隐私设置（用于前端根据被查看用户的设置控制展示）
+            Boolean hideFollowing,
+            Boolean hideFollowers,
+            Boolean publicFavorites
     ) {}
 
     /**
@@ -38,6 +42,21 @@ public class UserDtos {
             String bio,
             List<String> researchDirections,
             String backgroundImage
+    ) {}
+
+    /**
+     * 获取/更新隐私设置的响应与请求体。
+     */
+    public record PrivacySettingsResp(
+            Boolean hideFollowing,
+            Boolean hideFollowers,
+            Boolean publicFavorites
+    ) {}
+
+    public record UpdatePrivacySettingsReq(
+            Boolean hideFollowing,
+            Boolean hideFollowers,
+            Boolean publicFavorites
     ) {}
 
     /**

@@ -21,6 +21,10 @@ class UserProfile {
   final int favoritesReceivedCount;
   final bool? isFollowing;
   final bool? isFollower;
+  // 隐私设置：由后端返回，用于控制前端可见性
+  final bool hideFollowing;
+  final bool hideFollowers;
+  final bool publicFavorites;
 
   const UserProfile({
     required this.id,
@@ -38,6 +42,9 @@ class UserProfile {
     this.favoritesReceivedCount = 0,
     this.isFollowing,
     this.isFollower,
+    this.hideFollowing = false,
+    this.hideFollowers = false,
+    this.publicFavorites = true,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -79,6 +86,9 @@ class UserProfile {
           _parseCount(json['favoritesReceived'] ?? json['favoritesReceivedCount']),
       isFollowing: json['isFollowing'] as bool?,
       isFollower: json['isFollower'] as bool?,
+      hideFollowing: json['hideFollowing'] as bool? ?? false,
+      hideFollowers: json['hideFollowers'] as bool? ?? false,
+      publicFavorites: json['publicFavorites'] as bool? ?? true,
     );
   }
 
@@ -99,6 +109,9 @@ class UserProfile {
     'favoritesReceived': favoritesReceivedCount,
     if (isFollowing != null) 'isFollowing': isFollowing,
     if (isFollower != null) 'isFollower': isFollower,
+    'hideFollowing': hideFollowing,
+    'hideFollowers': hideFollowers,
+    'publicFavorites': publicFavorites,
   };
 
   UserProfile copyWith({
@@ -115,6 +128,9 @@ class UserProfile {
     int? favoritesReceivedCount,
     bool? isFollowing,
     bool? isFollower,
+    bool? hideFollowing,
+    bool? hideFollowers,
+    bool? publicFavorites,
   }) {
     return UserProfile(
       id: id,
@@ -133,6 +149,9 @@ class UserProfile {
           favoritesReceivedCount ?? this.favoritesReceivedCount,
       isFollowing: isFollowing ?? this.isFollowing,
       isFollower: isFollower ?? this.isFollower,
+      hideFollowing: hideFollowing ?? this.hideFollowing,
+      hideFollowers: hideFollowers ?? this.hideFollowers,
+      publicFavorites: publicFavorites ?? this.publicFavorites,
     );
   }
 }
