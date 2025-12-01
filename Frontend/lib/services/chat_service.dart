@@ -420,9 +420,6 @@ class ChatService extends ChangeNotifier {
         // 重新排序
         _conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
-        // 自动设置为当前会话
-        setCurrentConversation(conversation);
-
         notifyListeners();
 
         return conversation;

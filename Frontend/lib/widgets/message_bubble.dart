@@ -14,12 +14,14 @@ class MessageBubble extends StatelessWidget {
   final Message message;
   final bool showAvatar;
   final bool showTime;
+  final VoidCallback? onAvatarTap;
 
   const MessageBubble({
     Key? key,
     required this.message,
     this.showAvatar = true,
     this.showTime = true,
+    this.onAvatarTap,
   }) : super(key: key);
 
   @override
@@ -30,7 +32,7 @@ class MessageBubble extends StatelessWidget {
         mainAxisAlignment: message.isMe
             ? MainAxisAlignment.end
             : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!message.isMe && showAvatar) ...[
             _buildAvatar(),
@@ -60,25 +62,28 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildAvatar() {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.grey[200],
+    return GestureDetector(
+      onTap: onAvatarTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.grey[200],
+        ),
+        child: message.senderAvatar != null
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  message.senderAvatar!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return _buildDefaultAvatar();
+                  },
+                ),
+              )
+            : _buildDefaultAvatar(),
       ),
-      child: message.senderAvatar != null
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                message.senderAvatar!,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return _buildDefaultAvatar();
-                },
-              ),
-            )
-          : _buildDefaultAvatar(),
     );
   }
 
