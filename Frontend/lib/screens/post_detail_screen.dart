@@ -1,5 +1,6 @@
 // lib/screens/post_detail_screen.dart
 // merge request 测试 1104: 单个帖子界面
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'dart:convert';
@@ -275,6 +276,11 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   bool? _isFollowingAuthor; // 是否关注了作者
   bool _followInFlight = false; // 关注操作进行中
   
+  // 图片实际尺寸（用于动态计算宽高比）
+  double? _actualImageWidth;
+  double? _actualImageHeight;
+  bool _isLoadingImageSize = false;
+  
   // @功能相关状态
   bool _showMentionList = false;
   List<Author> _mentionCandidates = [];
@@ -282,6 +288,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   int _mentionStartIndex = -1; // @符号在文本中的位置
   Map<String, Author> _selectedMentions = {}; // 已选择的@用户映射：用户名 -> 用户对象
   bool _isAutoAddingMention = false; // 标记是否正在自动添加@用户名（用于区分自动添加和手动输入）
+  bool _isImageFullscreen = false;
+  int _currentImageIndex = 0;
+  bool _isHoveringImage = false;
+  late final PageController _imagePageController;
   // ========= 外部链接跳转方法=========
   Future<void> _openExternalLink(String url) async {
     final trimmed = url.trim();
@@ -331,6 +341,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   @override
   void initState() {
     super.initState();
+    _imagePageController = PageController();
     isLiked = widget.post.isLiked;
     isSaved = widget.post.isSaved;
     likeCount = widget.post.likesCount;
@@ -377,6 +388,104 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     
     // 检查是否已关注作者
     _checkFollowStatus();
+    
+    // 如果后端返回的尺寸看起来是默认值（800x600），尝试加载图片获取真实尺寸
+    if (_imageMedia.isNotEmpty &&
+        widget.post.imageNaturalWidth == 800.0 &&
+        widget.post.imageNaturalHeight == 600.0) {
+      _loadImageSize();
+    }
+  }
+  
+  /// 加载图片获取真实尺寸
+  Future<void> _loadImageSize() async {
+    if (_isLoadingImageSize || _imageMedia.isEmpty) return;
+    
+    setState(() {
+      _isLoadingImageSize = true;
+    });
+
+    try {
+      final imageUrl = _imageMedia.first;
+      final imageProvider = NetworkImage(imageUrl);
+      
+      // 使用 ImageProvider.resolve 获取图片信息
+      final ImageStream stream = imageProvider.resolve(const ImageConfiguration());
+      final Completer<void> completer = Completer<void>();
+      
+      ImageStreamListener? listener;
+      listener = ImageStreamListener((ImageInfo info, bool synchronousCall) {
+        if (!mounted) return;
+        
+        final image = info.image;
+        setState(() {
+          _actualImageWidth = image.width.toDouble();
+          _actualImageHeight = image.height.toDouble();
+          _isLoadingImageSize = false;
+        });
+        
+        stream.removeListener(listener!);
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+      }, onError: (exception, stackTrace) {
+        stream.removeListener(listener!);
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+        if (mounted) {
+          setState(() {
+            _isLoadingImageSize = false;
+          });
+        }
+      });
+      
+      stream.addListener(listener);
+      await completer.future;
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingImageSize = false;
+        });
+      }
+    }
+  }
+
+  void _toggleImageFullscreen() {
+    setState(() {
+      _isImageFullscreen = !_isImageFullscreen;
+    });
+  }
+
+  void _handleImageHover(bool isHovering) {
+    if (!kIsWeb) return;
+    if (_isHoveringImage != isHovering) {
+      setState(() {
+        _isHoveringImage = isHovering;
+      });
+    }
+  }
+
+  void _goToNextImage() {
+    final images = _imageMedia;
+    if (images.length <= 1) return;
+    final nextIndex = (_currentImageIndex + 1).clamp(0, images.length - 1);
+    _imagePageController.animateToPage(
+      nextIndex,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _goToPreviousImage() {
+    final images = _imageMedia;
+    if (images.length <= 1) return;
+    final prevIndex = (_currentImageIndex - 1).clamp(0, images.length - 1);
+    _imagePageController.animateToPage(
+      prevIndex,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
   }
 
   /// 从后端加载帖子详情
@@ -561,6 +670,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     _commentController.removeListener(_onCommentTextChanged);
     _commentController.dispose();
     _commentFocusNode.dispose();
+    _imagePageController.dispose();
     _wsChannel?.sink.close();
     super.dispose();
   }
@@ -1832,67 +1942,209 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   }
 
   Widget _buildMediaGallery() {
-    // 根据帖子记录的宽高比自适应高度 
-    final ratio = widget.post.imageAspectRatio == 0 ? 1.5 : widget.post.imageAspectRatio; 
-    return GestureDetector(
-      onDoubleTap: _toggleLike,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          AspectRatio( 
-            aspectRatio: ratio, 
-            child: PageView(
-              children: _imageMedia.isNotEmpty ? _imageMedia.map((m) { 
-                      // 判断是网络图片还是本地文件
-                      ImageProvider imageProvider;
-                      if (m.startsWith('http')) {
-                        imageProvider = NetworkImage(m);
-                  } 
-                else { 
-                        imageProvider = FileImage(File(m));
-                      }
-                      return Image(
-                        image: imageProvider,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        errorBuilder: (_, __, ___) {
-                          return Container(
-                            color: Colors.grey[200],
-                            child: const Center(
-                              child: Icon(
-                                Icons.broken_image,
-                                size: 48,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          );
-                        },
-                      );
-              }).toList() : [ 
-                      Container(
-                        color: Colors.grey[200],
-                        child: const Center(
-                          child: Icon(
-                            Icons.image_not_supported,
-                            size: 48,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ),
-                    ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = constraints.maxWidth;
+        
+        // 计算图片宽高比：优先使用实际加载的图片尺寸，然后是后端返回的尺寸，最后是 imageAspectRatio
+        double ratio = 1.5;
+        if (_imageMedia.isNotEmpty) {
+          // 优先使用实际加载的图片尺寸（如果已加载）
+          if (_actualImageWidth != null && _actualImageHeight != null && 
+              _actualImageWidth! > 0 && _actualImageHeight! > 0) {
+            ratio = _actualImageWidth! / _actualImageHeight!;
+          } 
+          // 否则使用后端返回的尺寸（如果看起来不是默认值）
+          else if (widget.post.imageNaturalWidth > 0 && 
+                   widget.post.imageNaturalHeight > 0 &&
+                   !(widget.post.imageNaturalWidth == 800.0 && 
+                     widget.post.imageNaturalHeight == 600.0)) {
+            ratio = widget.post.imageNaturalWidth / widget.post.imageNaturalHeight;
+          } 
+          // 最后使用 imageAspectRatio
+          else if (widget.post.imageAspectRatio > 0) {
+            ratio = widget.post.imageAspectRatio;
+          }
+        }
+        
+        // 计算如果宽度填满屏幕时的高度
+        final calculatedHeight = screenWidth / ratio;
+        
+        // 判断是否需要限制高度
+        final bool needsHeightLimit = calculatedHeight > 450;
+        final double containerHeight = needsHeightLimit ? 450.0 : calculatedHeight;
+        final double containerWidth = needsHeightLimit ? (450.0 * ratio) : screenWidth;
+        
+        final images = _imageMedia;
+        if (images.isEmpty) {
+          return Container(
+            height: 220,
+            color: Colors.grey[200],
+            child: const Center(
+              child: Icon(
+                Icons.image_not_supported,
+                size: 48,
+                color: Colors.grey,
+              ),
             ),
-          ), // 喜欢动画 
-          Positioned(
-            child: _showBigHeart ? ScaleTransition( 
-                    scale: _heartScale,
-                    child: const Icon(
-                      Icons.favorite,
-                      color: Colors.redAccent,
-                      size: 100,
+          );
+        }
+
+        return MouseRegion(
+          onEnter: (_) => _handleImageHover(true),
+          onExit: (_) => _handleImageHover(false),
+          child: GestureDetector(
+            onDoubleTap: _toggleLike,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+              if (needsHeightLimit)
+                Center(
+                  child: SizedBox(
+                    width: containerWidth,
+                    height: containerHeight,
+                    child: PageView.builder(
+                      controller: _imagePageController,
+                      itemCount: images.length,
+                      onPageChanged: (index) {
+                        if (_currentImageIndex != index) {
+                          setState(() {
+                            _currentImageIndex = index;
+                          });
+                        }
+                      },
+                      itemBuilder: (_, index) {
+                        return GestureDetector(
+                          onTap: _toggleImageFullscreen,
+                          child: _buildImageDisplay(
+                            images[index],
+                            containerWidth,
+                            containerHeight,
+                            BoxFit.cover,
+                          ),
+                        );
+                      },
                     ),
-              ) : const SizedBox.shrink(), 
+                  ),
+                )
+              else
+                SizedBox(
+                  width: screenWidth,
+                  height: containerHeight,
+                  child: PageView.builder(
+                    controller: _imagePageController,
+                    itemCount: images.length,
+                    onPageChanged: (index) {
+                      if (_currentImageIndex != index) {
+                        setState(() {
+                          _currentImageIndex = index;
+                        });
+                      }
+                    },
+                    itemBuilder: (_, index) {
+                      return GestureDetector(
+                        onTap: _toggleImageFullscreen,
+                        child: _buildImageDisplay(
+                          images[index],
+                          screenWidth,
+                          containerHeight,
+                          BoxFit.cover,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                if (kIsWeb && images.length > 1 && _isHoveringImage)
+                  Positioned(
+                    left: 16,
+                    child: _buildImageNavButton(
+                      icon: Icons.chevron_left,
+                      onTap: _goToPreviousImage,
+                      enabled: _currentImageIndex > 0,
+                    ),
+                  ),
+                if (kIsWeb && images.length > 1 && _isHoveringImage)
+                  Positioned(
+                    right: 16,
+                    child: _buildImageNavButton(
+                      icon: Icons.chevron_right,
+                      onTap: _goToNextImage,
+                      enabled: _currentImageIndex < images.length - 1,
+                    ),
+                  ),
+                // 喜欢动画
+                Positioned(
+                  child: _showBigHeart
+                      ? ScaleTransition(
+                          scale: _heartScale,
+                          child: const Icon(
+                            Icons.favorite,
+                            color: Colors.redAccent,
+                            size: 100,
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
           ),
-        ],
+        );
+      },
+    );
+  }
+
+  Widget _buildImageDisplay(
+    String path,
+    double width,
+    double height,
+    BoxFit fit,
+  ) {
+    final placeholder = Container(
+      width: width,
+      height: height,
+      color: Colors.grey[200],
+      child: const Center(
+        child: Icon(
+          Icons.broken_image,
+          size: 48,
+          color: Colors.grey,
+        ),
+      ),
+    );
+
+    if (path.startsWith('http')) {
+      return Image.network(
+        path,
+        width: width,
+        height: height,
+        fit: fit,
+        errorBuilder: (_, __, ___) => placeholder,
+      );
+    }
+
+    return Image.file(
+      File(path),
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (_, __, ___) => placeholder,
+    );
+  }
+
+  Widget _buildImageNavButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    bool enabled = true,
+  }) {
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.35,
+      child: Material(
+        color: Colors.black45,
+        shape: const CircleBorder(),
+        child: IconButton(
+          icon: Icon(icon, color: Colors.white),
+          onPressed: enabled ? onTap : null,
+        ),
       ),
     );
   }
@@ -2994,6 +3246,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
               ],
             ),
           ),
+          if (_isImageFullscreen) _buildFullscreenOverlay(),
           _buildBottomCommentInput(),
           if (_isDeleting)
             Positioned.fill(
@@ -3005,6 +3258,77 @@ class _PostDetailScreenState extends State<PostDetailScreen>
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFullscreenOverlay() {
+    final images = _imageMedia;
+    if (!_isImageFullscreen || images.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withOpacity(0.95),
+        child: SafeArea(
+          child: GestureDetector(
+            onTap: _toggleImageFullscreen,
+            child: Stack(
+              children: [
+                PageView.builder(
+                  controller: _imagePageController,
+                  itemCount: images.length,
+                  onPageChanged: (index) {
+                    if (_currentImageIndex != index) {
+                      setState(() {
+                        _currentImageIndex = index;
+                      });
+                    }
+                  },
+                  itemBuilder: (_, index) {
+                    return Center(
+                      child: InteractiveViewer(
+                        minScale: 0.8,
+                        maxScale: 4.0,
+                        child: _buildImageDisplay(
+                          images[index],
+                          MediaQuery.of(context).size.width,
+                          MediaQuery.of(context).size.height,
+                          BoxFit.contain,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${_currentImageIndex + 1}/${images.length}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: _toggleImageFullscreen,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
