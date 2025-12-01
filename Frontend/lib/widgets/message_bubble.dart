@@ -380,6 +380,7 @@ class MessageBubble extends StatelessWidget {
         return Icons.description;
       case 'xls':
       case 'xlsx':
+      case 'csv':
         return Icons.table_chart;
       case 'ppt':
       case 'pptx':
@@ -390,6 +391,8 @@ class MessageBubble extends StatelessWidget {
         return Icons.folder_zip;
       case 'txt':
         return Icons.text_snippet;
+      case 'exe':
+        return Icons.settings_applications;
       default:
         return Icons.insert_drive_file;
     }
@@ -616,6 +619,7 @@ class MessageBubble extends StatelessWidget {
         return Icons.description;
       case 'xls':
       case 'xlsx':
+      case 'csv':
         return Icons.table_chart;
       case 'ppt':
       case 'pptx':
@@ -626,6 +630,8 @@ class MessageBubble extends StatelessWidget {
         return Icons.folder_zip;
       case 'txt':
         return Icons.text_snippet;
+      case 'exe':
+        return Icons.settings_applications;
       default:
         return Icons.insert_drive_file;
     }
