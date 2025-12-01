@@ -23,8 +23,10 @@ public class UserDtos {
             int followersCount,
             int postsCount,
             int favoritesCount,
+            int favoritesReceivedCount,
             int likesCount,
-            Boolean isFollowing
+            Boolean isFollowing,
+            Boolean isFollower
     ) {}
 
     /**

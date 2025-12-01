@@ -15,5 +15,6 @@
             "username": "team",
             "askForPassword": true
         }
-    ]
+    ],
+    "java.compile.nullAnalysis.mode": "automatic"
 }

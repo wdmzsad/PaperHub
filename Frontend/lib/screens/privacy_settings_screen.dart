@@ -1,0 +1,215 @@
+// lib/screens/privacy_settings_screen.dart
+/// 隐私设置页面
+import 'package:flutter/material.dart';
+import '../services/api_service.dart';
+import '../services/local_storage.dart';
+
+class PrivacySettingsScreen extends StatefulWidget {
+  const PrivacySettingsScreen({Key? key}) : super(key: key);
+
+  @override
+  State<PrivacySettingsScreen> createState() => _PrivacySettingsScreenState();
+}
+
+class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
+  bool _hideFollowing = false;
+  bool _hideFollowers = false;
+  bool _publicFavorites = true;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrivacySettings();
+  }
+
+  Future<void> _loadPrivacySettings() async {
+    setState(() => _loading = true);
+    try {
+      // TODO: 从后端获取隐私设置
+      // 目前使用本地存储作为临时方案
+      final hideFollowing = LocalStorage.instance.read('privacy_hide_following') == 'true';
+      final hideFollowers = LocalStorage.instance.read('privacy_hide_followers') == 'true';
+      final publicFavorites = LocalStorage.instance.read('privacy_public_favorites') != 'false';
+
+      setState(() {
+        _hideFollowing = hideFollowing;
+        _hideFollowers = hideFollowers;
+        _publicFavorites = publicFavorites;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _savePrivacySettings() async {
+    try {
+      // TODO: 保存到后端
+      // 目前使用本地存储作为临时方案
+      await LocalStorage.instance.write('privacy_hide_following', _hideFollowing.toString());
+      await LocalStorage.instance.write('privacy_hide_followers', _hideFollowers.toString());
+      await LocalStorage.instance.write('privacy_public_favorites', _publicFavorites.toString());
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('设置已保存')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存失败: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          '隐私设置',
+          style: TextStyle(
+            color: Colors.black87,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 关注与粉丝列表
+                  _buildSection(
+                    title: '关注与粉丝列表',
+                    children: [
+                      _buildSwitchTile(
+                        title: '隐藏关注列表',
+                        subtitle: '开启后，其他人将无法查看你的关注列表',
+                        value: _hideFollowing,
+                        onChanged: (value) {
+                          setState(() {
+                            _hideFollowing = value;
+                          });
+                          _savePrivacySettings();
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildSwitchTile(
+                        title: '隐藏粉丝列表',
+                        subtitle: '开启后，其他人将无法查看你的粉丝列表',
+                        value: _hideFollowers,
+                        onChanged: (value) {
+                          setState(() {
+                            _hideFollowers = value;
+                          });
+                          _savePrivacySettings();
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // 我的收藏
+                  _buildSection(
+                    title: '我的收藏',
+                    children: [
+                      _buildSwitchTile(
+                        title: '公开我的收藏',
+                        subtitle: '开启后，其他人可以在你的主页查看你的收藏内容',
+                        value: _publicFavorites,
+                        onChanged: (value) {
+                          setState(() {
+                            _publicFavorites = value;
+                          });
+                          _savePrivacySettings();
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildSection({
+    required String title,
+    required List<Widget> children,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+        Container(
+          color: Colors.white,
+          child: Column(
+            children: children,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSwitchTile({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return ListTile(
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          subtitle,
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey[600],
+          ),
+        ),
+      ),
+      trailing: Switch(
+        value: value,
+        onChanged: onChanged,
+        activeColor: Colors.black87,
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    );
+  }
+}
+
+
+
+
+
+
+

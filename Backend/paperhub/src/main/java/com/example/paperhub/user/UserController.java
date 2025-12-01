@@ -250,6 +250,28 @@ public class UserController {
     }
 
     /**
+     * 获取互相关注列表。
+     */
+    @GetMapping("/{userId}/mutual")
+    public ResponseEntity<UserDtos.UserListResp> getMutual(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @AuthenticationPrincipal User currentUser) {
+        Page<UserFollow> mutualPage = followService.getMutualFollows(userId, PageRequest.of(page, pageSize));
+        var users = mutualPage.getContent().stream()
+                .map(UserFollow::getFollowing)
+                .map(u -> userService.toProfile(u, currentUser))
+                .toList();
+        return ResponseEntity.ok(new UserDtos.UserListResp(
+                users,
+                mutualPage.getTotalElements(),
+                page,
+                pageSize
+        ));
+    }
+
+    /**
      * 获取用户收藏的帖子。
      */
     @GetMapping("/{userId}/favorites")

@@ -18,7 +18,9 @@ class UserProfile {
   final int postsCount;
   final int favoritesCount;
   final int likesCount;
+  final int favoritesReceivedCount;
   final bool? isFollowing;
+  final bool? isFollower;
 
   const UserProfile({
     required this.id,
@@ -33,7 +35,9 @@ class UserProfile {
     this.postsCount = 0,
     this.favoritesCount = 0,
     this.likesCount = 0,
+    this.favoritesReceivedCount = 0,
     this.isFollowing,
+    this.isFollower,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -71,7 +75,10 @@ class UserProfile {
       postsCount: _parseCount(json['posts'] ?? json['postsCount']),
       favoritesCount: _parseCount(json['favorites'] ?? json['favoritesCount']),
       likesCount: _parseCount(json['likes'] ?? json['likesCount']),
+      favoritesReceivedCount:
+          _parseCount(json['favoritesReceived'] ?? json['favoritesReceivedCount']),
       isFollowing: json['isFollowing'] as bool?,
+      isFollower: json['isFollower'] as bool?,
     );
   }
 
@@ -89,7 +96,9 @@ class UserProfile {
     'posts': postsCount,
     'favorites': favoritesCount,
     'likes': likesCount,
+    'favoritesReceived': favoritesReceivedCount,
     if (isFollowing != null) 'isFollowing': isFollowing,
+    if (isFollower != null) 'isFollower': isFollower,
   };
 
   UserProfile copyWith({
@@ -103,7 +112,9 @@ class UserProfile {
     int? postsCount,
     int? favoritesCount,
     int? likesCount,
+    int? favoritesReceivedCount,
     bool? isFollowing,
+    bool? isFollower,
   }) {
     return UserProfile(
       id: id,
@@ -118,7 +129,10 @@ class UserProfile {
       postsCount: postsCount ?? this.postsCount,
       favoritesCount: favoritesCount ?? this.favoritesCount,
       likesCount: likesCount ?? this.likesCount,
+      favoritesReceivedCount:
+          favoritesReceivedCount ?? this.favoritesReceivedCount,
       isFollowing: isFollowing ?? this.isFollowing,
+      isFollower: isFollower ?? this.isFollower,
     );
   }
 }

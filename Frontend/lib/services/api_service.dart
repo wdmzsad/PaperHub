@@ -361,6 +361,23 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> getMutualFollowers(
+    String userId, {
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/users/$userId/mutual').replace(
+      queryParameters: {
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/users/$userId/mutual',
+    );
+  }
+
   /// 搜索用户（用于@功能）
   /// GET /users/search?q=name&type=following|all
   static Future<Map<String, dynamic>> searchUsers({

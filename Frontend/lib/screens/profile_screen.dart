@@ -19,6 +19,8 @@ import 'home_screen.dart';
 import 'message_screen.dart';
 import 'post_detail_screen.dart';
 import 'chat_screen.dart';
+import 'follow_list_screen.dart';
+import 'privacy_settings_screen.dart';
 
 class ProfilePage extends StatefulWidget {
   final String? userId;
@@ -350,15 +352,20 @@ class _ProfilePageState extends State<ProfilePage>
     }
   }
 
-  Future<void> _openFollowList(bool showFollowers) async {
+  Future<void> _openFollowList(bool showFollowers, {bool mutual = false}) async {
     if (_profile == null) return;
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) =>
-          _FollowListSheet(userId: _profile!.id, showFollowers: showFollowers),
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FollowListScreen(
+          userId: _profile!.id,
+          initialTab: mutual ? 'mutual' : (showFollowers ? 'followers' : 'following'),
+        ),
+      ),
     );
+    if (changed == true) {
+      await _loadProfile(forceNetwork: true);
+    }
   }
 
   Future<void> _toggleFollow() async {
@@ -659,6 +666,20 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ),
           ListTile(
+            leading: const Icon(Icons.settings),
+            title: const Text('隐私设置'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const PrivacySettingsScreen(),
+                ),
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
             title: const Text('登出'),
             onTap: () async {
@@ -916,14 +937,17 @@ class _ProfilePageState extends State<ProfilePage>
                     _StatItem(
                       title: '关注',
                       count: profile.followingCount,
-                      onTap: _isViewingSelf ? () => _openFollowList(false) : null,
+                      onTap: () => _openFollowList(false),
                     ),
                     _StatItem(
                       title: '粉丝',
                       count: profile.followersCount,
                       onTap: () => _openFollowList(true),
                     ),
-                    _StatItem(title: '收藏', count: profile.favoritesCount),
+                    _StatItem(
+                      title: '被收藏',
+                      count: profile.favoritesReceivedCount,
+                    ),
                     _StatItem(title: '点赞', count: profile.likesCount),
                   ],
                 ),
@@ -1014,8 +1038,8 @@ class _ProfilePageState extends State<ProfilePage>
             labelColor: Colors.black,
             indicatorColor: Colors.blueAccent,
             tabs: [
-              Tab(text: '我的笔记'),
-              Tab(text: '我的收藏'),
+              Tab(text: '笔记'),
+              Tab(text: '收藏'),
             ],
           ),
           const SizedBox(height: 8),
@@ -1156,10 +1180,11 @@ class _StatItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final displayCount = count == -1 ? '-' : '$count';
     final content = Column(
       children: [
         Text(
-          '$count',
+          displayCount,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         const SizedBox(height: 5),
