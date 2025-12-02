@@ -1,6 +1,8 @@
 /// 消息数据模型
 ///
 /// 支持多种消息类型：文本、图片、文件等
+import 'dart:convert';
+
 class Message {
   final String id;
   final String conversationId;
@@ -16,6 +18,7 @@ class Message {
   final DateTime createdAt;
   final MessageStatus status;
   final bool isMe;
+  final Map<String, dynamic>? sharePost; // 分享的帖子信息（当 type 为 share 时使用）
 
   Message({
     required this.id,
@@ -32,11 +35,14 @@ class Message {
     required this.createdAt,
     this.status = MessageStatus.sent,
     this.isMe = false,
+    this.sharePost,
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
     String typeStr = (json['type'] ?? 'TEXT').toString().toUpperCase();
     MessageType messageType = MessageType.text;
+    String content = json['content'] ?? '';
+    Map<String, dynamic>? sharePost;
 
     switch (typeStr) {
       case 'IMAGE':
@@ -53,6 +59,10 @@ class Message {
         break;
       case 'VIDEO':
         messageType = MessageType.video;
+      case 'SHARE':
+        messageType = MessageType.share;
+        // SHARE 类型的 content 存储的是 post ID
+        // sharePost 字段会在前端显示时根据 post ID 动态获取
         break;
       default:
         messageType = MessageType.text;
@@ -64,7 +74,7 @@ class Message {
       senderId: json['senderId']?.toString() ?? '',
       senderName: json['senderName'] ?? '',
       senderAvatar: json['senderAvatar'] ?? '',
-      content: json['content'] ?? '',
+      content: content,
       type: messageType,
       mediaUrls: json['mediaUrls'] != null
           ? List<String>.from(json['mediaUrls'])
@@ -78,6 +88,7 @@ class Message {
         orElse: () => MessageStatus.sent,
       ),
       isMe: json['isMe'] ?? false,
+      sharePost: sharePost,
     );
   }
 
@@ -97,6 +108,7 @@ class Message {
       'createdAt': createdAt.toIso8601String(),
       'status': status.toString().split('.').last,
       'isMe': isMe,
+      if (sharePost != null) 'sharePost': sharePost,
     };
   }
 
@@ -115,6 +127,7 @@ class Message {
     DateTime? createdAt,
     MessageStatus? status,
     bool? isMe,
+    Map<String, dynamic>? sharePost,
   }) {
     return Message(
       id: id ?? this.id,
@@ -131,6 +144,7 @@ class Message {
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
       isMe: isMe ?? this.isMe,
+      sharePost: sharePost ?? this.sharePost,
     );
   }
 }
@@ -143,6 +157,7 @@ enum MessageType {
   voice,   // 语音消息
   system,  // 系统消息
   video,   // 视频消息
+  share,   // 分享消息（帖子）
 }
 
 /// 消息状态枚举
