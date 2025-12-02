@@ -13,6 +13,8 @@ class _RegisterPageState extends State<RegisterPage> {
   String password = '';
   String confirm = '';
   bool loading = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
 
   bool _validPassword(String p) {
     if (p.length < 8) return false;
@@ -62,8 +64,14 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                   SizedBox(height: 12),
                   TextFormField(
-                    decoration: InputDecoration(labelText: '密码 (至少8位，包含字母和数字)'),
-                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: '密码 (至少8位，包含字母和数字)',
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
+                    ),
+                    obscureText: _obscurePassword,
                     onChanged: (v) => password = v,
                     validator: (v) {
                       if (v == null || v.isEmpty) return '请输入密码';
@@ -73,8 +81,14 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                   SizedBox(height: 12),
                   TextFormField(
-                    decoration: InputDecoration(labelText: '确认密码'),
-                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: '确认密码',
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                      ),
+                    ),
+                    obscureText: _obscureConfirm,
                     onChanged: (v) => confirm = v,
                     validator: (v) {
                       if (v == null || v.isEmpty) return '请确认密码';

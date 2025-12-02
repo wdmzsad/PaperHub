@@ -14,6 +14,7 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../widgets/pdf_iframe_view.dart';
 import '../services/local_storage.dart';
+import '../services/browse_history_service.dart';
 import '../config/app_env.dart';
 import 'profile_screen.dart';
 import '../constants/discipline_constants.dart';
@@ -385,6 +386,16 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     
     // 获取当前用户ID
     _loadCurrentUserId();
+
+    // 记录浏览历史（最多 50 条由 BrowseHistoryService 自己控制）
+    final userId = LocalStorage.instance.read('userId')?.toString();
+    if (userId != null && userId.isNotEmpty) {
+      unawaited(BrowseHistoryService.addHistory(
+        userId: userId,
+        postId: widget.post.id,
+        title: widget.post.title,
+      ));
+    }
 
     // WebSocket 实时点赞监听
     _initWebSocket();

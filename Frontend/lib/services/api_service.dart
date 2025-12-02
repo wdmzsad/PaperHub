@@ -1299,6 +1299,51 @@ class ApiService {
     );
   }
 
+  /// ==================== 浏览历史 API ====================
+
+  static Future<Map<String, dynamic>> recordBrowseHistory(
+    String postId,
+    String title,
+  ) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/browse-history'),
+        headers: _buildHeaders(),
+        body: jsonEncode({'postId': postId, 'title': title}),
+      ),
+      '/browse-history',
+    );
+  }
+
+  static Future<Map<String, dynamic>> getBrowseHistory({int limit = 50}) async {
+    final uri = Uri.parse('$baseUrl/browse-history')
+        .replace(queryParameters: {'limit': limit.toString()});
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/browse-history',
+    );
+  }
+
+  static Future<Map<String, dynamic>> deleteBrowseHistory(String postId) async {
+    return await _makeRequest(
+      () => http.delete(
+        Uri.parse('$baseUrl/browse-history/$postId'),
+        headers: _buildHeaders(),
+      ),
+      '/browse-history/$postId',
+    );
+  }
+
+  static Future<Map<String, dynamic>> clearBrowseHistory() async {
+    return await _makeRequest(
+      () => http.delete(
+        Uri.parse('$baseUrl/browse-history'),
+        headers: _buildHeaders(),
+      ),
+      '/browse-history',
+    );
+  }
+
   // ==================== 聊天相关API ====================
 
   /// 获取会话列表

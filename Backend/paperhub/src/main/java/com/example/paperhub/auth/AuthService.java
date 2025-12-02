@@ -22,13 +22,24 @@ public class AuthService {
     
     //以下函数是对应AuthController中的函数，负责处理用户认证相关的业务逻辑
     public void register(String email, String rawPassword) {//注册新用户
-        if (userRepository.existsByEmail(email)) {
+        // 检查是否已有已验证的用户
+        if (userRepository.existsByEmailAndVerified(email, true)) {
             throw new IllegalArgumentException("该邮箱已注册，请直接登录或找回密码");
         }
-        User user = new User();
-        user.setEmail(email);
-        user.setPasswordHash(passwordEncoder.encode(rawPassword));
-        user.setRole(UserRole.USER);
+
+        // 查找是否有未验证的用户
+        User user = userRepository.findByEmail(email).orElse(null);
+
+        if (user != null && !user.isVerified()) {
+            // 未验证用户，更新密码和验证码
+            user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        } else {
+            // 新用户
+            user = new User();
+            user.setEmail(email);
+            user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        }
+
         String code = generateCode(6);
         user.setVerifyCode(code);
         user.setVerifyExpiry(Instant.now().plusSeconds(5 * 60));
@@ -63,15 +74,12 @@ public class AuthService {
     }
 
     public User validateLogin(String email, String rawPassword) {//验证用户登录
-        User user = userRepository.findByEmail(email).orElseThrow(() -> new IllegalArgumentException("邮箱未注册"));
-        if (!user.isVerified()) {
-            throw new IllegalArgumentException("邮箱未验证，请先完成邮件验证");
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null || !user.isVerified()) {
+            throw new IllegalArgumentException("邮箱未注册或未验证，请先注册并完成邮件验证");
         }
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
             throw new IllegalArgumentException("密码错误");
-        }
-        if (user.getStatus() == UserStatus.BANNED) {
-            throw new IllegalArgumentException("账号已被封禁，请联系管理员");
         }
         return user;
     }
@@ -81,7 +89,10 @@ public class AuthService {
     }
 
     public void requestReset(String email) {//请求重置密码
-        User user = userRepository.findByEmail(email).orElseThrow(() -> new IllegalArgumentException("邮箱未注册"));
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null || !user.isVerified()) {
+            throw new IllegalArgumentException("邮箱未注册或未验证");
+        }
         String code = generateCode(6);
         user.setResetCode(code);
         user.setResetExpiry(Instant.now().plusSeconds(10 * 60));
@@ -90,7 +101,10 @@ public class AuthService {
     }
 
     public void resetPassword(String email, String code, String newRawPassword) {//重置用户密码
-        User user = userRepository.findByEmail(email).orElseThrow(() -> new IllegalArgumentException("邮箱未注册"));
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null || !user.isVerified()) {
+            throw new IllegalArgumentException("邮箱未注册或未验证");
+        }
         if (user.getResetCode() == null || user.getResetExpiry() == null) {
             throw new IllegalArgumentException("无重置请求，请先请求重置邮件");
         }

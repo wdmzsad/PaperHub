@@ -17,6 +17,7 @@ class _LoginPageState extends State<LoginPage> {
   String password = '';
   bool loading = false;
   String? errorText;
+  bool _obscurePassword = true;
 
   void _showSnack(String msg) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -92,8 +93,14 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     SizedBox(height: 12),
                     TextFormField(
-                      decoration: InputDecoration(labelText: '密码'),
-                      obscureText: true,
+                      decoration: InputDecoration(
+                        labelText: '密码',
+                        suffixIcon: IconButton(
+                          icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        ),
+                      ),
+                      obscureText: _obscurePassword,
                       validator: (v) {
                         if (v == null || v.isEmpty) return '请输入密码';
                         return null;
