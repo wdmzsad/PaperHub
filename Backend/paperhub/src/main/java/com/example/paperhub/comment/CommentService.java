@@ -2,6 +2,7 @@ package com.example.paperhub.comment;
 
 import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
+import com.example.paperhub.auth.UserStatus;
 import com.example.paperhub.like.CommentLikeRepository;
 import com.example.paperhub.notification.NotificationService;
 import com.example.paperhub.post.Post;
@@ -61,6 +62,7 @@ public class CommentService {
      */
     @Transactional
     public Comment createComment(Long postId, String content, User author, Long parentId, Long replyToId, List<Long> mentionIds) {
+        ensureUserCanInteract(author);
         Post post = postRepository.findById(postId)
             .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
         
@@ -224,6 +226,21 @@ public class CommentService {
      */
     public Optional<Comment> findById(Long commentId) {
         return commentRepository.findById(commentId);
+    }
+
+    private void ensureUserCanInteract(User user) {
+        if (user == null) {
+            throw new IllegalArgumentException("未认证用户无法执行此操作");
+        }
+        if (user.getStatus() == UserStatus.BANNED) {
+            throw new IllegalArgumentException("账号已被封禁，无法执行此操作");
+        }
+        if (user.getStatus() == UserStatus.MUTED) {
+            Instant muteUntil = user.getMuteUntil();
+            if (muteUntil == null || Instant.now().isBefore(muteUntil)) {
+                throw new IllegalArgumentException("账号被禁言中，暂时无法评论");
+            }
+        }
     }
 }
 

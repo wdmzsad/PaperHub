@@ -172,4 +172,21 @@ public class ChatController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * 获取最新消息（从 Redis 缓存）
+     */
+    @GetMapping("/{conversationId}/messages/latest")
+    public ResponseEntity<List<MessageResponse>> getLatestMessages(
+            @AuthenticationPrincipal com.example.paperhub.auth.User user,
+            @PathVariable Long conversationId,
+            @RequestParam(defaultValue = "30") int limit) {
+
+        if (user == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        List<MessageResponse> messages = chatService.getLatestMessages(conversationId, user.getId(), limit);
+        return ResponseEntity.ok(messages);
+    }
+
 }

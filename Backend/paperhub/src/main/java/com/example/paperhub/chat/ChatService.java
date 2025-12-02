@@ -4,12 +4,14 @@ import com.example.paperhub.chat.dto.ConversationResponse;
 import com.example.paperhub.chat.dto.MessageResponse;
 import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
+import com.example.paperhub.auth.UserStatus;
 import com.example.paperhub.websocket.ChatWebSocketService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
@@ -19,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class ChatService {
@@ -39,6 +42,11 @@ public class ChatService {
 
     @Autowired
     private ChatWebSocketService chatWebSocketService;
+
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+
+    private static final int CACHE_MESSAGE_LIMIT = 30;
 
     /**
      * 获取用户的所有会话列表
@@ -97,6 +105,7 @@ public class ChatService {
      */
     @Transactional
     public Conversation createOrGetPrivateConversation(Long currentUserId, Long targetUserId) {
+        ensureUserCanInteract(currentUserId);
         logger.info("开始创建或获取私聊会话: currentUserId={}, targetUserId={}", currentUserId, targetUserId);
 
         // 检查是否已存在私聊会话
@@ -166,6 +175,7 @@ public class ChatService {
     @Transactional
     public Message sendMessage(Long conversationId, Long senderId, String content, MessageType type,
                               String fileUrl, String fileName, Long fileSize) {
+        ensureUserCanInteract(senderId);
         // 验证用户是否在会话中
         if (!conversationParticipantRepository.existsByConversationIdAndUserId(conversationId, senderId)) {
             return null;
@@ -188,6 +198,9 @@ public class ChatService {
 
         Message savedMessage = messageRepository.save(message);
 
+        // 保存到 Redis 缓存
+        saveMessageToRedis(conversationId, savedMessage);
+
         // 更新会话的更新时间
         Conversation conversation = conversationOpt.get();
         conversation.setUpdatedAt(LocalDateTime.now());
@@ -205,6 +218,7 @@ public class ChatService {
     @Transactional
     public Message sendMessageWithMedia(Long conversationId, Long senderId, String content,
                                        MessageType type, List<String> mediaUrls, String fileName, Long fileSize) {
+        ensureUserCanInteract(senderId);
         if (!conversationParticipantRepository.existsByConversationIdAndUserId(conversationId, senderId)) {
             return null;
         }
@@ -231,6 +245,9 @@ public class ChatService {
         message.setCreatedAt(LocalDateTime.now());
 
         Message savedMessage = messageRepository.save(message);
+
+        // 保存到 Redis 缓存
+        saveMessageToRedis(conversationId, savedMessage);
 
         // 更新会话的更新时间
         Conversation conversation = conversationOpt.get();
@@ -319,5 +336,114 @@ public class ChatService {
             // WebSocket推送失败不影响消息发送，只记录错误
             e.printStackTrace();
         }
+    }
+
+
+    /**
+     * 保存消息到 Redis 缓存
+     */
+    private void saveMessageToRedis(Long conversationId, Message message) {
+        try {
+            String key = RedisKeys.conversationMessages(conversationId);
+            redisTemplate.opsForList().rightPush(key, message);
+            redisTemplate.opsForList().trim(key, -CACHE_MESSAGE_LIMIT, -1);
+        } catch (Exception e) {
+            logger.error("保存消息到 Redis 失败: conversationId={}, error={}", conversationId, e.getMessage());
+        }
+    }
+
+    /**
+     * 获取最新消息（优先从 Redis）
+     */
+    @Transactional(readOnly = true)
+    public List<MessageResponse> getLatestMessages(Long conversationId, Long userId, int limit) {
+        // 验证用户权限
+        if (!conversationParticipantRepository.existsByConversationIdAndUserId(conversationId, userId)) {
+            return new ArrayList<>();
+        }
+
+        try {
+            String key = RedisKeys.conversationMessages(conversationId);
+            List<Object> cachedMessages = redisTemplate.opsForList().range(key, -limit, -1);
+
+            if (cachedMessages != null && !cachedMessages.isEmpty()) {
+                logger.info("从 Redis 获取消息: conversationId={}, count={}", conversationId, cachedMessages.size());
+                return cachedMessages.stream()
+                    .filter(obj -> obj instanceof Message)
+                    .map(obj -> (Message) obj)
+                    .map(msg -> buildMessageResponse(msg, userId))
+                    .collect(Collectors.toList());
+            }
+        } catch (Exception e) {
+            logger.error("从 Redis 读取消息失败: conversationId={}, error={}", conversationId, e.getMessage());
+        }
+
+        // Redis 未命中，从 MySQL 加载并缓存
+        return loadFromMySQLAndCache(conversationId, userId, limit);
+    }
+
+    /**
+     * 从 MySQL 加载消息并写入 Redis
+     */
+    private List<MessageResponse> loadFromMySQLAndCache(Long conversationId, Long userId, int limit) {
+        logger.info("从 MySQL 加载消息: conversationId={}", conversationId);
+
+        Pageable pageable = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Message> messages = messageRepository.findByConversationIdOrderByCreatedAtDesc(conversationId, pageable);
+
+        List<Message> messageList = messages.getContent();
+
+        // 写入 Redis（按时间升序）
+        if (!messageList.isEmpty()) {
+            try {
+                String key = RedisKeys.conversationMessages(conversationId);
+                redisTemplate.delete(key);
+                for (int i = messageList.size() - 1; i >= 0; i--) {
+                    redisTemplate.opsForList().rightPush(key, messageList.get(i));
+                }
+            } catch (Exception e) {
+                logger.error("缓存消息到 Redis 失败: conversationId={}, error={}", conversationId, e.getMessage());
+            }
+        }
+
+        return messageList.stream()
+            .map(msg -> buildMessageResponse(msg, userId))
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * 构建消息响应
+     */
+    private MessageResponse buildMessageResponse(Message message, Long userId) {
+        MessageResponse response = new MessageResponse(message);
+        Optional<User> sender = userRepository.findById(message.getSenderId());
+        if (sender.isPresent()) {
+            User user = sender.get();
+            response.setSenderName(user.getName());
+            response.setSenderAvatar(user.getAvatar());
+        }
+        response.setIsMe(message.getSenderId().equals(userId));
+        return response;
+    }
+    
+    private void ensureUserCanInteract(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("未认证用户无法执行此操作");
+        }
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("用户不存在");
+        }
+        User user = userOpt.get();
+        if (user.getStatus() == UserStatus.BANNED) {
+            throw new IllegalArgumentException("账号已被封禁，无法发送私信");
+        }
+        if (user.getStatus() == UserStatus.MUTED) {
+            java.time.Instant muteUntil = user.getMuteUntil();
+            if (muteUntil == null || java.time.Instant.now().isBefore(muteUntil)) {
+                throw new IllegalArgumentException("账号被禁言中，暂时无法发送私信");
+            }
+        }
+
     }
 }

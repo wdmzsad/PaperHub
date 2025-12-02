@@ -432,6 +432,28 @@ class ApiService {
     );
   }
 
+  /// 搜索帖子
+  /// GET /posts/search?q=keyword&sort=hot|new&page=1&pageSize=20
+  static Future<Map<String, dynamic>> searchPosts({
+    required String query,
+    String sort = 'hot', // 'hot' 或 'new'
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/posts/search').replace(
+      queryParameters: {
+        'q': query,
+        'sort': sort,
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/posts/search',
+    );
+  }
+
   static Future<Map<String, dynamic>> getUserPosts(
     String userId, {
     int page = 1,
@@ -714,6 +736,328 @@ class ApiService {
         body: jsonEncode(payload),
       ),
       '/notifications',
+    );
+  }
+
+  // ===================== 管理员后台相关 =====================
+
+  /// 管理员搜索用户（用于“用户管理”页面）
+  /// GET /admin/users?q=...&page=&pageSize=
+  static Future<Map<String, dynamic>> adminSearchUsers({
+    String? query,
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/admin/users').replace(
+      queryParameters: {
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/admin/users',
+    );
+  }
+
+  /// 帖子下架（占位，下架逻辑由后端实现）
+  /// POST /admin/posts/{postId}/hide
+  static Future<Map<String, dynamic>> adminHidePost(String postId) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/posts/$postId/hide'),
+        headers: _buildHeaders(),
+      ),
+      '/admin/posts/$postId/hide',
+    );
+  }
+
+  /// 管理员搜索帖子
+  /// GET /admin/posts?q=&author=&page=&pageSize=
+  static Future<Map<String, dynamic>> adminSearchPosts({
+    String? query,
+    String? author,
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final params = <String, String>{
+      'page': page.toString(),
+      'pageSize': pageSize.toString(),
+    };
+    if (query != null && query.trim().isNotEmpty) {
+      params['q'] = query.trim();
+    }
+    if (author != null && author.trim().isNotEmpty) {
+      params['author'] = author.trim();
+    }
+    final uri = Uri.parse('$baseUrl/admin/posts').replace(
+      queryParameters: params,
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/admin/posts',
+    );
+  }
+
+  /// 获取公告列表
+  /// GET /admin/notices?q=&page=&pageSize=
+  static Future<Map<String, dynamic>> adminGetNotices({
+    String? query,
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/admin/notices').replace(
+      queryParameters: {
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/admin/notices',
+    );
+  }
+
+  /// 创建公告
+  static Future<Map<String, dynamic>> adminCreateNotice({
+    required String title,
+    String? content,
+    String? attachmentsJson,
+    bool published = true,
+  }) async {
+    final payload = <String, dynamic>{
+      'title': title,
+      if (content != null) 'content': content,
+      if (attachmentsJson != null) 'attachments': attachmentsJson,
+      'published': published,
+    };
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/notices'),
+        headers: _buildHeaders(),
+        body: jsonEncode(payload),
+      ),
+      '/admin/notices',
+    );
+  }
+
+  /// 更新公告
+  static Future<Map<String, dynamic>> adminUpdateNotice({
+    required String id,
+    required String title,
+    String? content,
+    String? attachmentsJson,
+    bool published = true,
+  }) async {
+    final payload = <String, dynamic>{
+      'title': title,
+      if (content != null) 'content': content,
+      if (attachmentsJson != null) 'attachments': attachmentsJson,
+      'published': published,
+    };
+    return await _makeRequest(
+      () => http.put(
+        Uri.parse('$baseUrl/admin/notices/$id'),
+        headers: _buildHeaders(),
+        body: jsonEncode(payload),
+      ),
+      '/admin/notices/$id',
+    );
+  }
+
+  /// 删除公告
+  static Future<Map<String, dynamic>> adminDeleteNotice(String id) async {
+    return await _makeRequest(
+      () => http.delete(
+        Uri.parse('$baseUrl/admin/notices/$id'),
+        headers: _buildHeaders(),
+      ),
+      '/admin/notices/$id',
+    );
+  }
+
+  /// 获取举报列表
+  /// GET /admin/reports?q=&status=&targetType=&page=&pageSize=
+  static Future<Map<String, dynamic>> adminGetReports({
+    String? query,
+    String? status,
+    String? targetType,
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final params = <String, String>{
+      'page': page.toString(),
+      'pageSize': pageSize.toString(),
+    };
+    if (query != null && query.trim().isNotEmpty) {
+      params['q'] = query.trim();
+    }
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+    if (targetType != null && targetType.isNotEmpty) {
+      params['targetType'] = targetType;
+    }
+    final uri = Uri.parse('$baseUrl/admin/reports').replace(
+      queryParameters: params,
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/admin/reports',
+    );
+  }
+
+  /// 处理举报
+  /// POST /admin/reports/{id}/handle
+  static Future<Map<String, dynamic>> adminHandleReport({
+    required String id,
+    required String action, // DELETE_POST / NO_VIOLATION / BAN_USER
+    String? note,
+  }) async {
+    final payload = <String, dynamic>{
+      'action': action,
+      if (note != null && note.isNotEmpty) 'resolutionNote': note,
+    };
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/reports/$id/handle'),
+        headers: _buildHeaders(),
+        body: jsonEncode(payload),
+      ),
+      '/admin/reports/$id/handle',
+    );
+  }
+
+  /// 创建管理员申请（由管理员或超管发起）
+  /// POST /admin/applications
+  static Future<Map<String, dynamic>> adminCreateApplication({
+    required String candidateUserId,
+    required String reason,
+  }) async {
+    final payload = {
+      'candidateUserId': int.tryParse(candidateUserId) ?? candidateUserId,
+      'reason': reason,
+    };
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/applications'),
+        headers: _buildHeaders(),
+        body: jsonEncode(payload),
+      ),
+      '/admin/applications',
+    );
+  }
+
+  /// 获取管理员申请列表（仅超级管理员）
+  /// GET /admin/applications?status=&page=&pageSize=
+  static Future<Map<String, dynamic>> adminGetApplications({
+    String? status,
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final params = <String, String>{
+      'page': page.toString(),
+      'pageSize': pageSize.toString(),
+    };
+    if (status != null && status.isNotEmpty) {
+      params['status'] = status;
+    }
+    final uri = Uri.parse('$baseUrl/admin/applications').replace(
+      queryParameters: params,
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/admin/applications',
+    );
+  }
+
+  static Future<Map<String, dynamic>> adminApproveApplication(String id) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/applications/$id/approve'),
+        headers: _buildHeaders(),
+      ),
+      '/admin/applications/$id/approve',
+    );
+  }
+
+  static Future<Map<String, dynamic>> adminRejectApplication(String id) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/applications/$id/reject'),
+        headers: _buildHeaders(),
+      ),
+      '/admin/applications/$id/reject',
+    );
+  }
+
+  /// 授予管理员权限/收回权限（仅超级管理员，配合“管理员权限管理”页）
+  static Future<Map<String, dynamic>> adminGrantAdmin(String userId) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/permissions/$userId/grant-admin'),
+        headers: _buildHeaders(),
+      ),
+      '/admin/permissions/$userId/grant-admin',
+    );
+  }
+
+  static Future<Map<String, dynamic>> adminRevokeAdmin(String userId) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/permissions/$userId/revoke-admin'),
+        headers: _buildHeaders(),
+      ),
+      '/admin/permissions/$userId/revoke-admin',
+    );
+  }
+
+  /// 用户封禁 / 解封 / 禁言 / 解除禁言（管理员）
+  static Future<Map<String, dynamic>> adminBanUser(String userId) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/users/$userId/ban'),
+        headers: _buildHeaders(),
+      ),
+      '/admin/users/$userId/ban',
+    );
+  }
+
+  static Future<Map<String, dynamic>> adminUnbanUser(String userId) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/users/$userId/unban'),
+        headers: _buildHeaders(),
+      ),
+      '/admin/users/$userId/unban',
+    );
+  }
+
+  static Future<Map<String, dynamic>> adminMuteUser(
+    String userId, {
+    required int duration,
+    required String unit, // HOURS / DAYS / MONTHS / YEARS
+  }) async {
+    final uri = Uri.parse(
+        '$baseUrl/admin/users/$userId/mute?duration=$duration&unit=$unit');
+    return await _makeRequest(
+      () => http.post(
+        uri,
+        headers: _buildHeaders(),
+      ),
+      '/admin/users/$userId/mute',
+    );
+  }
+
+  static Future<Map<String, dynamic>> adminUnmuteUser(String userId) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/users/$userId/unmute'),
+        headers: _buildHeaders(),
+      ),
+      '/admin/users/$userId/unmute',
     );
   }
 
@@ -1005,6 +1349,7 @@ class ApiService {
 
   /// 发送消息
   /// POST /api/conversations/{conversationId}/messages
+  /// 注意：后端不支持 sharePost 字段，分享消息的信息需要编码在 content 中
   static Future<Map<String, dynamic>> sendMessage(
     String conversationId,
     String content, {

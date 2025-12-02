@@ -18,6 +18,111 @@ import '../config/app_env.dart';
 import 'profile_screen.dart';
 import '../constants/discipline_constants.dart';
 import 'zone_screen.dart';
+import '../services/chat_service.dart';
+import '../models/message_model.dart';
+import 'chat_screen.dart';
+
+/*
+================================================================================
+ 后端对接说明（已整理为注释，放在 `post_detail_screen.dart` 文件末尾）
+ 目的：记录前端与后端 REST / WebSocket 的契约示例、字段说明与调试建议，便于与后端联调。
+================================================================================
+
+1) 认证
+ - 前端会通过 LocalStorage.instance.read('auth_token') 读取 token，并在
+   ApiService._buildHeaders() 中以 `Authorization: Bearer <token>` 方式发送给后端。
+ - 请后端对该 Header 进行校验，未授权返回 401/403 并在 body.message 提供可读提示。
+
+2) REST 接口（建议）
+ - 获取评论（分页）
+   GET /posts/{postId}/comments?page=1&pageSize=20&sort=time
+   Response 200:
+   {
+     "comments": [ {comment}, ... ],  // 顶层评论（每项可包含 replies 列表）
+     "total": 123,
+     "page": 1,
+     "pageSize": 20
+   }
+
+ - 发布评论（顶层或回复）
+   POST /posts/{postId}/comments
+   Body: { "content": "...", "parentId": "c_123"?, "replyToId": "u_456"? }
+   Response 201/200:
+   { "comment": { ...new comment object... } }
+
+ - 更新评论
+   PUT /posts/{postId}/comments/{commentId}
+   Body: { "content": "new content" }
+   Response: { "comment": { ... } }
+
+ - 删除评论
+   DELETE /posts/{postId}/comments/{commentId}
+   Response: 204 或 { "message": "deleted" }
+
+ - 点赞 / 取消点赞评论
+   POST /posts/{postId}/comments/{commentId}/like
+   DELETE /posts/{postId}/comments/{commentId}/like
+   Response: { "likesCount": 10, "isLiked": true }
+
+3) comment 对象（建议字段）
+ {
+   "id": "c_123",
+   "author": {"id":"u1","name":"Alice","avatar":"...","affiliation":"..."},
+   "content": "...",
+   "parentId": null,        // 顶层评论为 null
+   "replyTo": { ... }?,     // 被回复的用户（可选）
+   "likesCount": 5,
+   "isLiked": false,        // 当前用户是否已点赞（若后端能计算）
+   "replies": [ ... ],      // 可选：子回复列表
+   "createdAt": "2025-11-06T08:00:00Z"
+ }
+
+4) WebSocket 事件（建议格式）
+ - 连接： ws://<host>/ws/posts/{postId} 或统一 topic 方案
+ - 事件 JSON：必须包含 `type` 字段
+   1) 帖子点赞更新
+      {"type":"like_update","likesCount":123,"isLiked":true}
+   2) 评论点赞更新
+      {"type":"comment_like_update","commentId":"c_123","likesCount":5,"isLiked":true}
+   3) 新评论
+      {"type":"comment_created","comment":{...comment object...}}
+   4) 评论更新
+      {"type":"comment_updated","comment":{...}}
+   5) 评论删除
+      {"type":"comment_deleted","commentId":"c_123"}
+
+ - 本文件中已实现对上述事件的处理：
+   _initWebSocket() 里解析 type 并调用 _handleCommentCreated / _handleCommentUpdated / _handleCommentDeleted
+   注意：前端实现已兼容 comment 在 'comment'、'payload' 或 'data' 字段中的情况，但建议统一使用 'comment'
+
+5) 前端行为与容错策略
+ - 乐观更新：点赞、发送评论时前端会做乐观更新以提升响应感，若后端返回错误会回滚并通过 SnackBar 提示用户。
+ - 防重：提交评论使用 _isSubmittingComment 防止重复提交；点赞使用 _commentLikeInFlight 防止并发请求。
+ - 时间解析：后端请使用 ISO8601（UTC）字符串，前端使用 DateTime.parse 解析。
+ - 子回复分页：若回复很多，建议后端提供 /comments/{commentId}/replies 分页接口；否则可在 GET /posts/{postId}/comments 返回 replies 字段（限数量）。
+
+6) 推荐的对接与调试步骤（给后端同学）
+ - 确认接口路径与字段（上述示例），后端在 Postman 中演示以下流程：
+   1) GET 评论分页
+   2) POST 新评论（顶层 & 回复）并返回 comment
+   3) POST/DELETE 点赞并返回 likesCount/isLiked
+   4) 在另一个客户端通过 WS 推送 comment_created/comment_like_update，观察前端是否实时更新
+ - 前端准备：启动应用（flutter run），打开帖子详情页并观察控制台/SnackBar 的错误提示；若 token 验证失败，请在 LocalStorage 中填入有效 token。
+
+7) 切换 Mock -> 真正后端（简要步骤）
+ - 将 ApiService.baseUrl 指向真实后端地址
+ - 确认后端返回结构（尤其 comment 字段/时间格式/likesCount/isLiked）并调整 Comment.fromJson（位于 lib/models/post_model.dart）
+ - 删除或移动 mock_api_service.dart（若不再需要）
+
+8) 常见问题与建议
+ - 若后端不返回 isLiked，可考虑前端在获取当前用户点赞记录后合并；或后端提供单独的用户点赞接口。
+ - 高频事件（如点赞）可能需要后端做节流/合并，减少 WS 消息量。
+ - 对于权限错误（401/403），前端应引导用户重新登录或清理缓存的 token。
+
+================================================================================
+ 备注：如需我把这份注释提取为独立文档 `BACKEND_INTEGRATION.md` 或根据后端给出的真实样例调整解析代码，我可以继续修改。
+================================================================================
+*/
 
 
 class PostDetailScreen extends StatefulWidget {
@@ -1326,7 +1431,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
               _comments[pIdx].replies.add(newComment);
             }
           } else {
-            // 父评论不在当前页/列表中，作为降级处理，把回复也插为顶层（可根据需求改为忽略）
+            // parent评论不在当前页/列表中，作为降级处理，把回复也插为顶层（可根据需求改为忽略）
             _comments.insert(0, newComment);
             commentCount += 1;
             widget.post.commentsCount = commentCount;
@@ -1418,7 +1523,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         final parent = _comments[i];
         final rIdx = parent.replies.indexWhere((r) => r.id == commentId);
         if (rIdx != -1) {
-          // 重新创建父评论，移除被删除的回复
+          // 重新创建parent评论，移除被删除的回复
           final updatedReplies = parent.replies.where((r) => r.id != commentId).toList();
           _comments[i] = Comment(
             id: parent.id,
@@ -1596,11 +1701,79 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     }
   }
 
-  void _onShare() {
-    // TODO: 调用分享 API 或复制链接
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('分享（演示）')));
+  Future<void> _onShare() async {
+    if (_currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先登录')),
+      );
+      return;
+    }
+
+    // 显示分享选择界面
+    final selectedUserId = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => _ShareUserSelectionSheet(
+        currentUserId: _currentUserId!,
+        post: widget.post,
+      ),
+    );
+
+    if (selectedUserId == null) return;
+
+    // 分享帖子到选中的用户
+    await _sharePostToUser(selectedUserId);
+  }
+
+  Future<void> _sharePostToUser(String targetUserId) async {
+    try {
+      // 显示加载提示
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('正在分享...'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+
+      // 获取或创建 conversation
+      final chatService = ChatService();
+      final conversation = await chatService.createOrGetPrivateConversation(targetUserId);
+
+      if (conversation == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('创建会话失败，请稍后重试')),
+        );
+        return;
+      }
+
+      // 发送分享消息
+      // 使用 SHARE 类型，content 只存储 post ID
+      await chatService.sendMessage(
+        conversationId: conversation.id,
+        content: widget.post.id, // content 只存储 post ID
+        type: MessageType.share,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('分享成功')),
+      );
+
+      // 可选：导航到聊天界面
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(conversation: conversation),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('分享失败: $e')),
+      );
+    }
   }
 
   Future<void> _submitComment({String? parentId, Author? replyTo}) async {
@@ -3344,6 +3517,223 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             return Icon(Icons.person, size: radius, color: Colors.grey);
           },
         ),
+      ),
+    );
+  }
+}
+
+/// 分享用户选择界面
+class _ShareUserSelectionSheet extends StatefulWidget {
+  final String currentUserId;
+  final Post post;
+
+  const _ShareUserSelectionSheet({
+    required this.currentUserId,
+    required this.post,
+  });
+
+  @override
+  State<_ShareUserSelectionSheet> createState() => _ShareUserSelectionSheetState();
+}
+
+class _ShareUserSelectionSheetState extends State<_ShareUserSelectionSheet> {
+  List<Map<String, dynamic>> _followingUsers = [];
+  bool _isLoading = true;
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFollowingUsers();
+  }
+
+  Future<void> _loadFollowingUsers() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // 获取当前用户的关注列表
+      final result = await ApiService.getFollowing(
+        widget.currentUserId,
+        page: 0,
+        pageSize: 100, // 获取所有关注用户
+      );
+
+      if (result['statusCode'] == 200) {
+        final body = result['body'];
+        // 后端返回的字段是 'users'，不是 'content'
+        final users = body['users'] as List<dynamic>? ?? [];
+        setState(() {
+          _followingUsers = users.map((user) {
+            final userMap = user as Map<String, dynamic>;
+            // 后端返回的是 ProfileResp，包含 displayName 字段
+            return {
+              'id': userMap['id']?.toString() ?? '',
+              'name': userMap['displayName']?.toString() ?? 
+                      (userMap['email']?.toString() ?? '未知用户'),
+              'avatar': userMap['avatar']?.toString(),
+            };
+          }).toList();
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('加载关注列表失败: ${result['body']['message'] ?? '未知错误'}')),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载关注列表失败: $e')),
+        );
+      }
+    }
+  }
+
+  List<Map<String, dynamic>> get _filteredUsers {
+    if (_searchQuery.isEmpty) {
+      return _followingUsers;
+    }
+    return _followingUsers.where((user) {
+      final name = user['name']?.toString().toLowerCase() ?? '';
+      return name.contains(_searchQuery.toLowerCase());
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // 顶部拖拽指示器
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // 标题
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              children: [
+                const Text(
+                  '分享给',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          // 搜索框
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: '搜索用户',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                filled: true,
+                fillColor: Colors.grey[100],
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+              },
+            ),
+          ),
+          // 用户列表
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _filteredUsers.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.person_off, size: 64, color: Colors.grey[400]),
+                            const SizedBox(height: 16),
+                            Text(
+                              _searchQuery.isEmpty
+                                  ? '还没有关注任何人'
+                                  : '未找到匹配的用户',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                        itemCount: _filteredUsers.length,
+                        itemBuilder: (context, index) {
+                          final user = _filteredUsers[index];
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              leading: CircleAvatar(
+                                radius: 24,
+                                backgroundImage: user['avatar'] != null && user['avatar'].toString().isNotEmpty
+                                    ? NetworkImage(user['avatar'].toString())
+                                    : null,
+                                child: user['avatar'] == null || user['avatar'].toString().isEmpty
+                                    ? Text(
+                                        (user['name']?.toString().isNotEmpty ?? false)
+                                            ? user['name'].toString()[0].toUpperCase()
+                                            : '?',
+                                        style: const TextStyle(fontSize: 18),
+                                      )
+                                    : null,
+                              ),
+                              title: Text(
+                                user['name']?.toString() ?? '未知用户',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () {
+                                Navigator.pop(context, user['id']?.toString());
+                              },
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
       ),
     );
   }
