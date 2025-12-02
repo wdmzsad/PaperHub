@@ -1,6 +1,7 @@
 package com.example.paperhub.like;
 
 import com.example.paperhub.auth.User;
+import com.example.paperhub.auth.UserStatus;
 import com.example.paperhub.comment.Comment;
 import com.example.paperhub.comment.CommentRepository;
 import com.example.paperhub.notification.NotificationService;
@@ -41,6 +42,7 @@ public class LikeService {
      */
     @Transactional
     public boolean likePost(Long postId, User user) {
+        ensureUserCanInteract(user);
         Post post = postRepository.findById(postId)
             .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
         
@@ -78,6 +80,7 @@ public class LikeService {
      */
     @Transactional
     public boolean unlikePost(Long postId, User user) {
+        ensureUserCanInteract(user);
         Post post = postRepository.findById(postId)
             .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
         
@@ -132,6 +135,7 @@ public class LikeService {
      */
     @Transactional
     public boolean likeComment(Long commentId, User user) {
+        ensureUserCanInteract(user);
         Comment comment = commentRepository.findById(commentId)
             .orElseThrow(() -> new IllegalArgumentException("评论不存在"));
         
@@ -169,6 +173,7 @@ public class LikeService {
      */
     @Transactional
     public boolean unlikeComment(Long commentId, User user) {
+        ensureUserCanInteract(user);
         Comment comment = commentRepository.findById(commentId)
             .orElseThrow(() -> new IllegalArgumentException("评论不存在"));
         
@@ -215,6 +220,21 @@ public class LikeService {
             e.printStackTrace();
             // 如果查询失败，返回0，避免影响主流程
             return 0;
+        }
+    }
+
+    private void ensureUserCanInteract(User user) {
+        if (user == null) {
+            throw new IllegalArgumentException("未认证用户无法执行此操作");
+        }
+        if (user.getStatus() == UserStatus.BANNED) {
+            throw new IllegalArgumentException("账号已被封禁，无法执行此操作");
+        }
+        if (user.getStatus() == UserStatus.MUTED) {
+            java.time.Instant muteUntil = user.getMuteUntil();
+            if (muteUntil == null || java.time.Instant.now().isBefore(muteUntil)) {
+                throw new IllegalArgumentException("账号被禁言中，暂时无法点赞");
+            }
         }
     }
 }

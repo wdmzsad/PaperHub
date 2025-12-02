@@ -35,5 +35,10 @@ public interface PostRepository extends JpaRepository<Post, Long> {
            "   OR LOWER(t) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "ORDER BY p.createdAt DESC")
     Page<Post> searchByKeywordOrderByNew(@Param("keyword") String keyword, Pageable pageable);
+    Page<Post> findByTitleContainingIgnoreCaseOrContentContainingIgnoreCase(
+            String title, String content, Pageable pageable);
+
+    Page<Post> findByAuthor_NameContainingIgnoreCaseOrAuthor_EmailContainingIgnoreCase(
+            String name, String email, Pageable pageable);
 }
 

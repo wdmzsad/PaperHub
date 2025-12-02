@@ -2,6 +2,7 @@ package com.example.paperhub.post;
 
 import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
+import com.example.paperhub.auth.UserStatus;
 import com.example.paperhub.comment.CommentRepository;
 import com.example.paperhub.favorite.FavoritePostRepository;
 import com.example.paperhub.like.CommentLikeRepository;
@@ -82,6 +83,7 @@ public class PostService {
     public Post createPost(String title, String content, User author, List<String> media, 
                           List<String> tags, String doi, String journal, Integer year, List<String> externalLinks,
                           String arxivId, List<String> arxivAuthors, String arxivPublishedDate, List<String> arxivCategories) {
+        ensureUserCanInteract(author);
         Post post = new Post();
         post.setTitle(title);
         post.setContent(content != null ? content : "");
@@ -179,6 +181,21 @@ public class PostService {
         favoritePostRepository.deleteByPostId(postId);
 
         postRepository.delete(post);
+    }
+
+    private void ensureUserCanInteract(User user) {
+        if (user == null) {
+            throw new IllegalArgumentException("未认证用户无法执行此操作");
+        }
+        if (user.getStatus() == UserStatus.BANNED) {
+            throw new IllegalArgumentException("账号已被封禁，无法执行此操作");
+        }
+        if (user.getStatus() == UserStatus.MUTED) {
+            Instant muteUntil = user.getMuteUntil();
+            if (muteUntil == null || Instant.now().isBefore(muteUntil)) {
+                throw new IllegalArgumentException("账号被禁言中，暂时无法发帖");
+            }
+        }
     }
 }
 
