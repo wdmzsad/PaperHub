@@ -40,5 +40,22 @@ public interface PostRepository extends JpaRepository<Post, Long> {
 
     Page<Post> findByAuthor_NameContainingIgnoreCaseOrAuthor_EmailContainingIgnoreCase(
             String name, String email, Pageable pageable);
+
+    /**
+     * 按标签查询帖子（支持精确匹配标签名）
+     * @param tag 标签名称
+     * @param pageable 分页参数
+     * @return 包含指定标签的帖子分页
+     */
+    @Query("SELECT DISTINCT p FROM Post p JOIN p.tags t WHERE t = :tag ORDER BY p.createdAt DESC")
+    Page<Post> findByTagOrderByCreatedAtDesc(@Param("tag") String tag, Pageable pageable);
+
+    /**
+     * 统计包含指定标签的帖子数量
+     * @param tag 标签名称
+     * @return 包含指定标签的帖子数量
+     */
+    @Query("SELECT COUNT(DISTINCT p) FROM Post p JOIN p.tags t WHERE t = :tag")
+    long countByTag(@Param("tag") String tag);
 }
 

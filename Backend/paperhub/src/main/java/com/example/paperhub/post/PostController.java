@@ -68,22 +68,23 @@ public class PostController {
 
     /**
      * 获取帖子列表
-     * GET /posts?page=1&pageSize=20
+     * GET /posts?page=1&pageSize=20&tag=信息科学（CS）
      */
     @GetMapping
     public ResponseEntity<PostDtos.PostListResp> getPosts(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String tag,
             @AuthenticationPrincipal User user) {
-        
+
         try {
-            Page<Post> postPage = postService.getPosts(page, pageSize);
+            Page<Post> postPage = postService.getPosts(page, pageSize, tag);
             Long userId = (user != null) ? user.getId() : null;
-            
+
             List<PostDtos.PostResp> posts = postPage.getContent().stream()
                 .map(post -> postMapper.toPostResp(post, userId))
                 .toList();
-            
+
             return ResponseEntity.ok(new PostDtos.PostListResp(
                 posts,
                 postPage.getTotalElements(),

@@ -23,6 +23,7 @@
 /// - 释放资源：在 `dispose` 中释放 `ScrollController`。
 ///
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../models/post_model.dart';
 import '../widgets/post_card.dart';
 import 'search_screen.dart';
@@ -71,6 +72,18 @@ class _HomeScreenState extends State<HomeScreen> {
   /// 分区页当前选中的主分区
   String _currentZoneDiscipline = kMainDisciplines.first;
 
+  /// 分区页帖子列表（独立于发现页）
+  final List<Post> _zonePosts = [];
+
+  /// 分区页加载状态
+  bool _zoneLoading = false;
+
+  /// 分区页是否还有更多数据
+  bool _zoneHasMore = true;
+
+  /// 分区页当前页码
+  int _zonePage = 1;
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +91,48 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadInitialPosts();
     _scrollController.addListener(_scrollListener);
     _preloadUnreadBadges();
+  }
+
+  /// 加载分区帖子
+  Future<void> _loadZonePosts() async {
+    if (_zoneLoading || !_zoneHasMore) return;
+
+    setState(() {
+      _zoneLoading = true;
+    });
+
+    try {
+      final resp = await ApiService.getPosts(
+        page: _zonePage,
+        pageSize: 12,
+        disciplineTag: _currentZoneDiscipline,
+      );
+      final status = resp['statusCode'] as int? ?? 500;
+      final body = resp['body'] as Map<String, dynamic>?;
+
+      if (status >= 200 && status < 300 && body != null) {
+        final postsData = (body['posts'] as List<dynamic>?) ?? [];
+        final total = body['total'] as int? ?? postsData.length;
+        final newPosts = postsData
+            .map((e) => Post.fromJson(e as Map<String, dynamic>))
+            .toList();
+
+        setState(() {
+          _zonePosts.addAll(newPosts);
+          _zoneHasMore = _zonePosts.length < total;
+          _zonePage += 1;
+          _zoneLoading = false;
+        });
+      } else {
+        setState(() {
+          _zoneLoading = false;
+        });
+      }
+    } catch (_) {
+      setState(() {
+        _zoneLoading = false;
+      });
+    }
   }
 
   Future<void> _preloadUnreadBadges() async {
@@ -537,6 +592,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// 分区首页内容：顶部分区滑条 + 当前分区的瀑布流
   Widget _buildZoneTabContent() {
+    // 当切换到分区页且分区帖子为空时，加载数据
+    if (_selectedTab == 1 && _zonePosts.isEmpty && !_zoneLoading && _zoneHasMore) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        _loadZonePosts();
+      });
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -565,7 +627,12 @@ class _HomeScreenState extends State<HomeScreen> {
               if (_currentZoneDiscipline == discipline) return;
               setState(() {
                 _currentZoneDiscipline = discipline;
+                // 切换分区时重置状态并加载新分区的数据
+                _zonePosts.clear();
+                _zonePage = 1;
+                _zoneHasMore = true;
               });
+              _loadZonePosts();
             },
             child: Container(
               padding:
@@ -597,19 +664,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// 分区内瀑布流（当前实现复用首页加载的帖子，前端按主分区标签过滤）
+  /// 分区内瀑布流（使用后端标签过滤）
   Widget _buildZoneWaterfallGrid() {
-    if (_posts.isEmpty) {
-      // 复用首页的加载视图
+    // 使用独立的帖子列表和加载状态
+    if (_zonePosts.isEmpty && _zoneLoading) {
       return _buildInitialLoading();
     }
-    final filtered = _posts
-        .where(
-          (p) => p.tags.contains(_currentZoneDiscipline),
-        )
-        .toList();
 
-    if (filtered.isEmpty) {
+    if (_zonePosts.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32.0),
@@ -627,9 +689,9 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisSpacing: 8,
       mainAxisSpacing: 8,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      itemCount: filtered.length,
+      itemCount: _zonePosts.length,
       itemBuilder: (context, index) {
-        final post = filtered[index];
+        final post = _zonePosts[index];
         return PostCard(
           post: post,
           onTap: () => _onPostTap(post),

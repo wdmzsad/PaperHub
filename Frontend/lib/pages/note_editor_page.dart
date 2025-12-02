@@ -49,7 +49,13 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   // 分区与推荐细分类标签
   String? _selectedDiscipline; // 必选：学科分区
-  final Set<String> _selectedSubTags = {}; // 可选：细分类标签
+
+  // #符号触发标签选择相关状态
+  bool _showTagSuggestions = false;
+  String _currentTagInput = '';
+  List<String> _filteredTagSuggestions = [];
+  final FocusNode _contentFocusNode = FocusNode();
+  bool _isTypingCustomTag = false;
 
   // 选择图片
   Future<void> _pickImage() async {
@@ -219,10 +225,13 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
 
     try {
-      // 组装标签：至少包含一个主分区，可选细分类标签
+      // 从正文中提取#标签
+      final textTags = _extractTagsFromText(content);
+
+      // 组装标签：至少包含一个主分区，加上正文中的所有#标签
       final List<String> tags = [
         _selectedDiscipline!,
-        ..._selectedSubTags,
+        ...textTags,
       ].toSet().toList();
 
       // 调用创建笔记接口（注意：ApiService.createPost 需要支持 externalLinks / tags 参数）
@@ -696,125 +705,416 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 
-  // 分区选择区（必选）
-  Widget _buildDisciplineSection() {
+  // 一级标签选择（放在外部链接之上）
+  Widget _buildDisciplineSelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          children: const [
-            Text(
+          children: [
+            const Text(
               '选择学科分区',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            SizedBox(width: 6),
-            Text(
-              '* 必选',
-              style: TextStyle(fontSize: 12, color: Colors.redAccent),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                '必选',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
+            const Spacer(),
+            if (_selectedDiscipline != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.1) ?? const Color(0xFF1976D2).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.3) ?? const Color(0xFF1976D2).withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  _selectedDiscipline!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: kDisciplineColors[_selectedDiscipline] ?? const Color(0xFF1976D2),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
           ],
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: kMainDisciplines.map((d) {
-            final bool selected = _selectedDiscipline == d;
-            final color = kDisciplineColors[d] ?? const Color(0xFF1976D2);
-            return ChoiceChip(
-              label: Text(d),
-              selected: selected,
-              selectedColor: color.withOpacity(0.12),
-              labelStyle: TextStyle(
-                color: selected ? color : Colors.black87,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: selected ? color : Colors.grey.shade300,
+
+        // 一级标签水平滚动选择
+        SizedBox(
+          height: 36,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: kMainDisciplines.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 6),
+            itemBuilder: (context, index) {
+              final d = kMainDisciplines[index];
+              final bool selected = _selectedDiscipline == d;
+              final color = kDisciplineColors[d] ?? const Color(0xFF1976D2);
+
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    if (_selectedDiscipline == d) {
+                      _selectedDiscipline = null;
+                    } else {
+                      _selectedDiscipline = d;
+                    }
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: selected ? color.withOpacity(0.15) : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: selected ? color : Colors.grey.shade300,
+                      width: selected ? 1.5 : 1,
+                    ),
+                    boxShadow: selected
+                        ? [
+                            BoxShadow(
+                              color: color.withOpacity(0.2),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Text(
+                    d,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: selected ? color : Colors.black87,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
                 ),
-              ),
-              onSelected: (_) {
-                setState(() {
-                  if (_selectedDiscipline == d) {
-                    _selectedDiscipline = null;
-                    _selectedSubTags.clear();
-                  } else {
-                    _selectedDiscipline = d;
-                    _selectedSubTags.clear();
-                  }
-                });
-              },
-            );
-          }).toList(),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          '选择学科分区后，在正文中输入#可添加相关细分类标签',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
         ),
       ],
     );
   }
 
-  // 推荐细分类标签（可选）
-  Widget _buildRecommendedTagsSection() {
-    // 根据当前选中的主分区推荐细分类；若没有专属推荐，则展示所有去重后的推荐标签
-    List<String> tags = [];
+  // 获取当前可选的二级标签（用于#符号提示）
+  List<String> _getAvailableSubTags() {
     if (_selectedDiscipline != null &&
         kRecommendedSubTags.containsKey(_selectedDiscipline)) {
-      tags = kRecommendedSubTags[_selectedDiscipline!]!;
+      return kRecommendedSubTags[_selectedDiscipline!]!;
     } else {
       final set = <String>{};
       for (final list in kRecommendedSubTags.values) {
         set.addAll(list);
       }
-      tags = set.toList();
+      return set.toList();
+    }
+  }
+
+  // 处理正文文本变化，检测#符号
+  void _onContentChanged(String text) {
+    // 检查是否正在输入#标签 - 只检查最后一个#，并且后面没有空格
+    final lastIndex = text.lastIndexOf('#');
+    if (lastIndex != -1) {
+      // 提取#后面的所有内容
+      final afterHash = text.substring(lastIndex + 1);
+
+      // 检查#后面是否有空格或换行（表示标签已结束）
+      final nextSpaceIndex = afterHash.indexOf(' ');
+      final nextNewlineIndex = afterHash.indexOf('\n');
+
+      // 如果#后面直接是空格或换行，表示标签已结束
+      if (nextSpaceIndex == 0 || nextNewlineIndex == 0) {
+        // 完成自定义标签输入
+        _completeCustomTag();
+        return;
+      }
+
+      // 如果#后面没有内容，不显示建议
+      if (afterHash.isEmpty) {
+        if (_showTagSuggestions) {
+          setState(() {
+            _showTagSuggestions = false;
+            _currentTagInput = '';
+            _filteredTagSuggestions.clear();
+            _isTypingCustomTag = false;
+          });
+        }
+        return;
+      }
+
+      // 提取当前正在输入的标签内容（到空格或换行为止）
+      final endIndex = nextSpaceIndex != -1
+          ? nextSpaceIndex
+          : (nextNewlineIndex != -1 ? nextNewlineIndex : afterHash.length);
+
+      if (endIndex > 0) {
+        final tagInput = afterHash.substring(0, endIndex);
+
+        setState(() {
+          _currentTagInput = tagInput;
+          _showTagSuggestions = true;
+
+          // 过滤标签建议
+          final availableTags = _getAvailableSubTags();
+          print('可用标签数量: ${availableTags.length}'); // 调试
+          print('当前输入: "$tagInput"'); // 调试
+          _filteredTagSuggestions.clear();
+          if (tagInput.isNotEmpty) {
+            _filteredTagSuggestions.addAll(
+              availableTags.where((tag) =>
+                tag.toLowerCase().contains(tagInput.toLowerCase())
+              ).toList()
+            );
+          }
+
+          print('过滤后标签数量: ${_filteredTagSuggestions.length}'); // 调试
+          // 限制显示数量
+          if (_filteredTagSuggestions.length > 10) {
+            _filteredTagSuggestions = _filteredTagSuggestions.sublist(0, 10);
+          }
+
+          // 如果没有匹配的建议，表示用户正在输入自定义标签
+          if (_filteredTagSuggestions.isEmpty && tagInput.isNotEmpty) {
+            _isTypingCustomTag = true;
+          } else {
+            _isTypingCustomTag = false;
+          }
+        });
+        return;
+      }
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '系统推荐细分类（可选）',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
+    // 如果没有#标签输入，隐藏建议
+    if (_showTagSuggestions) {
+      setState(() {
+        _showTagSuggestions = false;
+        _currentTagInput = '';
+        _filteredTagSuggestions.clear();
+        _isTypingCustomTag = false;
+      });
+    }
+  }
+
+  // 选择标签建议
+  void _selectTagSuggestion(String tag) {
+    final currentText = _contentController.text;
+    final lastIndex = currentText.lastIndexOf('#');
+
+    if (lastIndex != -1) {
+      // 替换#及其后面的输入为完整的标签
+      final beforeHash = currentText.substring(0, lastIndex);
+      final afterHash = currentText.substring(lastIndex);
+      final nextSpaceIndex = afterHash.indexOf(' ');
+      final nextNewlineIndex = afterHash.indexOf('\n');
+      final endIndex = nextSpaceIndex != -1
+          ? nextSpaceIndex
+          : (nextNewlineIndex != -1 ? nextNewlineIndex : afterHash.length);
+
+      final newText = beforeHash + '#$tag ';
+      _contentController.text = newText;
+      _contentController.selection = TextSelection.fromPosition(
+        TextPosition(offset: newText.length)
+      );
+
+
+      // 隐藏建议
+      setState(() {
+        _showTagSuggestions = false;
+        _currentTagInput = '';
+        _filteredTagSuggestions.clear();
+        _isTypingCustomTag = false;
+      });
+    }
+  }
+
+  // 处理自定义标签完成（按空格或回车）
+  void _completeCustomTag() {
+    if (_currentTagInput.isNotEmpty && !_filteredTagSuggestions.contains(_currentTagInput)) {
+      // 这是一个自定义标签
+      final currentText = _contentController.text;
+      final lastIndex = currentText.lastIndexOf('#');
+
+      if (lastIndex != -1) {
+        // 替换#及其后面的输入为完整的自定义标签
+        final beforeHash = currentText.substring(0, lastIndex);
+        final afterHash = currentText.substring(lastIndex);
+        final nextSpaceIndex = afterHash.indexOf(' ');
+        final nextNewlineIndex = afterHash.indexOf('\n');
+        final endIndex = nextSpaceIndex != -1
+            ? nextSpaceIndex
+            : (nextNewlineIndex != -1 ? nextNewlineIndex : afterHash.length);
+
+        final newText = beforeHash + '#$_currentTagInput ';
+        _contentController.text = newText;
+        _contentController.selection = TextSelection.fromPosition(
+          TextPosition(offset: newText.length)
+        );
+
+      }
+    }
+
+    // 隐藏建议
+    setState(() {
+      _showTagSuggestions = false;
+      _currentTagInput = '';
+      _filteredTagSuggestions.clear();
+      _isTypingCustomTag = false;
+    });
+  }
+
+  // 从文本中提取所有#标签
+  Set<String> _extractTagsFromText(String text) {
+    final Set<String> tags = {};
+    // 匹配#后面的非空格字符，支持中文、英文、数字等
+    final regex = RegExp(r'#([^\s#]+)');
+    final matches = regex.allMatches(text);
+
+    for (final match in matches) {
+      if (match.groupCount >= 1) {
+        final tag = match.group(1)!.trim();
+        if (tag.isNotEmpty) {
+          tags.add(tag);
+        }
+      }
+    }
+
+    return tags;
+  }
+
+  // 构建标签建议列表
+  Widget _buildTagSuggestions() {
+    print('构建标签建议: _showTagSuggestions=$_showTagSuggestions, _filteredTagSuggestions.length=${_filteredTagSuggestions.length}, _isTypingCustomTag=$_isTypingCustomTag'); // 调试
+    if (!_showTagSuggestions) {
+      print('不显示标签建议'); // 调试
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          _selectedDiscipline == null
-              ? '先选择一个学科分区，我们会推荐相关细分类标签'
-              : '根据你选择的分区推荐：可多选，帮助别人更快找到你的笔记',
-          style: const TextStyle(fontSize: 12, color: Colors.grey),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: tags.map((t) {
-            final bool selected = _selectedSubTags.contains(t);
-            return FilterChip(
-              label: Text(t),
-              selected: selected,
-              selectedColor: Colors.blue.shade50,
-              checkmarkColor: Colors.blue,
-              labelStyle: TextStyle(
-                color: selected ? Colors.blue : Colors.black87,
+        ],
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      margin: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              _isTypingCustomTag ? '自定义标签（按空格或回车完成输入）' : '标签建议（输入#继续筛选）',
+              style: TextStyle(
+                fontSize: 12,
+                color: _isTypingCustomTag ? Colors.orange.shade700 : Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
               ),
-              onSelected: (value) {
-                setState(() {
-                  if (value) {
-                    _selectedSubTags.add(t);
-                  } else {
-                    _selectedSubTags.remove(t);
-                  }
-                });
-              },
+            ),
+          ),
+          const Divider(height: 1),
+          ..._filteredTagSuggestions.map((tag) {
+            // 检查标签是否已经出现在正文中
+            final bool alreadySelected = _contentController.text.contains('#$tag ');
+            return Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _selectTagSuggestion(tag),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Colors.grey.shade200,
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.tag,
+                        size: 16,
+                        color: alreadySelected ? Colors.blue : Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          tag,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: alreadySelected ? Colors.blue : Colors.black87,
+                            fontWeight: alreadySelected ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      if (alreadySelected)
+                        Icon(
+                          Icons.check,
+                          size: 16,
+                          color: Colors.blue,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
             );
           }).toList(),
-        ),
-      ],
+          if (_filteredTagSuggestions.isEmpty && _currentTagInput.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.orange.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _isTypingCustomTag
+                        ? '正在输入自定义标签 "$_currentTagInput"，按空格或回车完成输入'
+                        : '未找到匹配的标签，按空格或回车可输入自定义标签 "$_currentTagInput"',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.orange.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -867,19 +1167,31 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
               const SizedBox(height: 8),
 
-              // 正文
-              TextField(
-                controller: _contentController,
-                keyboardType: TextInputType.multiline,
-                maxLines: null,
-                minLines: 6,
-                decoration: const InputDecoration(
-                  hintText: '写下你的笔记（支持学术笔记格式）',
-                  hintStyle: TextStyle(color: Colors.grey),
-                  border: InputBorder.none,
-                  isCollapsed: false,
-                ),
+              // 正文（支持#符号添加标签）
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: _contentController,
+                    focusNode: _contentFocusNode,
+                    keyboardType: TextInputType.multiline,
+                    maxLines: null,
+                    minLines: 6,
+                    onChanged: _onContentChanged,
+                    decoration: const InputDecoration(
+                      hintText: '写下你的笔记（输入#添加标签，支持学术笔记格式）',
+                      hintStyle: TextStyle(color: Colors.grey),
+                      border: InputBorder.none,
+                      isCollapsed: false,
+                    ),
+                  ),
+                  _buildTagSuggestions(),
+                ],
               ),
+
+              // 一级标签选择（学科分区）
+              _buildDisciplineSelector(),
+              const SizedBox(height: 16),
 
               // 外部链接区
               _buildExternalLinksSection(),
@@ -935,15 +1247,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 ],
               ),
 
-              // 分区选择
-              _buildDisciplineSection(),
-              const SizedBox(height: 12),
 
-              // 推荐细分类标签
-              _buildRecommendedTagsSection(),
-              const SizedBox(height: 16),
-              
-              const SizedBox(height: 36),
+              const SizedBox(height: 24),
 
               // 发布按钮
               SizedBox(

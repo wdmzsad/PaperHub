@@ -47,15 +47,31 @@ public class PostService {
 
     /**
      * 获取帖子列表（分页）
+     * @deprecated 请使用 {@link #getPosts(int, int, String)} 方法
      */
     public Page<Post> getPosts(int page, int pageSize) {
-        Pageable pageable = PageRequest.of(page - 1, pageSize);
-        return postRepository.findAllByOrderByCreatedAtDesc(pageable);
+        return getPosts(page, pageSize, null);
     }
 
     public Page<Post> getPostsByAuthor(Long authorId, int page, int pageSize) {
         Pageable pageable = PageRequest.of(page - 1, pageSize);
         return postRepository.findByAuthorIdOrderByCreatedAtDesc(authorId, pageable);
+    }
+
+    /**
+     * 获取帖子列表（分页），支持按标签过滤
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
+     * @param tag 标签名称（可选，为null时返回所有帖子）
+     * @return 帖子分页结果
+     */
+    public Page<Post> getPosts(int page, int pageSize, String tag) {
+        Pageable pageable = PageRequest.of(page - 1, pageSize);
+        if (tag != null && !tag.trim().isEmpty()) {
+            return postRepository.findByTagOrderByCreatedAtDesc(tag.trim(), pageable);
+        } else {
+            return postRepository.findAllByOrderByCreatedAtDesc(pageable);
+        }
     }
 
     /**
