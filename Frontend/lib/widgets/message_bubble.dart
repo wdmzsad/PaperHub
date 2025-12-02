@@ -11,15 +11,16 @@ import 'package:flutter/painting.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import '../models/message_model.dart';
-import 'video_message_player.dart';
 import '../models/post_model.dart';
 import '../screens/post_detail_screen.dart';
 import '../services/api_service.dart';
+import 'video_message_player.dart';
 import 'dart:html' as html if (dart.library.io) 'dart:io';
 
-class MessageBubble extends StatelessWidget {
+class MessageBubble extends StatefulWidget {
   // 缓存帖子详情的 Future，避免反复加载
-  static final Map<String, Future<Map<String, dynamic>>> _postCache = {};
+  static final Map<String, Future<Map<String, dynamic>>> postCache = {};
+
   final Message message;
   final bool showAvatar;
   final bool showTime;
@@ -575,19 +576,19 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   Widget _buildShareMessage(BuildContext context) {
     // SHARE 类型的 content 存储的是 post ID
-    final postId = message.content;
+    final postId = widget.message.content;
     if (postId.isEmpty) {
       return _buildTextMessage(context);
     }
 
     // 使用缓存的 Future，避免反复加载
-    if (!_postCache.containsKey(postId)) {
-      _postCache[postId] = _loadPostDetails(postId);
+    if (!MessageBubble.postCache.containsKey(postId)) {
+      MessageBubble.postCache[postId] = _loadPostDetails(postId);
     }
 
     // 使用 FutureBuilder 根据 post ID 获取帖子详情
     return FutureBuilder<Map<String, dynamic>>(
-      future: _postCache[postId],
+      future: MessageBubble.postCache[postId],
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Container(
@@ -700,7 +701,7 @@ class _MessageBubbleState extends State<MessageBubble> {
       }
     } catch (e) {
       // 如果加载失败，从缓存中移除，以便下次重试
-      _postCache.remove(postId);
+      MessageBubble.postCache.remove(postId);
       rethrow;
     }
   }

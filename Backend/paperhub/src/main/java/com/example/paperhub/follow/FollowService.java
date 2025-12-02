@@ -2,6 +2,7 @@ package com.example.paperhub.follow;
 
 import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
+import com.example.paperhub.auth.UserStatus;
 import com.example.paperhub.notification.NotificationService;
 import java.util.Objects;
 import org.springframework.data.domain.Page;
@@ -29,6 +30,7 @@ public class FollowService {
 
     @Transactional
     public void follow(User follower, Long targetUserId) {
+        ensureUserCanInteract(follower);
         Objects.requireNonNull(targetUserId, "targetUserId cannot be null");
         if (follower.getId().equals(targetUserId)) {
             throw new IllegalArgumentException("不能关注自己");
@@ -54,6 +56,7 @@ public class FollowService {
 
     @Transactional
     public void unfollow(User follower, Long targetUserId) {
+        ensureUserCanInteract(follower);
         Objects.requireNonNull(targetUserId, "targetUserId cannot be null");
         followRepository.deleteByFollowerIdAndFollowingId(follower.getId(), targetUserId);
     }
@@ -81,6 +84,21 @@ public class FollowService {
 
     public Page<UserFollow> getMutualFollows(Long userId, Pageable pageable) {
         return followRepository.findMutualFollows(userId, pageable);
+    }
+
+    private void ensureUserCanInteract(User user) {
+        if (user == null) {
+            throw new IllegalArgumentException("未认证用户无法执行此操作");
+        }
+        if (user.getStatus() == UserStatus.BANNED) {
+            throw new IllegalArgumentException("账号已被封禁，无法执行此操作");
+        }
+        if (user.getStatus() == UserStatus.MUTED) {
+            java.time.Instant muteUntil = user.getMuteUntil();
+            if (muteUntil == null || java.time.Instant.now().isBefore(muteUntil)) {
+                throw new IllegalArgumentException("账号被禁言中，暂时无法关注或取消关注");
+            }
+        }
     }
 }
 

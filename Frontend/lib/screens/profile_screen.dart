@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/post_model.dart';
 import '../models/user_profile.dart';
+import 'admin_mode_screen.dart';
 import '../models/user_summary.dart';
 import '../pages/login_page.dart';
 import '../pages/note_editor_page.dart';
@@ -666,6 +667,8 @@ class _ProfilePageState extends State<ProfilePage>
 
   Drawer? _buildDrawer() {
     if (!_isViewingSelf) return null;
+    final hasAdminAccess =
+        _profile != null && _profile!.role.toUpperCase() != 'USER';
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
@@ -676,6 +679,20 @@ class _ProfilePageState extends State<ProfilePage>
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
           ),
+          if (hasAdminAccess)
+            ListTile(
+              leading: const Icon(Icons.admin_panel_settings),
+              title: const Text('管理员模式'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AdminModeScreen(role: _profile!.role),
+                  ),
+                );
+              },
+            ),
           ListTile(
             leading: const Icon(Icons.settings),
             title: const Text('隐私设置'),
@@ -901,6 +918,18 @@ class _ProfilePageState extends State<ProfilePage>
                             fontSize: 12,
                           ),
                         ),
+                        if (profile.statusMessage != null &&
+                            profile.statusMessage!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            profile.statusMessage!,
+                            style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

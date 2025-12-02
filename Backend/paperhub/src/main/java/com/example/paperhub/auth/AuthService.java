@@ -28,6 +28,7 @@ public class AuthService {
         User user = new User();
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        user.setRole(UserRole.USER);
         String code = generateCode(6);
         user.setVerifyCode(code);
         user.setVerifyExpiry(Instant.now().plusSeconds(5 * 60));
@@ -68,6 +69,9 @@ public class AuthService {
         }
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
             throw new IllegalArgumentException("密码错误");
+        }
+        if (user.getStatus() == UserStatus.BANNED) {
+            throw new IllegalArgumentException("账号已被封禁，请联系管理员");
         }
         return user;
     }
