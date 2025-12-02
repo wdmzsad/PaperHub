@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../services/api_service.dart';
 import '../models/post_model.dart';
 import '../models/user_summary.dart';
@@ -36,11 +37,31 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   final int _userPageSize = 10; // 每次加载用户的数量
   String _currentSort = 'hot'; // 'hot' 或 'new'
   bool _showAllUsers = false; // 是否展开显示所有用户
+  final Set<String> _likeInFlight = {}; // 防止重复点赞请求
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadPosts();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// 滚动监听：当接近底部时加载更多
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200 &&
+        !_isLoading &&
+        _hasMore) {
+      _loadPosts(loadMore: true);
+    }
   }
 
   /// 加载搜索结果（根据搜索类型分发）
@@ -199,6 +220,58 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
       _posts.addAll(allPosts);
       _hasMore = false; // 作者搜索不支持帖子分页
     });
+  }
+
+  /// 打开用户主页
+  void _openUserProfile(String userId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProfilePage(userId: userId),
+      ),
+    );
+  }
+
+  /// 处理帖子点赞（与首页保持一致）
+  Future<bool> _handlePostLike(Post post) async {
+    // 防止重复请求
+    if (_likeInFlight.contains(post.id)) {
+      return false;
+    }
+
+    _likeInFlight.add(post.id);
+
+    try {
+      final response = post.isLiked
+          ? await ApiService.unlikePost(post.id)
+          : await ApiService.likePost(post.id);
+
+      if (response['statusCode'] == 200) {
+        final body = response['body'] as Map<String, dynamic>?;
+        final updatedLikesCount = (body?['likesCount'] as num?)?.toInt();
+        final updatedIsLiked = body?['isLiked'] as bool?;
+
+        // 更新帖子状态（只更新单个帖子，不刷新整个列表）
+        final postIndex = _posts.indexWhere((p) => p.id == post.id);
+        if (postIndex != -1) {
+          setState(() {
+            _posts[postIndex].likesCount =
+                updatedLikesCount ?? _posts[postIndex].likesCount;
+            _posts[postIndex].isLiked =
+                updatedIsLiked ?? !_posts[postIndex].isLiked;
+          });
+        }
+
+        return true;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      print('点赞失败: $e');
+      return false;
+    } finally {
+      _likeInFlight.remove(post.id);
+    }
   }
 
   /// 切换排序方式
@@ -417,28 +490,27 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
 
   /// 构建加载更多指示器
   Widget _buildLoadMoreIndicator() {
-    if (!_hasMore && _posts.isNotEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        child: const Center(
-          child: Text(
-            '没有更多内容了',
-            style: TextStyle(color: Colors.grey, fontSize: 14),
+    if (_isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
           ),
         ),
       );
-    }
-
-    if (_isLoading && _posts.isNotEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        child: const Center(
-          child: CircularProgressIndicator(),
+    } else if (!_hasMore) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Text('没有更多内容了', style: TextStyle(color: Colors.grey)),
         ),
       );
+    } else {
+      return const SizedBox();
     }
-
-    return Container();
   }
 
   @override
@@ -466,8 +538,13 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                 ? _buildEmptyState()
                 : RefreshIndicator(
                     onRefresh: () => _loadPosts(loadMore: false),
-                    child: ListView.builder(
-                      itemCount: _posts.length + 1, // +1 for load more indicator
+                    child: MasonryGridView.count(
+                      controller: _scrollController,
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      itemCount: _posts.length + (_isLoading ? 1 : 0),
                       itemBuilder: (context, index) {
                         if (index < _posts.length) {
                           final post = _posts[index];
@@ -481,14 +558,10 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                                 ),
                               );
                             },
+                            onAuthorTap: () => _openUserProfile(post.author.id),
+                            onLikeTap: (post) => _handlePostLike(post),
                           );
                         } else {
-                          // 加载更多指示器（仅在非作者搜索或仍有更多内容时显示）
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (!_isLoading && _hasMore) {
-                              _loadPosts(loadMore: true);
-                            }
-                          });
                           return _buildLoadMoreIndicator();
                         }
                       },
