@@ -4,6 +4,7 @@ import com.example.paperhub.chat.dto.ConversationResponse;
 import com.example.paperhub.chat.dto.MessageResponse;
 import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
+import com.example.paperhub.auth.UserStatus;
 import com.example.paperhub.websocket.ChatWebSocketService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -104,6 +105,7 @@ public class ChatService {
      */
     @Transactional
     public Conversation createOrGetPrivateConversation(Long currentUserId, Long targetUserId) {
+        ensureUserCanInteract(currentUserId);
         logger.info("开始创建或获取私聊会话: currentUserId={}, targetUserId={}", currentUserId, targetUserId);
 
         // 检查是否已存在私聊会话
@@ -173,6 +175,7 @@ public class ChatService {
     @Transactional
     public Message sendMessage(Long conversationId, Long senderId, String content, MessageType type,
                               String fileUrl, String fileName, Long fileSize) {
+        ensureUserCanInteract(senderId);
         // 验证用户是否在会话中
         if (!conversationParticipantRepository.existsByConversationIdAndUserId(conversationId, senderId)) {
             return null;
@@ -215,6 +218,7 @@ public class ChatService {
     @Transactional
     public Message sendMessageWithMedia(Long conversationId, Long senderId, String content,
                                        MessageType type, List<String> mediaUrls, String fileName, Long fileSize) {
+        ensureUserCanInteract(senderId);
         if (!conversationParticipantRepository.existsByConversationIdAndUserId(conversationId, senderId)) {
             return null;
         }
@@ -334,6 +338,7 @@ public class ChatService {
         }
     }
 
+
     /**
      * 保存消息到 Redis 缓存
      */
@@ -419,5 +424,26 @@ public class ChatService {
         }
         response.setIsMe(message.getSenderId().equals(userId));
         return response;
+    }
+    
+    private void ensureUserCanInteract(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("未认证用户无法执行此操作");
+        }
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("用户不存在");
+        }
+        User user = userOpt.get();
+        if (user.getStatus() == UserStatus.BANNED) {
+            throw new IllegalArgumentException("账号已被封禁，无法发送私信");
+        }
+        if (user.getStatus() == UserStatus.MUTED) {
+            java.time.Instant muteUntil = user.getMuteUntil();
+            if (muteUntil == null || java.time.Instant.now().isBefore(muteUntil)) {
+                throw new IllegalArgumentException("账号被禁言中，暂时无法发送私信");
+            }
+        }
+
     }
 }

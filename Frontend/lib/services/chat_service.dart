@@ -237,6 +237,7 @@ class ChatService extends ChangeNotifier {
   }
 
   /// 发送消息
+  /// 对于 SHARE 类型，content 应该存储 post ID
   Future<void> sendMessage({
     required String conversationId,
     required String content,
@@ -253,6 +254,7 @@ class ChatService extends ChangeNotifier {
       createdAt: DateTime.now(),
       status: MessageStatus.sending,
       isMe: true,
+      sharePost: null, // SHARE 类型不再需要 sharePost，前端会根据 post ID 获取详情
     );
 
     // 添加到消息列表末尾（因为列表现在是按时间升序排列，最早的在顶部）
@@ -260,6 +262,7 @@ class ChatService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // 如果是分享消息，sharePost 信息已经编码在 content 中
       final result = await ApiService.sendMessage(
         conversationId,
         content,
@@ -374,6 +377,8 @@ class ChatService extends ChangeNotifier {
         return 'FILE';
       case MessageType.video:
         return 'VIDEO';
+      case MessageType.share:
+        return 'SHARE';
       default:
         return 'TEXT';
     }

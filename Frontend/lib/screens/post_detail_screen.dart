@@ -16,6 +16,9 @@ import '../widgets/pdf_iframe_view.dart';
 import '../services/local_storage.dart';
 import '../config/app_env.dart';
 import 'profile_screen.dart';
+import '../services/chat_service.dart';
+import '../models/message_model.dart';
+import 'chat_screen.dart';
 
 /*
 ================================================================================
@@ -1426,7 +1429,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
               _comments[pIdx].replies.add(newComment);
             }
           } else {
-            // 父评论不在当前页/列表中，作为降级处理，把回复也插为顶层（可根据需求改为忽略）
+            // parent评论不在当前页/列表中，作为降级处理，把回复也插为顶层（可根据需求改为忽略）
             _comments.insert(0, newComment);
             commentCount += 1;
             widget.post.commentsCount = commentCount;
@@ -1518,7 +1521,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         final parent = _comments[i];
         final rIdx = parent.replies.indexWhere((r) => r.id == commentId);
         if (rIdx != -1) {
-          // 重新创建父评论，移除被删除的回复
+          // 重新创建parent评论，移除被删除的回复
           final updatedReplies = parent.replies.where((r) => r.id != commentId).toList();
           _comments[i] = Comment(
             id: parent.id,
@@ -1696,11 +1699,79 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     }
   }
 
-  void _onShare() {
-    // TODO: 调用分享 API 或复制链接
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('分享（演示）')));
+  Future<void> _onShare() async {
+    if (_currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先登录')),
+      );
+      return;
+    }
+
+    // 显示分享选择界面
+    final selectedUserId = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => _ShareUserSelectionSheet(
+        currentUserId: _currentUserId!,
+        post: widget.post,
+      ),
+    );
+
+    if (selectedUserId == null) return;
+
+    // 分享帖子到选中的用户
+    await _sharePostToUser(selectedUserId);
+  }
+
+  Future<void> _sharePostToUser(String targetUserId) async {
+    try {
+      // 显示加载提示
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('正在分享...'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+
+      // 获取或创建 conversation
+      final chatService = ChatService();
+      final conversation = await chatService.createOrGetPrivateConversation(targetUserId);
+
+      if (conversation == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('创建会话失败，请稍后重试')),
+        );
+        return;
+      }
+
+      // 发送分享消息
+      // 使用 SHARE 类型，content 只存储 post ID
+      await chatService.sendMessage(
+        conversationId: conversation.id,
+        content: widget.post.id, // content 只存储 post ID
+        type: MessageType.share,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('分享成功')),
+      );
+
+      // 可选：导航到聊天界面
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => ChatScreen(conversation: conversation),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('分享失败: $e')),
+      );
+    }
   }
 
   Future<void> _submitComment({String? parentId, Author? replyTo}) async {
@@ -3377,6 +3448,223 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             return Icon(Icons.person, size: radius, color: Colors.grey);
           },
         ),
+      ),
+    );
+  }
+}
+
+/// 分享用户选择界面
+class _ShareUserSelectionSheet extends StatefulWidget {
+  final String currentUserId;
+  final Post post;
+
+  const _ShareUserSelectionSheet({
+    required this.currentUserId,
+    required this.post,
+  });
+
+  @override
+  State<_ShareUserSelectionSheet> createState() => _ShareUserSelectionSheetState();
+}
+
+class _ShareUserSelectionSheetState extends State<_ShareUserSelectionSheet> {
+  List<Map<String, dynamic>> _followingUsers = [];
+  bool _isLoading = true;
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFollowingUsers();
+  }
+
+  Future<void> _loadFollowingUsers() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // 获取当前用户的关注列表
+      final result = await ApiService.getFollowing(
+        widget.currentUserId,
+        page: 0,
+        pageSize: 100, // 获取所有关注用户
+      );
+
+      if (result['statusCode'] == 200) {
+        final body = result['body'];
+        // 后端返回的字段是 'users'，不是 'content'
+        final users = body['users'] as List<dynamic>? ?? [];
+        setState(() {
+          _followingUsers = users.map((user) {
+            final userMap = user as Map<String, dynamic>;
+            // 后端返回的是 ProfileResp，包含 displayName 字段
+            return {
+              'id': userMap['id']?.toString() ?? '',
+              'name': userMap['displayName']?.toString() ?? 
+                      (userMap['email']?.toString() ?? '未知用户'),
+              'avatar': userMap['avatar']?.toString(),
+            };
+          }).toList();
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('加载关注列表失败: ${result['body']['message'] ?? '未知错误'}')),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载关注列表失败: $e')),
+        );
+      }
+    }
+  }
+
+  List<Map<String, dynamic>> get _filteredUsers {
+    if (_searchQuery.isEmpty) {
+      return _followingUsers;
+    }
+    return _followingUsers.where((user) {
+      final name = user['name']?.toString().toLowerCase() ?? '';
+      return name.contains(_searchQuery.toLowerCase());
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // 顶部拖拽指示器
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // 标题
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              children: [
+                const Text(
+                  '分享给',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          // 搜索框
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: '搜索用户',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey[300]!),
+                ),
+                filled: true,
+                fillColor: Colors.grey[100],
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                });
+              },
+            ),
+          ),
+          // 用户列表
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _filteredUsers.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.person_off, size: 64, color: Colors.grey[400]),
+                            const SizedBox(height: 16),
+                            Text(
+                              _searchQuery.isEmpty
+                                  ? '还没有关注任何人'
+                                  : '未找到匹配的用户',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                        itemCount: _filteredUsers.length,
+                        itemBuilder: (context, index) {
+                          final user = _filteredUsers[index];
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              leading: CircleAvatar(
+                                radius: 24,
+                                backgroundImage: user['avatar'] != null && user['avatar'].toString().isNotEmpty
+                                    ? NetworkImage(user['avatar'].toString())
+                                    : null,
+                                child: user['avatar'] == null || user['avatar'].toString().isEmpty
+                                    ? Text(
+                                        (user['name']?.toString().isNotEmpty ?? false)
+                                            ? user['name'].toString()[0].toUpperCase()
+                                            : '?',
+                                        style: const TextStyle(fontSize: 18),
+                                      )
+                                    : null,
+                              ),
+                              title: Text(
+                                user['name']?.toString() ?? '未知用户',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () {
+                                Navigator.pop(context, user['id']?.toString());
+                              },
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
       ),
     );
   }

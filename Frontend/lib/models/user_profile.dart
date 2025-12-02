@@ -8,6 +8,9 @@ int _parseCount(dynamic value) {
 class UserProfile {
   final String id;
   final String email;
+  final String role;
+  final String status;
+  final String? statusMessage;
   final String displayName;
   final String? bio;
   final String avatar;
@@ -29,6 +32,8 @@ class UserProfile {
   const UserProfile({
     required this.id,
     required this.email,
+    required this.role,
+    required this.status,
     required this.displayName,
     required this.avatar,
     required this.backgroundImage,
@@ -45,6 +50,7 @@ class UserProfile {
     this.hideFollowing = false,
     this.hideFollowers = false,
     this.publicFavorites = true,
+    this.statusMessage,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -61,6 +67,9 @@ class UserProfile {
       displayName: (rawDisplayName as String?)?.trim().isNotEmpty == true
           ? rawDisplayName as String
           : fallbackName,
+      role: (json['role'] as String?)?.toUpperCase() ?? 'USER',
+      status: (json['status'] as String?)?.toUpperCase() ?? 'NORMAL',
+      statusMessage: json['statusMessage'] as String?,
       avatar: (json['avatar'] as String?)?.trim().isNotEmpty == true
           ? json['avatar'] as String
           : 'images/DefaultAvatar.png',
@@ -95,6 +104,9 @@ class UserProfile {
   Map<String, dynamic> toJson() => {
     'id': id,
     'email': email,
+    'role': role,
+    'status': status,
+    if (statusMessage != null) 'statusMessage': statusMessage,
     'displayName': displayName,
     'name': displayName,
     'avatar': avatar,
@@ -119,6 +131,9 @@ class UserProfile {
     String? avatar,
     String? backgroundImage,
     String? bio,
+    String? role,
+    String? status,
+    String? statusMessage,
     List<String>? researchDirections,
     int? followingCount,
     int? followersCount,
@@ -135,6 +150,8 @@ class UserProfile {
     return UserProfile(
       id: id,
       email: email,
+      role: role ?? this.role,
+      status: status ?? this.status,
       displayName: displayName ?? this.displayName,
       avatar: avatar ?? this.avatar,
       backgroundImage: backgroundImage ?? this.backgroundImage,
@@ -152,6 +169,7 @@ class UserProfile {
       hideFollowing: hideFollowing ?? this.hideFollowing,
       hideFollowers: hideFollowers ?? this.hideFollowers,
       publicFavorites: publicFavorites ?? this.publicFavorites,
+      statusMessage: statusMessage ?? this.statusMessage,
     );
   }
 }

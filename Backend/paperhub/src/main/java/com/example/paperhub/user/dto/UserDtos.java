@@ -14,6 +14,9 @@ public class UserDtos {
     public record ProfileResp(
             Long id,
             String email,
+            String role,
+            String status,
+            String statusMessage,
             String displayName,
             String avatar,
             String backgroundImage,

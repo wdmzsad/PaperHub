@@ -29,6 +29,20 @@ public class User {
     @Column(name = "bio", columnDefinition = "TEXT")//个人简介
     private String bio;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false, columnDefinition = "varchar(20) default 'USER'")
+    private UserRole role = UserRole.USER;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, columnDefinition = "varchar(20) default 'NORMAL'")
+    private UserStatus status = UserStatus.NORMAL;
+
+    /**
+     * 禁言截止时间（可为空，空表示不限期）
+     */
+    @Column(name = "mute_until")
+    private Instant muteUntil;
+
     @Column(name = "research_directions", columnDefinition = "TEXT")//研究方向(逗号分隔)
     private String researchDirections;
 
@@ -93,6 +107,12 @@ public class User {
     public void setAffiliation(String affiliation) { this.affiliation = affiliation; }
     public String getBio() { return bio; }
     public void setBio(String bio) { this.bio = bio; }
+    public UserRole getRole() { return role; }
+    public void setRole(UserRole role) { this.role = role; }
+    public UserStatus getStatus() { return status; }
+    public void setStatus(UserStatus status) { this.status = status; }
+    public Instant getMuteUntil() { return muteUntil; }
+    public void setMuteUntil(Instant muteUntil) { this.muteUntil = muteUntil; }
     public String getResearchDirections() { return researchDirections; }
     public void setResearchDirections(String researchDirections) { this.researchDirections = researchDirections; }
     public String getProfileBackground() { return profileBackground; }
@@ -106,6 +126,16 @@ public class User {
 
     public boolean isPublicFavorites() { return publicFavorites; }
     public void setPublicFavorites(boolean publicFavorites) { this.publicFavorites = publicFavorites; }
+
+    @PrePersist
+    public void ensureRole() {
+        if (role == null) {
+            role = UserRole.USER;
+        }
+        if (status == null) {
+            status = UserStatus.NORMAL;
+        }
+    }
 }
 
 

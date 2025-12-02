@@ -195,6 +195,9 @@ class ConversationItem extends StatelessWidget {
       case 'MessageType.system':
         content = '[系统消息]';
         break;
+      case 'MessageType.share':
+        content = '分享了一条帖子';
+        break;
       default:
         break;
     }
