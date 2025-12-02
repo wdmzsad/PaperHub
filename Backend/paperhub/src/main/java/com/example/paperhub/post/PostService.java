@@ -20,6 +20,7 @@ import java.util.Optional;
 @Service
 public class PostService {
     private final PostRepository postRepository;
+    private final FollowFeedRepository followFeedRepository;
     private final UserRepository userRepository;
     private final PostLikeRepository postLikeRepository;
     private final FavoritePostRepository favoritePostRepository;
@@ -28,12 +29,14 @@ public class PostService {
 
     public PostService(
             PostRepository postRepository,
+            FollowFeedRepository followFeedRepository,
             UserRepository userRepository,
             PostLikeRepository postLikeRepository,
             FavoritePostRepository favoritePostRepository,
             CommentRepository commentRepository,
             CommentLikeRepository commentLikeRepository) {
         this.postRepository = postRepository;
+        this.followFeedRepository = followFeedRepository;
         this.userRepository = userRepository;
         this.postLikeRepository = postLikeRepository;
         this.favoritePostRepository = favoritePostRepository;
@@ -72,6 +75,19 @@ public class PostService {
         } else {
             return postRepository.findAllByOrderByCreatedAtDesc(pageable);
         }
+    }
+
+    /**
+     * 获取“关注”信息流：只包含当前用户关注的作者发布的帖子。
+     *
+     * @param followerId 当前用户ID
+     * @param page       页码（从1开始）
+     * @param pageSize   每页大小
+     * @return 关注作者的帖子分页结果
+     */
+    public Page<Post> getFollowingFeed(Long followerId, int page, int pageSize) {
+        Pageable pageable = PageRequest.of(page - 1, pageSize);
+        return followFeedRepository.findFollowingPosts(followerId, pageable);
     }
 
     /**

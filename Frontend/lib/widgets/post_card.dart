@@ -153,12 +153,16 @@ class PostCard extends StatefulWidget {
   /// 点击点赞时的回调（返回是否点赞成功，用于乐观更新）
   final Future<bool> Function(Post post)? onLikeTap;
 
+  /// 是否在卡片右上角显示“未读”红点（用于关注流未查看提醒）
+  final bool showUnreadDot;
+
   const PostCard({
     Key? key,
     required this.post,
     required this.onTap,
     this.onAuthorTap,
     this.onLikeTap,
+    this.showUnreadDot = false,
   }) : super(key: key);
 
   @override
@@ -297,129 +301,139 @@ class _PostCardState extends State<PostCard> {
         final calculatedHeight = cardWidth / aspect;
         final containerHeight = calculatedHeight > 350 ? 350.0 : calculatedHeight;
         
-        // 调试信息：打印每个卡片的高度计算过程
-        print('PostCard [${widget.post.id.substring(0, widget.post.id.length > 8 ? 8 : widget.post.id.length)}...]: '
-            'cardWidth=$cardWidth, aspect=$aspect, containerHeight=$containerHeight, '
-            'actualSize=${_actualImageWidth}x${_actualImageHeight}, '
-            'naturalSize=${widget.post.imageNaturalWidth}x${widget.post.imageNaturalHeight}, '
-            'imageAspectRatio=${widget.post.imageAspectRatio}');
-
-        return Card(
-          margin: const EdgeInsets.all(8),
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: InkWell(
-            onTap: widget.onTap,
-            borderRadius: BorderRadius.circular(12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 图片区域（若有多图，显示第一张缩略）
-                ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(12),
-                    topRight: Radius.circular(12),
-                  ),
-                  child: Container(
-                    width: cardWidth,
-                    height: containerHeight,
-                    color: Colors.grey[100],
-                    child: _buildImageContent(
-                      cardWidth,
-                      containerHeight,
-                      containerHeight,
+        return Stack(
+          children: [
+            Card(
+              margin: const EdgeInsets.all(8),
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: InkWell(
+                onTap: widget.onTap,
+                borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 图片区域（若有多图，显示第一张缩略）
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
+                      child: Container(
+                        width: cardWidth,
+                        height: containerHeight,
+                        color: Colors.grey[100],
+                        child: _buildImageContent(
+                          cardWidth,
+                          containerHeight,
+                          containerHeight,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
 
-                // 标题区域
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    widget.post.title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      height: 1.4,
+                    // 标题区域
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        widget.post.title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          height: 1.4,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
 
-                // 用户信息 + tags 区域
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                  child: Row(
-                    children: [
-                      // 头像（仅头像可点击）
-                      GestureDetector(
-                        onTap: widget.onAuthorTap,
-                        child: CircleAvatar(
-                          radius: 12,
-                          backgroundColor: Colors.grey[300],
-                          child: ClipOval(
-                            child: Image.network(
-                              widget.post.author.avatar,
-                              width: 24,
-                              height: 24,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                // 头像加载失败时的兜底图标
-                                return const Icon(
-                                  Icons.person,
-                                  size: 16,
-                                  color: Colors.grey,
-                                );
-                              },
+                    // 用户信息 + tags 区域
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      child: Row(
+                        children: [
+                          // 头像（仅头像可点击）
+                          GestureDetector(
+                            onTap: widget.onAuthorTap,
+                            child: CircleAvatar(
+                              radius: 12,
+                              backgroundColor: Colors.grey[300],
+                              child: ClipOval(
+                                child: Image.network(
+                                  widget.post.author.avatar,
+                                  width: 24,
+                                  height: 24,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    // 头像加载失败时的兜底图标
+                                    return const Icon(
+                                      Icons.person,
+                                      size: 16,
+                                      color: Colors.grey,
+                                    );
+                                  },
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.post.author.name,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.post.author.name,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  widget.post.tags.isNotEmpty
+                                      ? '#${widget.post.tags.first}'
+                                      : '',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              widget.post.tags.isNotEmpty
-                                  ? '#${widget.post.tags.first}'
-                                  : '',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 8),
+                          // 点赞图标 + 点赞数
+                          _LikeButton(
+                            post: widget.post,
+                            onLikeTap: widget.onLikeTap,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      // 点赞图标 + 点赞数
-                      _LikeButton(
-                        post: widget.post,
-                        onLikeTap: widget.onLikeTap,
-                      ),
-                    ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (widget.showUnreadDot)
+              Positioned(
+                right: 14,
+                top: 10,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Colors.redAccent,
+                    shape: BoxShape.circle,
                   ),
                 ),
-              ],
-            ),
-          ),
+              ),
+          ],
         );
       },
     );

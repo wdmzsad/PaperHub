@@ -1226,6 +1226,39 @@ class ApiService {
     }
   }
 
+  /// 获取“关注”信息流
+  /// 只返回当前登录用户关注的作者发布的帖子
+  /// GET /posts/following?page=1&pageSize=20
+  static Future<Map<String, dynamic>> getFollowingPosts({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    try {
+      final queryParameters = <String, String>{
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      };
+      final uri = Uri.parse('$baseUrl/posts/following').replace(
+        queryParameters: queryParameters,
+      );
+      final result = await _makeRequest(
+        () => http
+            .get(uri, headers: _buildHeaders())
+            .timeout(
+              const Duration(seconds: 10),
+              onTimeout: () {
+                throw Exception('请求超时，请检查后端服务是否启动');
+              },
+            ),
+        '/posts/following',
+      );
+      return result;
+    } catch (e) {
+      print('获取关注信息流失败: $e');
+      rethrow;
+    }
+  }
+
   /// 获取帖子详情
   /// @param postId 帖子ID
   static Future<Map<String, dynamic>> getPost(String postId) async {
