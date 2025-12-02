@@ -100,6 +100,43 @@ public class PostController {
     }
 
     /**
+     * 获取“关注”信息流：只返回当前登录用户关注的作者发布的帖子。
+     * GET /posts/following?page=1&pageSize=20
+     */
+    @GetMapping("/following")
+    public ResponseEntity<?> getFollowingFeed(
+            @AuthenticationPrincipal User user,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize) {
+
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "未认证，请先登录"));
+        }
+
+        try {
+            Page<Post> postPage = postService.getFollowingFeed(user.getId(), page, pageSize);
+            Long userId = user.getId();
+
+            List<PostDtos.PostResp> posts = postPage.getContent().stream()
+                    .map(post -> postMapper.toPostResp(post, userId))
+                    .toList();
+
+            return ResponseEntity.ok(new PostDtos.PostListResp(
+                    posts,
+                    postPage.getTotalElements(),
+                    page,
+                    pageSize
+            ));
+        } catch (Exception e) {
+            System.err.println("获取关注信息流失败: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500)
+                    .body(Map.of("message", "获取关注信息流失败: " +
+                            (e.getMessage() != null ? e.getMessage() : "未知错误")));
+        }
+    }
+
+    /**
      * 获取帖子详情
      * GET /posts/{postId}
      */
