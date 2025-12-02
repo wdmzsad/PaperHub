@@ -1190,16 +1190,21 @@ class ApiService {
   /// 获取帖子列表
   /// @param page 页码，从1开始
   /// @param pageSize 每页数量，默认20
+  /// @param disciplineTag 可选：按分区 / 标签过滤帖子
   static Future<Map<String, dynamic>> getPosts({
     int page = 1,
     int pageSize = 20,
+    String? disciplineTag,
   }) async {
     try {
+      final queryParameters = <String, String>{
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+        if (disciplineTag != null && disciplineTag.isNotEmpty)
+          'tag': disciplineTag,
+      };
       final uri = Uri.parse('$baseUrl/posts').replace(
-        queryParameters: {
-          'page': page.toString(),
-          'pageSize': pageSize.toString(),
-        },
+        queryParameters: queryParameters,
       );
       print('请求帖子列表: $uri'); // 调试日志
       final result = await _makeRequest(

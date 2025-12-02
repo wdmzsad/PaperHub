@@ -17,6 +17,8 @@ import '../services/local_storage.dart';
 import '../services/browse_history_service.dart';
 import '../config/app_env.dart';
 import 'profile_screen.dart';
+import '../constants/discipline_constants.dart';
+import 'zone_screen.dart';
 import '../services/chat_service.dart';
 import '../models/message_model.dart';
 import 'chat_screen.dart';
@@ -2305,6 +2307,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 分区标签区域（点击可跳转到对应分区页）
+          _buildDisciplineTagArea(),
+          const SizedBox(height: 12),
           Text(//标题
             widget.post.title,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -2315,16 +2320,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             style: const TextStyle(fontSize: 14, height: 1.6),
           ),
           const SizedBox(height: 12),
-          Wrap(//标签
-            spacing: 8,
-            children: widget.post.tags
-                .map(
-                  (t) => Chip(
-                    label: Text(t, style: const TextStyle(fontSize: 12)),
-                  ),
-                )
-                .toList(),
-          ),
+          _buildSecondaryTagsLine(),
           const SizedBox(height: 10),
           // arXiv 文献信息（如果有）
           if (_hasArxivMetadata()) _buildArxivMetadataSection(),
@@ -2541,6 +2537,79 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           ),
         ],
       ),
+    );
+  }
+
+  /// 帖子正文上方的分区标签区域
+  Widget _buildDisciplineTagArea() {
+    final mainDiscipline = findMainDisciplineFromTags(widget.post.tags);
+    if (mainDiscipline == null) {
+      return const SizedBox.shrink();
+    }
+    final color = kDisciplineColors[mainDiscipline] ?? Colors.blue;
+
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ZoneScreen(initialDiscipline: mainDiscipline),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.local_offer, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(
+              mainDiscipline,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Text(
+              '· 点击查看该分区更多笔记',
+              style: TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 二级分区 / 细分类标签行（以 #xxx 形式展示在正文和评论之间）
+  Widget _buildSecondaryTagsLine() {
+    if (widget.post.tags.isEmpty) return const SizedBox.shrink();
+
+    final main = findMainDisciplineFromTags(widget.post.tags);
+    final secondary = widget.post.tags
+        .where((t) => !kMainDisciplines.contains(t) && t.trim().isNotEmpty)
+        .toList();
+    if (secondary.isEmpty) return const SizedBox.shrink();
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: secondary.map((t) {
+        return Text(
+          '#$t',
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.blue,
+          ),
+        );
+      }).toList(),
     );
   }
 
