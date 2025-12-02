@@ -13,6 +13,7 @@ import '../pages/note_editor_page.dart';
 import '../services/api_service.dart';
 import '../services/local_storage.dart';
 import '../services/chat_service.dart';
+import '../services/browse_history_service.dart';
 import '../widgets/bottom_navigation.dart';
 import '../widgets/post_card.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -138,6 +139,127 @@ class _ProfilePageState extends State<ProfilePage>
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  // 上面已经完整实现了 `_openBrowseHistory`，下面重复的几份定义是合并冲突遗留，需要删除。
+
+  Future<void> _openBrowseHistory() async {
+    final userId = _currentUserId ?? LocalStorage.instance.read('userId');
+    if (userId == null || userId.isEmpty) {
+      _showSnack('未登录，无法查看浏览历史');
+      return;
+    }
+
+    final history = await BrowseHistoryService.getHistory(userId);
+    if (!mounted) return;
+
+    if (history.isEmpty) {
+      _showSnack('暂无浏览历史');
+      return;
+    }
+
+    // 先根据历史记录批量拉取帖子详情，构造 Post 列表用于 PostCard 展示
+    final List<Post> posts = [];
+    for (final item in history) {
+      try {
+        final resp = await ApiService.getPost(item.postId);
+        final status = resp['statusCode'] as int? ?? 500;
+        if (status == 200) {
+          final body = resp['body'] as Map<String, dynamic>;
+          posts.add(Post.fromJson(body));
+        } else if (status == 404) {
+          // 帖子不存在时，顺便清理这条历史
+          await BrowseHistoryService.removeByPostId(userId, item.postId);
+        }
+      } catch (_) {
+        // 忽略单条失败，继续加载其他帖子
+      }
+    }
+
+    if (!mounted) return;
+
+    if (posts.isEmpty) {
+      _showSnack('浏览的帖子都已不存在或加载失败');
+      return;
+    }
+
+    final rootContext = context; // Store the context before the async gap.
+
+    await showModalBottomSheet(
+      context: rootContext,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(sheetContext).size.height * 0.8,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        '浏览历史',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () async {
+                          await BrowseHistoryService.clearHistory(userId);
+                          Navigator.of(sheetContext).pop();
+                          // Check for mounted again after async operation
+                          if (mounted) {
+                            _showSnack('浏览历史已清空');
+                          }
+                        },
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('清空'),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: MasonryGridView.count(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    itemCount: posts.length,
+                    itemBuilder: (ctx, index) {
+                      final post = posts[index];
+                      return PostCard(
+                        post: post,
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          // 使用外层 context 打开详情，避免使用已销毁的上下文
+                          _openPostDetail(post);
+                        },
+                        onAuthorTap: () {
+                          if (post.author.id != _currentUserId) {
+                            Navigator.of(sheetContext).pop();
+                            Navigator.of(rootContext)
+                                .pushNamed('/user/${post.author.id}');
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _showAvatarViewer(String? avatar) {
@@ -704,6 +826,14 @@ class _ProfilePageState extends State<ProfilePage>
                   builder: (_) => const PrivacySettingsScreen(),
                 ),
               );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.history),
+            title: const Text('浏览历史'),
+            onTap: () async {
+              Navigator.pop(context);
+              await _openBrowseHistory();
             },
           ),
           const Divider(),
