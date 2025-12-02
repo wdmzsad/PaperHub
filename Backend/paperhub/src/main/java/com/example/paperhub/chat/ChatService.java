@@ -424,7 +424,8 @@ public class ChatService {
         }
         response.setIsMe(message.getSenderId().equals(userId));
         return response;
-
+    }
+    
     private void ensureUserCanInteract(Long userId) {
         if (userId == null) {
             throw new IllegalArgumentException("未认证用户无法执行此操作");
