@@ -12,6 +12,7 @@ import 'package:image_picker/image_picker.dart';
 import '../config/app_env.dart';
 import '../services/api_service.dart';
 import '../services/arxiv_service.dart';
+import '../constants/discipline_constants.dart';
 
 class NoteEditorPage extends StatefulWidget {
   const NoteEditorPage({Key? key}) : super(key: key);
@@ -45,6 +46,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   String? _doi;
   String? _journal;
   int? _year;
+
+  // 分区与推荐细分类标签
+  String? _selectedDiscipline; // 必选：学科分区
+  final Set<String> _selectedSubTags = {}; // 可选：细分类标签
 
   // 选择图片
   Future<void> _pickImage() async {
@@ -199,6 +204,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       );
       return;
     }
+    if (_selectedDiscipline == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请选择一个学科分区')),
+      );
+      return;
+    }
 
     // 显示加载中
     showDialog(
@@ -208,7 +219,13 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
 
     try {
-      // 调用创建笔记接口（注意：ApiService.createPost 需要支持 externalLinks 参数）
+      // 组装标签：至少包含一个主分区，可选细分类标签
+      final List<String> tags = [
+        _selectedDiscipline!,
+        ..._selectedSubTags,
+      ].toSet().toList();
+
+      // 调用创建笔记接口（注意：ApiService.createPost 需要支持 externalLinks / tags 参数）
       List<String> mediaUrls = [];
       // 先上传图片获取 URL
       for (var img in _images) {
@@ -251,7 +268,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         title: title,
         content: content.isNotEmpty ? content : null,
         media: mediaUrls.isNotEmpty ? mediaUrls : null,
-        tags: null,
+        tags: tags.isNotEmpty ? tags : null,
         doi: _doi,
         journal: _journal,
         year: _year,
@@ -679,6 +696,128 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 
+  // 分区选择区（必选）
+  Widget _buildDisciplineSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: const [
+            Text(
+              '选择学科分区',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(width: 6),
+            Text(
+              '* 必选',
+              style: TextStyle(fontSize: 12, color: Colors.redAccent),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: kMainDisciplines.map((d) {
+            final bool selected = _selectedDiscipline == d;
+            final color = kDisciplineColors[d] ?? const Color(0xFF1976D2);
+            return ChoiceChip(
+              label: Text(d),
+              selected: selected,
+              selectedColor: color.withOpacity(0.12),
+              labelStyle: TextStyle(
+                color: selected ? color : Colors.black87,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(
+                  color: selected ? color : Colors.grey.shade300,
+                ),
+              ),
+              onSelected: (_) {
+                setState(() {
+                  if (_selectedDiscipline == d) {
+                    _selectedDiscipline = null;
+                    _selectedSubTags.clear();
+                  } else {
+                    _selectedDiscipline = d;
+                    _selectedSubTags.clear();
+                  }
+                });
+              },
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // 推荐细分类标签（可选）
+  Widget _buildRecommendedTagsSection() {
+    // 根据当前选中的主分区推荐细分类；若没有专属推荐，则展示所有去重后的推荐标签
+    List<String> tags = [];
+    if (_selectedDiscipline != null &&
+        kRecommendedSubTags.containsKey(_selectedDiscipline)) {
+      tags = kRecommendedSubTags[_selectedDiscipline!]!;
+    } else {
+      final set = <String>{};
+      for (final list in kRecommendedSubTags.values) {
+        set.addAll(list);
+      }
+      tags = set.toList();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '系统推荐细分类（可选）',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _selectedDiscipline == null
+              ? '先选择一个学科分区，我们会推荐相关细分类标签'
+              : '根据你选择的分区推荐：可多选，帮助别人更快找到你的笔记',
+          style: const TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: tags.map((t) {
+            final bool selected = _selectedSubTags.contains(t);
+            return FilterChip(
+              label: Text(t),
+              selected: selected,
+              selectedColor: Colors.blue.shade50,
+              checkmarkColor: Colors.blue,
+              labelStyle: TextStyle(
+                color: selected ? Colors.blue : Colors.black87,
+              ),
+              onSelected: (value) {
+                setState(() {
+                  if (value) {
+                    _selectedSubTags.add(t);
+                  } else {
+                    _selectedSubTags.remove(t);
+                  }
+                });
+              },
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -703,6 +842,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              
+              //选择图片
               _buildImageGrid(),
               const SizedBox(height: 16),
 
@@ -794,6 +935,14 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 ],
               ),
 
+              // 分区选择
+              _buildDisciplineSection(),
+              const SizedBox(height: 12),
+
+              // 推荐细分类标签
+              _buildRecommendedTagsSection(),
+              const SizedBox(height: 16),
+              
               const SizedBox(height: 36),
 
               // 发布按钮
