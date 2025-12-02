@@ -1022,6 +1022,7 @@ class ApiService {
 
   /// 发送消息
   /// POST /api/conversations/{conversationId}/messages
+  /// 注意：后端不支持 sharePost 字段，分享消息的信息需要编码在 content 中
   static Future<Map<String, dynamic>> sendMessage(
     String conversationId,
     String content, {
