@@ -372,6 +372,8 @@ class ChatService extends ChangeNotifier {
         return 'IMAGE';
       case MessageType.file:
         return 'FILE';
+      case MessageType.video:
+        return 'VIDEO';
       default:
         return 'TEXT';
     }

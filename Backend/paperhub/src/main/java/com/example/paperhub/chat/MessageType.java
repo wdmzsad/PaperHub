@@ -1,5 +1,5 @@
 package com.example.paperhub.chat;
 
 public enum MessageType {
-    TEXT, VOICE, IMAGE, FILE
+    TEXT, VOICE, IMAGE, FILE, VIDEO
 }

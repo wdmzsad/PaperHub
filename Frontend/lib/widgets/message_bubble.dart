@@ -7,10 +7,12 @@
 /// - 头像和时间显示
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 import '../models/message_model.dart';
+import 'video_message_player.dart';
 import 'dart:html' as html if (dart.library.io) 'dart:io';
 
-class MessageBubble extends StatelessWidget {
+class MessageBubble extends StatefulWidget {
   final Message message;
   final bool showAvatar;
   final bool showTime;
@@ -25,34 +27,47 @@ class MessageBubble extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends State<MessageBubble> {
+  VideoPlayerController? _videoController;
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
-        mainAxisAlignment: message.isMe
+        mainAxisAlignment: widget.message.isMe
             ? MainAxisAlignment.end
             : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!message.isMe && showAvatar) ...[
+          if (!widget.message.isMe && widget.showAvatar) ...[
             _buildAvatar(),
             const SizedBox(width: 8),
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment: message.isMe
+              crossAxisAlignment: widget.message.isMe
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
                 _buildMessageContent(context),
-                if (showTime) ...[
+                if (widget.showTime) ...[
                   const SizedBox(height: 4),
                   _buildMessageMeta(),
                 ],
               ],
             ),
           ),
-          if (message.isMe && showAvatar) ...[
+          if (widget.message.isMe && widget.showAvatar) ...[
             const SizedBox(width: 8),
             _buildAvatar(),
           ],
@@ -63,7 +78,7 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildAvatar() {
     return GestureDetector(
-      onTap: onAvatarTap,
+      onTap: widget.onAvatarTap,
       child: Container(
         width: 32,
         height: 32,
@@ -71,11 +86,11 @@ class MessageBubble extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           color: Colors.grey[200],
         ),
-        child: message.senderAvatar != null
+        child: widget.message.senderAvatar != null
             ? ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(
-                  message.senderAvatar!,
+                  widget.message.senderAvatar!,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
                     return _buildDefaultAvatar();
@@ -88,7 +103,7 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildDefaultAvatar() {
-    final name = message.senderName;
+    final name = widget.message.senderName;
     final firstChar = name.isNotEmpty ? name[0] : '?';
 
     return Container(
@@ -97,7 +112,7 @@ class MessageBubble extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: message.isMe
+          colors: widget.message.isMe
               ? [const Color(0xFF1976D2), const Color(0xFF42A5F5)]
               : [Colors.grey[400]!, Colors.grey[600]!],
         ),
@@ -118,12 +133,15 @@ class MessageBubble extends StatelessWidget {
   Widget _buildMessageContent(BuildContext context) {
     Widget content;
 
-    switch (message.type) {
+    switch (widget.message.type) {
       case MessageType.text:
         content = _buildTextMessage(context);
         break;
       case MessageType.image:
         content = _buildImageMessage(context);
+        break;
+      case MessageType.video:
+        content = _buildVideoMessage(context);
         break;
       case MessageType.file:
         content = _buildFileMessage(context);
@@ -141,6 +159,18 @@ class MessageBubble extends StatelessWidget {
     return content;
   }
 
+  Widget _buildVideoMessage(BuildContext context) {
+    final videoUrl = widget.message.fileUrl ?? widget.message.mediaUrls.firstOrNull ?? '';
+    if (videoUrl.isEmpty) {
+      return _buildTextMessage(context);
+    }
+
+    return VideoMessagePlayer(
+      videoUrl: videoUrl,
+      isMe: widget.message.isMe,
+    );
+  }
+
   Widget _buildTextMessage(BuildContext context) {
     return Container(
       constraints: BoxConstraints(
@@ -148,12 +178,12 @@ class MessageBubble extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: message.isMe ? const Color(0xFF1976D2) : Colors.white,
+        color: widget.message.isMe ? const Color(0xFF1976D2) : Colors.white,
         borderRadius: BorderRadius.circular(18).copyWith(
-          bottomLeft: message.isMe
+          bottomLeft: widget.message.isMe
               ? const Radius.circular(18)
               : const Radius.circular(4),
-          bottomRight: message.isMe
+          bottomRight: widget.message.isMe
               ? const Radius.circular(4)
               : const Radius.circular(18),
         ),
@@ -166,9 +196,9 @@ class MessageBubble extends StatelessWidget {
         ],
       ),
       child: Text(
-        message.content,
+        widget.message.content,
         style: TextStyle(
-          color: message.isMe ? Colors.white : Colors.black87,
+          color: widget.message.isMe ? Colors.white : Colors.black87,
           fontSize: 16,
           height: 1.4,
         ),
@@ -177,16 +207,16 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildImageMessage(BuildContext context) {
-    if (message.mediaUrls.isEmpty) {
+    if (widget.message.mediaUrls.isEmpty) {
       return _buildTextMessage(context);
     }
 
     return Column(
-      crossAxisAlignment: message.isMe
+      crossAxisAlignment: widget.message.isMe
           ? CrossAxisAlignment.end
           : CrossAxisAlignment.start,
       children: [
-        ...message.mediaUrls.map(
+        ...widget.message.mediaUrls.map(
           (url) => GestureDetector(
             onTap: () => _showImagePreview(context, url),
             child: Container(
@@ -241,20 +271,20 @@ class MessageBubble extends StatelessWidget {
             ),
           ),
         ),
-        if (message.content.isNotEmpty)
+        if (widget.message.content.isNotEmpty)
           Container(
             constraints: BoxConstraints(
               maxWidth: MediaQuery.of(context).size.width * 0.6,
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: message.isMe ? const Color(0xFF1976D2) : Colors.white,
+              color: widget.message.isMe ? const Color(0xFF1976D2) : Colors.white,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              message.content,
+              widget.message.content,
               style: TextStyle(
-                color: message.isMe ? Colors.white : Colors.black87,
+                color: widget.message.isMe ? Colors.white : Colors.black87,
                 fontSize: 14,
               ),
             ),
@@ -300,11 +330,11 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _buildFileMessage(BuildContext context) {
-    final fileUrl = message.fileUrl ?? (message.mediaUrls.isNotEmpty ? message.mediaUrls.first : null);
+    final fileUrl = widget.message.fileUrl ?? (widget.message.mediaUrls.isNotEmpty ? widget.message.mediaUrls.first : null);
     if (fileUrl == null) return _buildTextMessage(context);
 
-    final fileName = message.fileName ?? _getFileName(fileUrl);
-    final fileSize = message.fileSize;
+    final fileName = widget.message.fileName ?? _getFileName(fileUrl);
+    final fileSize = widget.message.fileSize;
 
     return GestureDetector(
       onTap: () => _openFile(fileUrl),
@@ -314,7 +344,7 @@ class MessageBubble extends StatelessWidget {
         ),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: message.isMe ? const Color(0xFF1976D2) : Colors.white,
+          color: widget.message.isMe ? const Color(0xFF1976D2) : Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
@@ -329,7 +359,7 @@ class MessageBubble extends StatelessWidget {
           children: [
             Icon(
               _getFileIconFromName(fileName),
-              color: message.isMe ? Colors.white : const Color(0xFF1976D2),
+              color: widget.message.isMe ? Colors.white : const Color(0xFF1976D2),
               size: 32,
             ),
             const SizedBox(width: 12),
@@ -340,7 +370,7 @@ class MessageBubble extends StatelessWidget {
                   Text(
                     fileName,
                     style: TextStyle(
-                      color: message.isMe ? Colors.white : Colors.black87,
+                      color: widget.message.isMe ? Colors.white : Colors.black87,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
@@ -351,7 +381,7 @@ class MessageBubble extends StatelessWidget {
                   Text(
                     fileSize != null ? _formatFileSize(fileSize) : _getFileExtension(fileName).toUpperCase(),
                     style: TextStyle(
-                      color: message.isMe ? Colors.white70 : Colors.grey[600],
+                      color: widget.message.isMe ? Colors.white70 : Colors.grey[600],
                       fontSize: 12,
                     ),
                   ),
@@ -361,7 +391,7 @@ class MessageBubble extends StatelessWidget {
             const SizedBox(width: 8),
             Icon(
               Icons.download,
-              color: message.isMe ? Colors.white70 : Colors.grey[400],
+              color: widget.message.isMe ? Colors.white70 : Colors.grey[400],
               size: 20,
             ),
           ],
@@ -393,6 +423,8 @@ class MessageBubble extends StatelessWidget {
         return Icons.text_snippet;
       case 'exe':
         return Icons.settings_applications;
+      case 'mp4':
+        return Icons.video_library;
       default:
         return Icons.insert_drive_file;
     }
@@ -456,12 +488,12 @@ class MessageBubble extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: message.isMe ? const Color(0xFF1976D2) : Colors.white,
+        color: widget.message.isMe ? const Color(0xFF1976D2) : Colors.white,
         borderRadius: BorderRadius.circular(18).copyWith(
-          bottomLeft: message.isMe
+          bottomLeft: widget.message.isMe
               ? const Radius.circular(18)
               : const Radius.circular(4),
-          bottomRight: message.isMe
+          bottomRight: widget.message.isMe
               ? const Radius.circular(4)
               : const Radius.circular(18),
         ),
@@ -478,7 +510,7 @@ class MessageBubble extends StatelessWidget {
         children: [
           Icon(
             Icons.mic,
-            color: message.isMe ? Colors.white : Colors.grey[600],
+            color: widget.message.isMe ? Colors.white : Colors.grey[600],
             size: 18,
           ),
           const SizedBox(width: 8),
@@ -494,7 +526,7 @@ class MessageBubble extends StatelessWidget {
                   width: 2,
                   height: 12 + (index % 3) * 4,
                   decoration: BoxDecoration(
-                    color: message.isMe ? Colors.white : Colors.grey[400],
+                    color: widget.message.isMe ? Colors.white : Colors.grey[400],
                     borderRadius: BorderRadius.circular(1),
                   ),
                 ),
@@ -503,9 +535,9 @@ class MessageBubble extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            "0:${(message.content.length % 60).toString().padLeft(2, '0')}",
+            "0:${(widget.message.content.length % 60).toString().padLeft(2, '0')}",
             style: TextStyle(
-              color: message.isMe ? Colors.white70 : Colors.grey[600],
+              color: widget.message.isMe ? Colors.white70 : Colors.grey[600],
               fontSize: 12,
             ),
           ),
@@ -524,7 +556,7 @@ class MessageBubble extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
-          message.content,
+          widget.message.content,
           style: TextStyle(color: Colors.grey[600], fontSize: 12),
         ),
       ),
@@ -533,18 +565,18 @@ class MessageBubble extends StatelessWidget {
 
   Widget _buildMessageMeta() {
     return Row(
-      mainAxisAlignment: message.isMe
+      mainAxisAlignment: widget.message.isMe
           ? MainAxisAlignment.end
           : MainAxisAlignment.start,
       children: [
-        if (!message.isMe) ...[
+        if (!widget.message.isMe) ...[
           Text(
-            _formatTime(message.createdAt),
+            _formatTime(widget.message.createdAt),
             style: TextStyle(color: Colors.grey[500], fontSize: 11),
           ),
           const SizedBox(width: 4),
           Text(
-            message.senderName,
+            widget.message.senderName,
             style: TextStyle(
               color: Colors.grey[600],
               fontSize: 11,
@@ -555,7 +587,7 @@ class MessageBubble extends StatelessWidget {
           _buildMessageStatus(),
           const SizedBox(width: 4),
           Text(
-            _formatTime(message.createdAt),
+            _formatTime(widget.message.createdAt),
             style: TextStyle(color: Colors.grey[500], fontSize: 11),
           ),
         ],
@@ -567,7 +599,7 @@ class MessageBubble extends StatelessWidget {
     IconData icon;
     Color color;
 
-    switch (message.status) {
+    switch (widget.message.status) {
       case MessageStatus.sending:
         icon = Icons.access_time;
         color = Colors.grey[400]!;
@@ -632,6 +664,8 @@ class MessageBubble extends StatelessWidget {
         return Icons.text_snippet;
       case 'exe':
         return Icons.settings_applications;
+      case 'mp4':
+        return Icons.video_library;
       default:
         return Icons.insert_drive_file;
     }
@@ -648,7 +682,7 @@ class MessageBubble extends StatelessWidget {
   }
 
   Future<void> _openFile(String url) async {
-    final fileName = message.fileName ?? _getFileName(url);
+    final fileName = widget.message.fileName ?? _getFileName(url);
     final uri = Uri.parse(url);
 
     // Web平台：使用download属性

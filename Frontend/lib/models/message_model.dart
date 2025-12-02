@@ -51,6 +51,9 @@ class Message {
       case 'SYSTEM':
         messageType = MessageType.system;
         break;
+      case 'VIDEO':
+        messageType = MessageType.video;
+        break;
       default:
         messageType = MessageType.text;
     }
@@ -139,6 +142,7 @@ enum MessageType {
   file,    // 文件消息
   voice,   // 语音消息
   system,  // 系统消息
+  video,   // 视频消息
 }
 
 /// 消息状态枚举

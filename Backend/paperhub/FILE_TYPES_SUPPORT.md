@@ -64,6 +64,7 @@ text/csv                                                                        
 | ZIP/RAR/7Z | `Icons.folder_zip` |
 | TXT | `Icons.text_snippet` |
 | EXE | `Icons.settings_applications` |
+| MP4 | `Icons.video_library` |
 | 其他 | `Icons.insert_drive_file` |
 
 ## API 使用
