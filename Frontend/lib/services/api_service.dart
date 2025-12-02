@@ -240,6 +240,17 @@ class ApiService {
     );
   }
 
+  /// 获取当前用户的隐私设置
+  static Future<Map<String, dynamic>> getPrivacySettings() async {
+    return await _makeRequest(
+      () => http.get(
+        Uri.parse('$baseUrl/users/me/privacy'),
+        headers: _buildHeaders(),
+      ),
+      '/users/me/privacy',
+    );
+  }
+
   static Future<Map<String, dynamic>> getUserProfile(String userId) async {
     return await _makeRequest(
       () => http.get(
@@ -271,6 +282,27 @@ class ApiService {
       body: jsonEncode(payload),
     );
     return _parseResponse(resp);
+  }
+
+  /// 更新当前用户的隐私设置
+  static Future<Map<String, dynamic>> updatePrivacySettings({
+    required bool hideFollowing,
+    required bool hideFollowers,
+    required bool publicFavorites,
+  }) async {
+    final payload = <String, dynamic>{
+      'hideFollowing': hideFollowing,
+      'hideFollowers': hideFollowers,
+      'publicFavorites': publicFavorites,
+    };
+    return await _makeRequest(
+      () => http.put(
+        Uri.parse('$baseUrl/users/me/privacy'),
+        headers: _buildHeaders(),
+        body: jsonEncode(payload),
+      ),
+      '/users/me/privacy',
+    );
   }
 
   static Future<Map<String, dynamic>> uploadAvatarBytes(
@@ -361,6 +393,23 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> getMutualFollowers(
+    String userId, {
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/users/$userId/mutual').replace(
+      queryParameters: {
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/users/$userId/mutual',
+    );
+  }
+
   /// 搜索用户（用于@功能）
   /// GET /users/search?q=name&type=following|all
   static Future<Map<String, dynamic>> searchUsers({
@@ -380,6 +429,28 @@ class ApiService {
     return await _makeRequest(
       () => http.get(uri, headers: _buildHeaders()),
       '/users/search',
+    );
+  }
+
+  /// 搜索帖子
+  /// GET /posts/search?q=keyword&sort=hot|new&page=1&pageSize=20
+  static Future<Map<String, dynamic>> searchPosts({
+    required String query,
+    String sort = 'hot', // 'hot' 或 'new'
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/posts/search').replace(
+      queryParameters: {
+        'q': query,
+        'sort': sort,
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/posts/search',
     );
   }
 

@@ -83,6 +83,23 @@ public class UserController {
     }
 
     /**
+     * 获取当前登录用户的隐私设置。
+     */
+    @GetMapping("/me/privacy")
+    public ResponseEntity<?> getMyPrivacySettings(@AuthenticationPrincipal User currentUser) {
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "未认证，请先登录"));
+        }
+        User fresh = userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new IllegalStateException("当前用户不存在"));
+        return ResponseEntity.ok(new UserDtos.PrivacySettingsResp(
+                fresh.isHideFollowing(),
+                fresh.isHideFollowers(),
+                fresh.isPublicFavorites()
+        ));
+    }
+
+    /**
      * 获取指定用户的公开资料。
      */
     @GetMapping("/{userId}")
@@ -105,6 +122,37 @@ public class UserController {
         }
         User updated = userService.updateProfile(currentUser, req);
         return ResponseEntity.ok(userService.toProfile(updated));
+    }
+
+    /**
+     * 更新当前登录用户的隐私设置。
+     */
+    @PutMapping("/me/privacy")
+    public ResponseEntity<?> updatePrivacy(@AuthenticationPrincipal User currentUser,
+                                           @RequestBody UserDtos.UpdatePrivacySettingsReq req) {
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "未认证，请先登录"));
+        }
+        User user = userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new IllegalStateException("当前用户不存在"));
+
+        if (req.hideFollowing() != null) {
+            user.setHideFollowing(Boolean.TRUE.equals(req.hideFollowing()));
+        }
+        if (req.hideFollowers() != null) {
+            user.setHideFollowers(Boolean.TRUE.equals(req.hideFollowers()));
+        }
+        if (req.publicFavorites() != null) {
+            user.setPublicFavorites(Boolean.TRUE.equals(req.publicFavorites()));
+        }
+
+        userRepository.save(user);
+
+        return ResponseEntity.ok(new UserDtos.PrivacySettingsResp(
+                user.isHideFollowing(),
+                user.isHideFollowers(),
+                user.isPublicFavorites()
+        ));
     }
 
     /**
@@ -209,11 +257,22 @@ public class UserController {
      * 获取关注列表。
      */
     @GetMapping("/{userId}/following")
-    public ResponseEntity<UserDtos.UserListResp> getFollowing(
+    public ResponseEntity<?> getFollowing(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int pageSize,
             @AuthenticationPrincipal User currentUser) {
+        var targetUserOpt = userRepository.findById(userId);
+        if (targetUserOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message", "用户不存在"));
+        }
+        User targetUser = targetUserOpt.get();
+        // 隐私控制：非本人且对方隐藏关注列表时禁止访问
+        if ((currentUser == null || !currentUser.getId().equals(userId))
+                && targetUser.isHideFollowing()) {
+            return ResponseEntity.status(403).body(Map.of("message", "对方已隐藏关注列表"));
+        }
+
         Page<UserFollow> followingPage = followService.getFollowing(userId, PageRequest.of(page, pageSize));
         var users = followingPage.getContent().stream()
                 .map(UserFollow::getFollowing)
@@ -231,11 +290,22 @@ public class UserController {
      * 获取粉丝列表。
      */
     @GetMapping("/{userId}/followers")
-    public ResponseEntity<UserDtos.UserListResp> getFollowers(
+    public ResponseEntity<?> getFollowers(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int pageSize,
             @AuthenticationPrincipal User currentUser) {
+        var targetUserOpt = userRepository.findById(userId);
+        if (targetUserOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message", "用户不存在"));
+        }
+        User targetUser = targetUserOpt.get();
+        // 隐私控制：非本人且对方隐藏粉丝列表时禁止访问
+        if ((currentUser == null || !currentUser.getId().equals(userId))
+                && targetUser.isHideFollowers()) {
+            return ResponseEntity.status(403).body(Map.of("message", "对方已隐藏粉丝列表"));
+        }
+
         Page<UserFollow> followerPage = followService.getFollowers(userId, PageRequest.of(page, pageSize));
         var users = followerPage.getContent().stream()
                 .map(UserFollow::getFollower)
@@ -250,14 +320,47 @@ public class UserController {
     }
 
     /**
+     * 获取互相关注列表。
+     */
+    @GetMapping("/{userId}/mutual")
+    public ResponseEntity<UserDtos.UserListResp> getMutual(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @AuthenticationPrincipal User currentUser) {
+        Page<UserFollow> mutualPage = followService.getMutualFollows(userId, PageRequest.of(page, pageSize));
+        var users = mutualPage.getContent().stream()
+                .map(UserFollow::getFollowing)
+                .map(u -> userService.toProfile(u, currentUser))
+                .toList();
+        return ResponseEntity.ok(new UserDtos.UserListResp(
+                users,
+                mutualPage.getTotalElements(),
+                page,
+                pageSize
+        ));
+    }
+
+    /**
      * 获取用户收藏的帖子。
      */
     @GetMapping("/{userId}/favorites")
-    public ResponseEntity<PostDtos.PostListResp> getFavorites(
+    public ResponseEntity<?> getFavorites(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize,
             @AuthenticationPrincipal User currentUser) {
+        var targetUserOpt = userRepository.findById(userId);
+        if (targetUserOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message", "用户不存在"));
+        }
+        User targetUser = targetUserOpt.get();
+        // 隐私控制：非本人且对方未公开收藏时禁止访问
+        if ((currentUser == null || !currentUser.getId().equals(userId))
+                && !targetUser.isPublicFavorites()) {
+            return ResponseEntity.status(403).body(Map.of("message", "对方已隐藏收藏"));
+        }
+
         var pageable = PageRequest.of(page - 1, pageSize);
         var favoritePage = favoriteService.getFavoritePosts(userId, pageable);
         Long viewerId = currentUser != null ? currentUser.getId() : null;
