@@ -127,6 +127,7 @@ public class PostController {
     public ResponseEntity<?> createPost(
             @Valid @RequestBody PostDtos.CreatePostReq req,
             @AuthenticationPrincipal User user) {
+        System.out.println(">>> [PostController] 调用了 createPost()," );
         
         try {
             // 检查用户是否已认证
@@ -171,6 +172,76 @@ public class PostController {
             return ResponseEntity.status(500).body(error);
         }
     }
+
+    /**
+     * 更新帖子（编辑）
+     * PUT /posts/{postId}
+     */
+    @PutMapping("/{postId}")
+    public ResponseEntity<?> updatePost(
+            @PathVariable Long postId,
+            @Valid @RequestBody PostDtos.CreatePostReq req,
+            @AuthenticationPrincipal User user) {
+        System.out.println(">>> [PostController] 调用了 updatePost(), postId = ");
+
+        try {
+            // 1. 认证校验
+            if (user == null) {
+                Map<String, String> error = new HashMap<>();
+                error.put("message", "未认证，请先登录");
+                return ResponseEntity.status(401).body(error);
+            }
+
+            // 2. 校验外链格式（和创建时完全一致）
+            if (req.externalLinks() != null) {
+                for (String url : req.externalLinks()) {
+                    if (!isValidUrl(url)) {
+                        return ResponseEntity.badRequest()
+                                .body(Map.of("message", "外部链接格式非法: " + url));
+                    }
+                }
+            }
+
+            // 3. 调用业务层更新（包含“只能作者本人编辑”的校验）
+            Post post = postService.updatePost(
+                    postId,
+                    user,
+                    req.title(),
+                    req.content(),
+                    req.media() != null ? req.media() : new ArrayList<>(),
+                    req.tags() != null ? req.tags() : new ArrayList<>(),
+                    req.doi(),
+                    req.journal(),
+                    req.year(),
+                    req.externalLinks() != null ? req.externalLinks() : new ArrayList<>(),
+                    req.arxivId(),
+                    req.arxivAuthors() != null ? req.arxivAuthors() : new ArrayList<>(),
+                    req.arxivPublishedDate(),
+                    req.arxivCategories() != null ? req.arxivCategories() : new ArrayList<>()
+            );
+
+            // 4. 映射成响应对象（保持和详情页一致）
+            PostDtos.PostResp resp = postMapper.toPostResp(post, user.getId());
+            return ResponseEntity.ok(resp);
+
+        } catch (IllegalArgumentException ex) {
+            // 帖子不存在
+            return ResponseEntity.status(404)
+                    .body(Map.of("message", ex.getMessage()));
+        } catch (SecurityException ex) {
+            // 不是作者，禁止编辑
+            return ResponseEntity.status(403)
+                    .body(Map.of("message", ex.getMessage()));
+        } catch (Exception e) {
+            System.err.println("更新帖子失败: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, String> error = new HashMap<>();
+            error.put("message", "更新帖子失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
+            return ResponseEntity.status(500).body(error);
+        }
+
+    }
+
     //判断链接是否合法，允许 http(s)，禁止危险协议
     private boolean isValidUrl(String url) {
         if (url == null) return false;

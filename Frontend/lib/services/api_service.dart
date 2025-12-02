@@ -961,6 +961,51 @@ class ApiService {
     );
   }
 
+  //编辑帖子
+  /// postId: 要编辑的帖子 ID
+  static Future<Map<String, dynamic>> updatePost({
+    required String postId,
+    required String title,
+    String? content,
+    required List<String> media,
+    List<String>? tags,
+    String? doi,
+    String? journal,
+    int? year,
+    List<String>? externalLinks,
+    String? arxivId,
+    List<String>? arxivAuthors,
+    String? arxivPublishedDate,
+    List<String>? arxivCategories,
+  }) async {
+    return await _makeRequest(
+      () => http.put(
+        Uri.parse('$baseUrl/posts/$postId'),
+        headers: _buildHeaders(),
+        body: jsonEncode({
+          'title': title,
+          if (content != null) 'content': content,
+          // 编辑时 media 传“完整列表”（已有 + 新上传）
+          'media': media,
+          if (tags != null) 'tags': tags,
+          if (doi != null) 'doi': doi,
+          if (journal != null) 'journal': journal,
+          if (year != null) 'year': year,
+          if (externalLinks != null) 'externalLinks': externalLinks,
+          if (arxivId != null) 'arxivId': arxivId,
+          if (arxivAuthors != null && arxivAuthors.isNotEmpty)
+            'arxivAuthors': arxivAuthors,
+          if (arxivPublishedDate != null)
+            'arxivPublishedDate': arxivPublishedDate,
+          if (arxivCategories != null && arxivCategories.isNotEmpty)
+            'arxivCategories': arxivCategories,
+        }),
+      ),
+      '/posts/$postId',
+    );
+  }
+
+
   /// 删除帖子
   static Future<Map<String, dynamic>> deletePost(String postId) async {
     return await _makeRequest(

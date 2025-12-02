@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -12,9 +12,13 @@ import 'package:image_picker/image_picker.dart';
 import '../config/app_env.dart';
 import '../services/api_service.dart';
 import '../services/arxiv_service.dart';
+import '../models/post_model.dart';
 
 class NoteEditorPage extends StatefulWidget {
-  const NoteEditorPage({Key? key}) : super(key: key);
+  /// 如果传入 initialPost，则进入“编辑模式”，否则是“新建笔记”
+  final Post? initialPost;
+
+  const NoteEditorPage({Key? key, this.initialPost}) : super(key: key);
 
   @override
   State<NoteEditorPage> createState() => _NoteEditorPageState();
@@ -46,6 +50,79 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   String? _journal;
   int? _year;
 
+  /// 编辑模式下旧图片的 URL 列表
+  final List<String> _existingImageUrls = [];
+  /// 编辑模式下旧 PDF 的 URL
+  String? _existingPdfUrl;
+  /// 是否处于编辑模式
+  bool get _isEditing => widget.initialPost != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // 如果传入了 initialPost，则进入编辑模式，预填内容
+    if (_isEditing && widget.initialPost != null) {
+      _applyExistingPost(widget.initialPost!);
+    }
+  }
+
+  // 将已有帖子内容灌入编辑器（编辑模式）
+  void _applyExistingPost(Post post) {
+    // 标题 & 正文
+    _titleController.text = post.title;
+    _contentController.text = post.content;
+
+    // 已有媒体：区分图片和 PDF
+    _existingImageUrls.clear();
+    _existingPdfUrl = null;
+    if (post.media.isNotEmpty) {
+      for (final m in post.media) {
+        if (m.isEmpty) continue;
+        if (_isPdfUrl(m)) {
+          // 只用第一份 PDF
+          _existingPdfUrl ??= m;
+        } else {
+          _existingImageUrls.add(m);
+        }
+      }
+    }
+
+    // 外部链接
+    _externalLinks
+      ..clear()
+      ..addAll(post.externalLinks);
+
+    // 文献信息 / arXiv
+    _arxivId = post.arxivId;
+    _doi = post.doi;
+    _journal = post.journal;
+    _year = post.year;
+
+    if (post.arxivId != null && post.arxivId!.isNotEmpty) {
+      _arxivController.text = post.arxivId!;
+      _arxivMetadata = ArxivMetadata(
+        id: post.arxivId!,
+        title: post.title,
+        authors: post.arxivAuthors,
+        abstract: null,
+        publishedDate: post.arxivPublishedDate != null
+            ? DateTime.tryParse(post.arxivPublishedDate!)
+            : null,
+        updatedDate: null,
+        categories: post.arxivCategories,
+        doi: post.doi,
+        journal: post.journal,
+        year: post.year,
+      );
+    }
+  }
+
+  // 判断 URL 是否为 PDF
+  bool _isPdfUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.endsWith('.pdf');
+  }
+
   // 选择图片
   Future<void> _pickImage() async {
     if (_images.length >= 9) return;
@@ -63,6 +140,13 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   void _removeImage(int index) {
     setState(() {
       _images.removeAt(index);
+    });
+  }
+
+  // 移除已有的 PDF（编辑模式）
+  void _removeExistingPdf() {
+    setState(() {
+      _existingPdfUrl = null;
     });
   }
 
@@ -85,6 +169,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             // 存储字节数据以便后续上传
             _pdfFileBytes = file.bytes;
             _pdfFileName = file.name;
+            // 选了新的 PDF，则视为替换旧附件
+            _existingPdfUrl = null;
           });
         }
       } else {
@@ -95,6 +181,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             _pdfFile = File(path);
             _pdfFileBytes = null;
             _pdfFileName = null;
+            _existingPdfUrl = null;
           });
         }
       }
@@ -175,7 +262,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   }
 }
 
-  // 发布逻辑
+  // 发布 / 编辑 笔记
   Future<void> _publishNote() async {
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
@@ -193,7 +280,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       );
       return;
     }
-    if (_images.isEmpty) {
+    // 只有“新建笔记”强制要求必须选择图片；编辑时可以只改文字 / 链接
+    if (!_isEditing && _images.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('请添加图片')),
       );
@@ -208,59 +296,92 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
 
     try {
-      // 调用创建笔记接口（注意：ApiService.createPost 需要支持 externalLinks 参数）
-      List<String> mediaUrls = [];
-      // 先上传图片获取 URL
+      // 1) 先把“已有图片”放进 media 列表（编辑模式）
+      final List<String> mediaUrls = [..._existingImageUrls];
+
+      // 2) 上传新选择的图片
       for (var img in _images) {
-        print('2\n');
         final url = await _uploadFileToServer(img, 'image');
-        print(url);
-        print("\n");
         if (url != null) mediaUrls.add(url);
       }
-      // 再上传 PDF（如有）
+
+      // 3) 处理 PDF：优先使用新选择的 PDF，其次沿用旧的 URL
+      String? pdfUrlToUse;
       if (_pdfFile != null) {
-        String? pdfUrl;
-        if (kIsWeb && _pdfFileBytes != null && _pdfFileName != null) {
-          // Web 平台：使用字节数据上传
-          final uri = Uri.parse('${AppEnv.apiBaseUrl}/posts/upload');
-          final request = http.MultipartRequest('POST', uri);
-          request.files.add(
-            http.MultipartFile.fromBytes(
-              'file',
-              _pdfFileBytes!,
-              filename: _pdfFileName!,
-              contentType: MediaType('application', 'pdf'),
-            ),
-          );
-          final response = await request.send();
-          if (response.statusCode == 200) {
-            final respStr = await response.stream.bytesToString();
-            final data = jsonDecode(respStr) as Map<String, dynamic>;
-            pdfUrl = data['url'] as String?;
+        XFile pdfXFile;
+        if (kIsWeb) {
+          if (_pdfFileBytes == null) {
+            if (mounted) {
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('PDF 文件数据异常，请重新选择')),
+              );
+            }
+            return;
           }
+          pdfXFile = XFile.fromData(
+            _pdfFileBytes!,
+            name: _pdfFileName ?? 'document.pdf',
+            mimeType: 'application/pdf',
+          );
         } else {
-          // 移动平台：使用文件路径上传
-          final pdfXFile = XFile(_pdfFile!.path);
-          pdfUrl = await _uploadFileToServer(pdfXFile, 'pdf');
+          pdfXFile = XFile(_pdfFile!.path);
         }
-        if (pdfUrl != null) mediaUrls.add(pdfUrl);
+        pdfUrlToUse = await _uploadFileToServer(pdfXFile, 'pdf');
+      } else if (_existingPdfUrl != null) {
+        pdfUrlToUse = _existingPdfUrl;
       }
-      // 调用创建笔记接口
-      final resp = await ApiService.createPost(
-        title: title,
-        content: content.isNotEmpty ? content : null,
-        media: mediaUrls.isNotEmpty ? mediaUrls : null,
-        tags: null,
-        doi: _doi,
-        journal: _journal,
-        year: _year,
-        externalLinks: _externalLinks.isNotEmpty ? _externalLinks : null,
-        arxivId: _arxivId,
-        arxivAuthors: _arxivMetadata?.authors,
-        arxivPublishedDate: _arxivMetadata?.publishedDateFormatted,
-        arxivCategories: _arxivMetadata?.categories,
-      );
+
+      if (pdfUrlToUse != null) {
+        mediaUrls.add(pdfUrlToUse);
+      }
+
+      // 4) 外部链接（过滤空字符串）
+      final links =
+          _externalLinks.where((e) => e.trim().isNotEmpty).toList();
+
+      // 5) arXiv 相关
+      final String? arxivPublishedDate =
+          _arxivMetadata?.publishedDateFormatted;
+      final List<String>? arxivAuthors = _arxivMetadata?.authors;
+      final List<String>? arxivCategories = _arxivMetadata?.categories;
+
+      // 6) 调用后端接口：新建 or 更新
+      Map<String, dynamic> resp;
+      if (_isEditing && widget.initialPost != null) {
+        // === 编辑已有帖子 ===
+        resp = await ApiService.updatePost(
+          postId: widget.initialPost!.id,
+          title: title,
+          content: content.isNotEmpty ? content : null,
+          media: mediaUrls,
+          tags: null,
+          doi: _doi,
+          journal: _journal,
+          year: _year,
+          externalLinks: links.isNotEmpty ? links : null,
+          arxivId: _arxivId,
+          arxivAuthors: arxivAuthors,
+          arxivPublishedDate: arxivPublishedDate,
+          arxivCategories: arxivCategories,
+        );
+      } else {
+        // === 新建帖子 ===
+        resp = await ApiService.createPost(
+          title: title,
+          content: content.isNotEmpty ? content : null,
+          media: mediaUrls.isNotEmpty ? mediaUrls : null,
+          tags: null,
+          doi: _doi,
+          journal: _journal,
+          year: _year,
+          externalLinks: links.isNotEmpty ? links : null,
+          arxivId: _arxivId,
+          arxivAuthors: arxivAuthors,
+          arxivPublishedDate: arxivPublishedDate,
+          arxivCategories: arxivCategories,
+        );
+      }
 
       // 关闭加载对话框
       if (mounted) Navigator.of(context).pop();
@@ -271,14 +392,17 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       if (status >= 200 && status < 300) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('发布成功')),
+            SnackBar(
+              content: Text(_isEditing ? '笔记已更新' : '发布成功'),
+            ),
           );
-          Navigator.of(context).pop(); // 返回上一页
+          // 返回 true，告诉上一个页面“需要刷新”
+          Navigator.of(context).pop(true);
         }
       } else {
         final msg = body != null && body['message'] != null
             ? body['message'].toString()
-            : '发布失败';
+            : (_isEditing ? '保存失败' : '发布失败');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(msg)),
@@ -289,7 +413,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('网络错误，发布失败')),
+          SnackBar(
+            content: Text(
+              _isEditing ? '保存失败，网络错误' : '发布失败，网络错误',
+            ),
+          ),
         );
       }
     }
@@ -396,13 +524,28 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     super.dispose();
   }
 
+  // 移除已有图片（编辑模式）
+  void _removeExistingImage(int index) {
+    setState(() {
+      _existingImageUrls.removeAt(index);
+    });
+  }
+
   // 图片九宫格
+  // 图片九宫格（支持：已有图片 + 新选图片）
   Widget _buildImageGrid() {
-    final int total = _images.length < 9 ? _images.length + 1 : 9;
+    final int existingCount = _existingImageUrls.length;
+    final int newCount = _images.length;
+    final int totalImages = existingCount + newCount;
+
+    // 最多 9 张，多出来的不再显示“添加”按钮
+    final bool showAddButton = totalImages < 9;
+    final int itemCount = showAddButton ? totalImages + 1 : totalImages;
+
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
       shrinkWrap: true,
-      itemCount: total,
+      itemCount: itemCount,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 4,
         crossAxisSpacing: 8,
@@ -410,7 +553,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         childAspectRatio: 1,
       ),
       itemBuilder: (context, index) {
-        if (index < _images.length) {
+        // 1) 先画“已有图片”（后端返回的 URL）
+        if (index < existingCount) {
+          final url = _existingImageUrls[index];
           return Stack(
             children: [
               Container(
@@ -418,7 +563,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   color: Colors.grey[200],
                   borderRadius: BorderRadius.circular(8),
                   image: DecorationImage(
-                    image: FileImage(File(_images[index].path)),
+                    image: NetworkImage(url), // 用网络图
                     fit: BoxFit.cover,
                   ),
                 ),
@@ -427,17 +572,17 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 top: 4,
                 right: 4,
                 child: GestureDetector(
-                  onTap: () => _removeImage(index),
+                  onTap: () => _removeExistingImage(index),
                   child: Container(
                     decoration: const BoxDecoration(
                       color: Colors.black54,
                       shape: BoxShape.circle,
                     ),
-                    padding: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.all(3),
                     child: const Icon(
                       Icons.close,
-                      size: 14,
                       color: Colors.white,
+                      size: 16,
                     ),
                   ),
                 ),
@@ -446,7 +591,45 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           );
         }
 
-        // “添加图片” 按钮
+        // 2) 再画“新选图片”（本地 XFile）
+        final int newIndex = index - existingCount;
+        if (newIndex < newCount) {
+          return Stack(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(8),
+                  image: DecorationImage(
+                    image: FileImage(File(_images[newIndex].path)),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: GestureDetector(
+                  onTap: () => _removeImage(newIndex),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    padding: const EdgeInsets.all(3),
+                    child: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
+        // 3) 最后是“添加图片”按钮
         return GestureDetector(
           onTap: _pickImage,
           child: Container(
@@ -679,15 +862,20 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 
-  @override
+ @override
   Widget build(BuildContext context) {
+    final bool hasPdf = _pdfFile != null || _existingPdfUrl != null;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         elevation: 0.3,
         backgroundColor: Colors.white,
         automaticallyImplyLeading: false,
-        title: const Text('发布笔记', style: TextStyle(color: Colors.black)),
+        title: Text(
+          _isEditing ? '编辑笔记' : '发布笔记',
+          style: const TextStyle(color: Colors.black),
+        ),
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.black),
@@ -695,7 +883,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             Navigator.of(context).maybePop();
           },
         ),
-        actions: const [SizedBox(width: 48)],
+        actions: const [
+          SizedBox(width: 48),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -723,7 +913,6 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 ),
               ),
               const Divider(height: 1, color: Colors.grey),
-
               const SizedBox(height: 8),
 
               // 正文
@@ -742,12 +931,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
               // 外部链接区
               _buildExternalLinksSection(),
-
               const SizedBox(height: 16),
 
               // arXiv 文献信息区
               _buildArxivSection(),
-
               const SizedBox(height: 16),
 
               // PDF 附件
@@ -757,7 +944,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     onPressed: _pickPdf,
                     icon: const Icon(Icons.picture_as_pdf_outlined),
                     label: Text(
-                      _pdfFile == null ? '添加 PDF 附件（仅一篇）' : '替换 PDF',
+                      hasPdf ? '替换 PDF' : '添加 PDF 附件（仅一篇）',
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey[100],
@@ -770,22 +957,33 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  if (_pdfFile != null)
+                  if (hasPdf)
                     Expanded(
                       child: Row(
                         children: [
-                          const Icon(Icons.attach_file,
-                              size: 18, color: Colors.grey),
+                          const Icon(
+                            Icons.attach_file,
+                            size: 18,
+                            color: Colors.grey,
+                          ),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              _pdfFileName ?? _pdfFile!.path.split('/').last,
+                              _pdfFile != null
+                                  ? (_pdfFileName ?? '已选择 PDF')
+                                  : (_existingPdfUrl!.split('/').last),
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontSize: 14),
                             ),
                           ),
                           IconButton(
-                            onPressed: _removePdf,
+                            onPressed: () {
+                              if (_pdfFile != null) {
+                                _removePdf();        // 清空新选 PDF
+                              } else {
+                                _removeExistingPdf(); // 清空旧的 PDF URL
+                              }
+                            },
                             icon: const Icon(Icons.close, size: 20),
                           ),
                         ],
@@ -808,9 +1006,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text(
-                    '发布笔记',
-                    style: TextStyle(fontSize: 16, color: Colors.white),
+                  child: Text(
+                    _isEditing ? '保存修改' : '发布笔记',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
