@@ -58,6 +58,24 @@ public class PostService {
     }
 
     /**
+     * 搜索帖子
+     * @param keyword 搜索关键词
+     * @param sort 排序方式：hot（热度）或new（最新）
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
+     * @return 帖子分页结果
+     */
+    public Page<Post> searchPosts(String keyword, String sort, int page, int pageSize) {
+        Pageable pageable = PageRequest.of(page - 1, pageSize);
+        if ("new".equals(sort)) {
+            return postRepository.searchByKeywordOrderByNew(keyword, pageable);
+        } else {
+            // 默认按热度排序
+            return postRepository.searchByKeywordOrderByHot(keyword, pageable);
+        }
+    }
+
+    /**
      * 创建帖子
      */
     @Transactional
