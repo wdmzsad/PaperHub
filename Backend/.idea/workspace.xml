@@ -4,20 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2e281e09-5d8e-43b1-8df1-7a8f46fbb586" name="更改" comment="更改">
-      <change beforePath="$PROJECT_DIR$/paperhub/src/main/java/com/example/paperhub/post/PostController.java" beforeDir="false" afterPath="$PROJECT_DIR$/paperhub/src/main/java/com/example/paperhub/post/PostController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/paperhub/src/main/java/com/example/paperhub/post/PostRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/paperhub/src/main/java/com/example/paperhub/post/PostRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/paperhub/src/main/java/com/example/paperhub/post/PostService.java" beforeDir="false" afterPath="$PROJECT_DIR$/paperhub/src/main/java/com/example/paperhub/post/PostService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Frontend/lib/screens/search_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../Frontend/lib/screens/search_screen.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Frontend/lib/services/api_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../Frontend/lib/services/api_service.dart" afterDir="false" />
-    </list>
+    <list default="true" id="2e281e09-5d8e-43b1-8df1-7a8f46fbb586" name="更改" comment="更改" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="Git.Settings">
-    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/../.." />
   </component>
   <component name="ProjectColorInfo">{
   &quot;customColor&quot;: &quot;&quot;,
@@ -34,7 +28,7 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "dart.analysis.tool.window.visible": "false",
-    "git-widget-placeholder": "main",
+    "git-widget-placeholder": "master",
     "ignore.virus.scanning.warn.message": "true",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "D:/hw_software/Projects/paperhub-main/Backend",

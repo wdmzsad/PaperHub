@@ -20,7 +20,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/search_model.dart';
 import '../services/search_history_service.dart';
-import 'search_results_screen.dart';
 
 /// 搜索页面（Stateful）
 class SearchScreen extends StatefulWidget {
@@ -101,7 +100,7 @@ class _SearchScreenState extends State<SearchScreen> {
   /// 合约：
   /// - 若输入为空（去除首尾空白）则忽略。
   /// - 构造 `SearchHistoryItem` 并调用服务层写入，再刷新历史列表。
-  /// - 跳转到搜索结果页面。
+  /// - 当前为演示：使用 SnackBar 提示；后续可导航至搜索结果页。
   void _onSearchSubmitted(String value) {
     if (value.trim().isEmpty) return;
 
@@ -117,14 +116,13 @@ class _SearchScreenState extends State<SearchScreen> {
       _loadSearchHistory(); // 重新加载历史记录
     });
 
-    // 跳转到搜索结果页面
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => SearchResultsScreen(
-          query: value.trim(),
-          searchType: _selectedSearchType,
+    // 暂时显示提示，后续可以跳转到搜索结果页
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '搜索: $value (${_searchTypeOptions[_selectedSearchType]})',
         ),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -132,46 +130,22 @@ class _SearchScreenState extends State<SearchScreen> {
   /// 点击历史记录项：
   /// - 将其 keyword 与 searchType 回填到输入框与当前搜索类型
   /// - 主动请求输入框获取焦点，便于用户直接编辑/提交
-  /// - 直接跳转到搜索结果页面
   void _onHistoryItemTap(SearchHistoryItem item) {
     setState(() {
       _searchController.text = item.keyword;
       _selectedSearchType = item.searchType;
     });
     _searchFocusNode.requestFocus();
-
-    // 直接跳转到搜索结果页面
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => SearchResultsScreen(
-          query: item.keyword,
-          searchType: item.searchType,
-        ),
-      ),
-    );
   }
 
   /// 点击热搜项：
   /// - 回填标题到输入框，并同步对应的搜索类型
-  /// - 直接跳转到搜索结果页面
   void _onHotSearchTap(HotSearchItem item) {
     setState(() {
       _searchController.text = item.title;
       _selectedSearchType = item.searchType;
     });
     _searchFocusNode.requestFocus();
-
-    // 直接跳转到搜索结果页面
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => SearchResultsScreen(
-          query: item.title,
-          searchType: item.searchType,
-        ),
-      ),
-    );
   }
 
   /// 清空全部历史记录
