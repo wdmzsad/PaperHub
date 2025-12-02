@@ -6,6 +6,7 @@ enum _AdminSection {
   posts,
   reports,
   notices,
+  recommend, // 管理员推荐
   applyReview,
   permissions,
 }
@@ -26,12 +27,16 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
   String _userSearchKeyword = '';
   List<Map<String, dynamic>> _userList = [];
   bool _userLoading = false;
+  int _userPage = 0;
+  int _userTotal = 0;
 
   // ==== 帖子管理 ====
   String _postSearchKeyword = '';
   String _postAuthorKeyword = '';
   List<Map<String, dynamic>> _postList = [];
   bool _postLoading = false;
+  int _postPage = 0;
+  int _postTotal = 0;
 
   // ==== 举报管理 ====
   String _reportSearchKeyword = '';
@@ -39,17 +44,23 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
   String _reportTargetType = '';
   List<Map<String, dynamic>> _reportList = [];
   bool _reportLoading = false;
+  int _reportPage = 0;
+  int _reportTotal = 0;
 
   // ==== 公告管理 ====
   String _noticeSearchKeyword = '';
   List<Map<String, dynamic>> _noticeList = [];
   bool _noticeLoading = false;
+  int _noticePage = 0;
+  int _noticeTotal = 0;
   final TextEditingController _noticeTitleCtrl = TextEditingController();
   final TextEditingController _noticeContentCtrl = TextEditingController();
 
   // ==== 管理员申请审核 ====
   List<Map<String, dynamic>> _applicationList = [];
   bool _applicationLoading = false;
+  int _applicationPage = 0;
+  int _applicationTotal = 0;
 
   // ==== 权限管理 ====
   String _adminSearchKeyword = '';
@@ -57,6 +68,15 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
   List<Map<String, dynamic>> _adminList = [];
   List<Map<String, dynamic>> _normalUserList = [];
   bool _permissionLoading = false;
+  int _adminPageLocal = 0;
+  int _normalPageLocal = 0;
+
+  // ==== 管理员推荐 ====
+  String _recommendSearchKeyword = '';
+  List<Map<String, dynamic>> _recommendUserList = [];
+  bool _recommendLoading = false;
+  int _recommendPage = 0;
+  int _recommendTotal = 0;
 
   bool get _isSuperAdmin => widget.role.toUpperCase() == 'SUPER_ADMIN';
 
@@ -80,6 +100,11 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
       section: _AdminSection.notices,
       label: '公告管理',
       icon: Icons.campaign_outlined,
+    ),
+    _AdminMenuItem(
+      section: _AdminSection.recommend,
+      label: '管理员推荐',
+      icon: Icons.person_add_alt_1_outlined,
     ),
   ];
 
@@ -108,11 +133,12 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
 
   Future<void> _loadInitialData() async {
     await Future.wait([
-      _loadUsers(),
-      _loadPosts(),
-      _loadNotices(),
-      _loadReports(),
-      if (_isSuperAdmin) _loadApplications(),
+      _loadUsers(page: 0),
+      _loadPosts(page: 0),
+      _loadReports(page: 0),
+      _loadNotices(page: 0),
+      _loadRecommendUsers(page: 0),
+      if (_isSuperAdmin) _loadApplications(page: 0),
       if (_isSuperAdmin) _loadPermissionUsers(),
     ]);
   }
@@ -220,6 +246,18 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                       setState(() {
                         _selectedSection = item.section;
                       });
+                      // 进入部分页面时如果还没加载过数据，则自动加载第一页
+                      if (item.section == _AdminSection.recommend &&
+                          _recommendUserList.isEmpty &&
+                          !_recommendLoading) {
+                        _loadRecommendUsers(page: 0);
+                      }
+                      if (item.section == _AdminSection.permissions &&
+                          _adminList.isEmpty &&
+                          _normalUserList.isEmpty &&
+                          !_permissionLoading) {
+                        _loadPermissionUsers();
+                      }
                     },
                   ),
                 ),
@@ -266,6 +304,8 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         return _buildReportManagementSection();
       case _AdminSection.notices:
         return _buildNoticeManagementSection();
+      case _AdminSection.recommend:
+        return _buildRecommendAdminSection();
       case _AdminSection.applyReview:
         return _buildApplyReviewSection();
       case _AdminSection.permissions:
@@ -282,7 +322,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
           _SearchBar(
             hintText: '输入用户名或邮箱（留空则查询全部）',
             buttonLabel: '搜索',
-            onPressed: () => _loadUsers(keyword: _userSearchKeyword),
+            onPressed: () => _loadUsers(page: 0),
             onChanged: (v) => _userSearchKeyword = v,
           ),
           const SizedBox(height: 16),
@@ -301,6 +341,12 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                       ])
                   .toList(),
             ),
+          const SizedBox(height: 12),
+          _buildPagination(
+            currentPage: _userPage,
+            totalItems: _userTotal,
+            onPageChanged: (p) => _loadUsers(page: p),
+          ),
         ],
       ),
     );
@@ -316,14 +362,14 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
             hintText: '按标题或内容搜索帖子（留空为全部）',
             buttonLabel: '搜索',
             onChanged: (v) => _postSearchKeyword = v,
-            onPressed: () => _loadPosts(),
+            onPressed: () => _loadPosts(page: 0),
           ),
           const SizedBox(height: 12),
           _SearchBar(
             hintText: '按作者昵称或邮箱筛选（可选）',
             buttonLabel: '筛选',
             onChanged: (v) => _postAuthorKeyword = v,
-            onPressed: () => _loadPosts(),
+            onPressed: () => _loadPosts(page: 0),
           ),
           const SizedBox(height: 16),
           if (_postLoading)
@@ -334,11 +380,14 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
               rows: _postList
                   .map((p) => [
                         Text(p['id']?.toString() ?? ''),
-                        Text(p['title']?.toString() ?? ''),
+                        Text(
+                          _truncateTitle(p['title']?.toString() ?? ''),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         Text(
                           'ID: ${p['authorId'] ?? ''} | 昵称: ${p['authorName'] ?? ''} | 邮箱: ${p['authorEmail'] ?? ''}',
                         ),
-                        Text(p['createdAt']?.toString() ?? ''),
+                        Text(_formatPostTime(p['createdAt']?.toString())),
                         ElevatedButton(
                           onPressed: () async {
                             final id = (p['id'] ?? '').toString();
@@ -361,6 +410,12 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                       ])
                   .toList(),
             ),
+          const SizedBox(height: 12),
+          _buildPagination(
+            currentPage: _postPage,
+            totalItems: _postTotal,
+            onPageChanged: (p) => _loadPosts(page: p),
+          ),
         ],
       ),
     );
@@ -374,7 +429,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         children: [
           _ReportFilterBar(
             onSearchChanged: (v) => _reportSearchKeyword = v,
-            onSearch: () => _loadReports(),
+            onSearch: () => _loadReports(page: 0),
           ),
           const SizedBox(height: 16),
           if (_reportLoading)
@@ -384,6 +439,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
               headers: const [
                 '举报人(ID/昵称)',
                 '对象类型',
+                '举报时间',
                 '被举报对象(ID/昵称)',
                 '理由',
                 '状态',
@@ -394,6 +450,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                         Text(
                             'U${r['reporter']?['id'] ?? ''} / ${r['reporter']?['name'] ?? ''}'),
                         Text(r['targetType']?.toString() ?? ''),
+                        Text(_formatPostTime(r['createdAt']?.toString())),
                         Text(_formatReportedTarget(r)),
                         Text(r['reason']?.toString() ?? ''),
                         Text(r['status']?.toString() ?? ''),
@@ -405,6 +462,12 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                       ])
                   .toList(),
             ),
+          const SizedBox(height: 12),
+          _buildPagination(
+            currentPage: _reportPage,
+            totalItems: _reportTotal,
+            onPageChanged: (p) => _loadReports(page: p),
+          ),
         ],
       ),
     );
@@ -423,7 +486,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                   hintText: '搜索公告标题',
                   buttonLabel: '搜索',
                   onChanged: (v) => _noticeSearchKeyword = v,
-                  onPressed: () => _loadNotices(),
+                  onPressed: () => _loadNotices(page: 0),
                 ),
               ),
               const SizedBox(width: 12),
@@ -446,7 +509,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
               rows: _noticeList
                   .map((n) => [
                         Text(n['title']?.toString() ?? ''),
-                        Text(n['createdAt']?.toString() ?? ''),
+                        Text(_formatPostTime(n['createdAt']?.toString())),
                         Text((n['published'] == true) ? '已发布' : '草稿'),
                         Row(
                           children: [
@@ -471,6 +534,13 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                       ])
                   .toList(),
             ),
+          const SizedBox(height: 12),
+          _buildPagination(
+            currentPage: _noticePage,
+            totalItems: _noticeTotal,
+            pageSize: 5,
+            onPageChanged: (p) => _loadNotices(page: p),
+          ),
           const SizedBox(height: 32),
           const Divider(),
           const SizedBox(height: 12),
@@ -493,7 +563,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
             minLines: 5,
             maxLines: 12,
             decoration: InputDecoration(
-              hintText: '公告正文（支持富文本编辑器占位）',
+              hintText: '请输入公告正文',
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -560,7 +630,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                         Text(
                             'U${a['candidate']?['id'] ?? ''} / ${a['candidate']?['name'] ?? ''}'),
                         Text(a['reason']?.toString() ?? ''),
-                        Text(a['createdAt']?.toString() ?? ''),
+                        Text(_formatPostTime(a['createdAt']?.toString())),
                         Row(
                           children: [
                             ElevatedButton(
@@ -582,6 +652,12 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                       ])
                   .toList(),
             ),
+          const SizedBox(height: 12),
+          _buildPagination(
+            currentPage: _applicationPage,
+            totalItems: _applicationTotal,
+            onPageChanged: (p) => _loadApplications(page: p),
+          ),
         ],
       ),
     );
@@ -608,25 +684,58 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
           if (_permissionLoading)
             const Center(child: CircularProgressIndicator())
           else
-            _buildPlaceholderTable(
-              headers: const ['用户名', '当前角色', '操作'],
-              rows: _adminList
-                  .map((u) => [
-                        Text(u['name']?.toString() ?? ''),
-                        Text(u['role']?.toString() ?? ''),
-                        if (u['role'] == 'SUPER_ADMIN')
-                          const Text('无法操作')
-                        else
-                          OutlinedButton(
-                            onPressed: () => _revokeAdmin(
-                                (u['id'] ?? '').toString()),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.redAccent,
-                            ),
-                            child: const Text('收回权限'),
-                          ),
-                      ])
-                  .toList(),
+            Builder(
+              builder: (context) {
+                // 如果后端列表为空，则回退到通用用户列表做拆分，避免界面完全空白
+                final source = _adminList.isNotEmpty
+                    ? _adminList
+                    : _userList.where((u) {
+                        final role =
+                            (u['role'] ?? '').toString().toUpperCase();
+                        return role == 'ADMIN' || role == 'SUPER_ADMIN';
+                      }).toList();
+                const pageSize = 10;
+                final total = source.length;
+                final start = _adminPageLocal * pageSize;
+                final visible = source.skip(start).take(pageSize).toList();
+                return Column(
+                  children: [
+                    _buildPlaceholderTable(
+                      headers: const ['用户名', '当前角色', '操作'],
+                      rows: visible
+                          .map((u) => [
+                                Text(u['name']?.toString() ?? ''),
+                                Text(u['role']?.toString() ?? ''),
+                                if ((u['role'] ?? '')
+                                        .toString()
+                                        .toUpperCase() ==
+                                    'SUPER_ADMIN')
+                                  const Text('无法操作')
+                                else
+                                  OutlinedButton(
+                                    onPressed: () => _revokeAdmin(
+                                        (u['id'] ?? '').toString()),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.redAccent,
+                                    ),
+                                    child: const Text('收回权限'),
+                                  ),
+                              ])
+                          .toList(),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildPagination(
+                      currentPage: _adminPageLocal,
+                      totalItems: total,
+                      onPageChanged: (p) {
+                        setState(() {
+                          _adminPageLocal = p;
+                        });
+                      },
+                    ),
+                  ],
+                );
+              },
             ),
           const SizedBox(height: 32),
           const Text(
@@ -644,22 +753,52 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
           if (_permissionLoading)
             const SizedBox.shrink()
           else
-            _buildPlaceholderTable(
-              headers: const ['用户名', '当前角色', '操作'],
-              rows: _normalUserList
-                  .map((u) => [
-                        Text(u['name']?.toString() ?? ''),
-                        Text(u['role']?.toString() ?? ''),
-                        ElevatedButton(
-                          onPressed: () =>
-                              _grantAdmin((u['id'] ?? '').toString()),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                          ),
-                          child: const Text('授权为管理员'),
-                        ),
-                      ])
-                  .toList(),
+            Builder(
+              builder: (context) {
+                // 同样做回退：如果后端返回为空，则从用户列表中拆出普通用户
+                final source = _normalUserList.isNotEmpty
+                    ? _normalUserList
+                    : _userList
+                        .where((u) =>
+                            (u['role'] ?? '').toString().toUpperCase() ==
+                            'USER')
+                        .toList();
+                const pageSize = 10;
+                final total = source.length;
+                final start = _normalPageLocal * pageSize;
+                final visible = source.skip(start).take(pageSize).toList();
+                return Column(
+                  children: [
+                    _buildPlaceholderTable(
+                      headers: const ['用户名', '当前角色', '操作'],
+                      rows: visible
+                          .map((u) => [
+                                Text(u['name']?.toString() ?? ''),
+                                Text(u['role']?.toString() ?? ''),
+                                ElevatedButton(
+                                  onPressed: () => _grantAdmin(
+                                      (u['id'] ?? '').toString()),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                  ),
+                                  child: const Text('授权为管理员'),
+                                ),
+                              ])
+                          .toList(),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildPagination(
+                      currentPage: _normalPageLocal,
+                      totalItems: total,
+                      onPageChanged: (p) {
+                        setState(() {
+                          _normalPageLocal = p;
+                        });
+                      },
+                    ),
+                  ],
+                );
+              },
             ),
         ],
       ),
@@ -748,75 +887,87 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
 
   // ===================== 数据加载 & 动作 =====================
 
-  Future<void> _loadUsers({String? keyword}) async {
+  Future<void> _loadUsers({int page = 0}) async {
     setState(() => _userLoading = true);
     try {
+      const pageSize = 10;
       final resp = await ApiService.adminSearchUsers(
-        query: keyword ?? _userSearchKeyword,
-        page: 0,
-        pageSize: 50,
+        query: _userSearchKeyword,
+        page: page,
+        pageSize: pageSize,
       );
       final body = resp['body'] as Map<String, dynamic>?;
       _userList = (body?['users'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [];
+      _userTotal = (body?['total'] as num?)?.toInt() ?? 0;
+      _userPage = (body?['page'] as num?)?.toInt() ?? page;
     } finally {
       if (mounted) setState(() => _userLoading = false);
     }
   }
 
-  Future<void> _loadNotices() async {
+  Future<void> _loadNotices({int page = 0}) async {
     setState(() => _noticeLoading = true);
     try {
+      const pageSize = 5;
       final resp = await ApiService.adminGetNotices(
         query: _noticeSearchKeyword,
-        page: 0,
-        pageSize: 50,
+        page: page,
+        pageSize: pageSize,
       );
       final body = resp['body'] as Map<String, dynamic>?;
       _noticeList = (body?['notices'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [];
+      _noticeTotal = (body?['total'] as num?)?.toInt() ?? 0;
+      _noticePage = (body?['page'] as num?)?.toInt() ?? page;
     } finally {
       if (mounted) setState(() => _noticeLoading = false);
     }
   }
 
-  Future<void> _loadReports() async {
+  Future<void> _loadReports({int page = 0}) async {
     setState(() => _reportLoading = true);
     try {
+      const pageSize = 10;
       final resp = await ApiService.adminGetReports(
         query: _reportSearchKeyword,
         status: _reportStatus.isEmpty ? null : _reportStatus,
         targetType: _reportTargetType.isEmpty ? null : _reportTargetType,
-        page: 0,
-        pageSize: 50,
+        page: page,
+        pageSize: pageSize,
       );
       final body = resp['body'] as Map<String, dynamic>?;
       _reportList = (body?['reports'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [];
+      _reportTotal = (body?['total'] as num?)?.toInt() ?? 0;
+      _reportPage = (body?['page'] as num?)?.toInt() ?? page;
     } finally {
       if (mounted) setState(() => _reportLoading = false);
     }
   }
 
-  Future<void> _loadApplications() async {
+  Future<void> _loadApplications({int page = 0}) async {
     setState(() => _applicationLoading = true);
     try {
+      const pageSize = 10;
       final resp = await ApiService.adminGetApplications(
         status: 'PENDING',
-        page: 0,
-        pageSize: 50,
+        page: page,
+        pageSize: pageSize,
       );
       final body = resp['body'] as Map<String, dynamic>?;
       _applicationList = (body?['applications'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [];
+      _applicationTotal = (body?['total'] as num?)?.toInt() ?? 0;
+      _applicationPage = (body?['page'] as num?)?.toInt() ?? page;
     } finally {
       if (mounted) setState(() => _applicationLoading = false);
     }
@@ -825,6 +976,9 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
   Future<void> _loadPermissionUsers() async {
     setState(() => _permissionLoading = true);
     try {
+      // 每次加载时重置本地分页页码
+      _adminPageLocal = 0;
+      _normalPageLocal = 0;
       // 管理员列表
       final adminResp = await ApiService.adminSearchUsers(
         query: _adminSearchKeyword,
@@ -853,8 +1007,9 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [];
-      _normalUserList =
-          allUsers2.where((u) => u['role'] == 'USER').toList();
+      _normalUserList = allUsers2
+          .where((u) => (u['role'] ?? '').toString() == 'USER')
+          .toList();
     } finally {
       if (mounted) setState(() => _permissionLoading = false);
     }
@@ -928,22 +1083,49 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     return '';
   }
 
-  Future<void> _loadPosts() async {
+  Future<void> _loadPosts({int page = 0}) async {
     setState(() => _postLoading = true);
     try {
+      const pageSize = 10;
       final resp = await ApiService.adminSearchPosts(
         query: _postSearchKeyword,
         author: _postAuthorKeyword,
-        page: 0,
-        pageSize: 50,
+        page: page,
+        pageSize: pageSize,
       );
       final body = resp['body'] as Map<String, dynamic>?;
       _postList = (body?['posts'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [];
+      _postTotal = (body?['total'] as num?)?.toInt() ?? 0;
+      _postPage = (body?['page'] as num?)?.toInt() ?? page;
     } finally {
       if (mounted) setState(() => _postLoading = false);
+    }
+  }
+
+  Future<void> _loadRecommendUsers({int page = 0}) async {
+    setState(() => _recommendLoading = true);
+    try {
+      const pageSize = 10;
+      final resp = await ApiService.adminSearchUsers(
+        query: _recommendSearchKeyword,
+        page: page,
+        pageSize: pageSize,
+      );
+      final body = resp['body'] as Map<String, dynamic>?;
+      final users = (body?['users'] as List<dynamic>?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          [];
+      // 只展示普通用户
+      _recommendUserList =
+          users.where((u) => (u['role'] ?? '').toString() == 'USER').toList();
+      _recommendTotal = (body?['total'] as num?)?.toInt() ?? 0;
+      _recommendPage = (body?['page'] as num?)?.toInt() ?? page;
+    } finally {
+      if (mounted) setState(() => _recommendLoading = false);
     }
   }
 
@@ -1147,6 +1329,151 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
     await _loadUsers();
+  }
+
+  Widget _buildRecommendAdminSection() {
+    return _AdminSectionScaffold(
+      title: '管理员推荐',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SearchBar(
+            hintText: '输入普通用户昵称或邮箱（可选）',
+            buttonLabel: '搜索',
+            onChanged: (v) => _recommendSearchKeyword = v,
+            onPressed: () => _loadRecommendUsers(page: 0),
+          ),
+          const SizedBox(height: 16),
+          if (_recommendLoading)
+            const Center(child: CircularProgressIndicator())
+          else
+            _buildPlaceholderTable(
+              headers: const ['用户名', '邮箱', '角色', '状态', '操作'],
+              rows: _recommendUserList
+                  .map((u) => [
+                        Text(u['name']?.toString() ?? ''),
+                        Text(u['email']?.toString() ?? ''),
+                        Text(u['role']?.toString() ?? ''),
+                        _buildStatusChip(u['status']?.toString()),
+                        ElevatedButton(
+                          onPressed: () =>
+                              _showRecommendDialog((u['id'] ?? '').toString()),
+                          child: const Text('推荐为管理员'),
+                        ),
+                      ])
+                  .toList(),
+            ),
+          const SizedBox(height: 12),
+          _buildPagination(
+            currentPage: _recommendPage,
+            totalItems: _recommendTotal,
+            onPageChanged: (p) => _loadRecommendUsers(page: p),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showRecommendDialog(String userId) async {
+    final reasonCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('推荐用户为管理员'),
+          content: TextField(
+            controller: reasonCtrl,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: '推荐理由',
+              hintText: '请输入推荐理由',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('提交'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (ok != true) return;
+    final reason = reasonCtrl.text.trim();
+    if (reason.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('推荐理由不能为空')),
+      );
+      return;
+    }
+    final resp = await ApiService.adminCreateApplication(
+      candidateUserId: userId,
+      reason: reason,
+    );
+    final msg = resp['body']?['message']?.toString() ?? '推荐已提交，等待超级管理员审核';
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
+  }
+
+  // 标题截断（最多20个字符，超出加省略号）
+  String _truncateTitle(String title) {
+    const maxLen = 20;
+    if (title.runes.length <= maxLen) return title;
+    return String.fromCharCodes(title.runes.take(maxLen)) + '...';
+  }
+
+  // 格式化帖子时间为 yyyy-MM-dd HH:mm
+  // 统一时间格式化：yyyy-MM-dd HH:mm
+  String _formatPostTime(String? raw) {
+    if (raw == null || raw.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(raw).toLocal();
+      String two(int v) => v.toString().padLeft(2, '0');
+      return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
+          '${two(dt.hour)}:${two(dt.minute)}';
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  Widget _buildPagination({
+    required int currentPage,
+    required int totalItems,
+    int pageSize = 10,
+    required ValueChanged<int> onPageChanged,
+  }) {
+    if (totalItems <= 0) return const SizedBox.shrink();
+    final totalPages = (totalItems + pageSize - 1) ~/ pageSize;
+    if (totalPages <= 1) return const SizedBox.shrink();
+    final displayPage = currentPage + 1;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            onPressed: currentPage <= 0
+                ? null
+                : () => onPageChanged(currentPage - 1),
+            icon: const Icon(Icons.chevron_left),
+          ),
+          Text('第 $displayPage / $totalPages 页'),
+          IconButton(
+            onPressed: currentPage >= totalPages - 1
+                ? null
+                : () => onPageChanged(currentPage + 1),
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
+      ),
+    );
   }
 }
 
