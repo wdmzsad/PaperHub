@@ -432,6 +432,28 @@ class ApiService {
     );
   }
 
+  /// 搜索帖子
+  /// GET /posts/search?q=keyword&sort=hot|new&page=1&pageSize=20
+  static Future<Map<String, dynamic>> searchPosts({
+    required String query,
+    String sort = 'hot', // 'hot' 或 'new'
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    final uri = Uri.parse('$baseUrl/posts/search').replace(
+      queryParameters: {
+        'q': query,
+        'sort': sort,
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/posts/search',
+    );
+  }
+
   static Future<Map<String, dynamic>> getUserPosts(
     String userId, {
     int page = 1,

@@ -371,6 +371,31 @@ public class PostController {
     }
 
     /**
+     * 搜索帖子
+     * GET /posts/search?q=keyword&sort=hot|new&page=1&pageSize=20
+     * sort: hot（按热度排序）、new（按最新排序）
+     */
+    @GetMapping("/search")
+    public ResponseEntity<PostDtos.PostListResp> searchPosts(
+            @RequestParam String q,
+            @RequestParam(defaultValue = "hot") String sort,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @AuthenticationPrincipal User currentUser) {
+        Page<Post> postPage = postService.searchPosts(q, sort, page, pageSize);
+        Long viewerId = currentUser != null ? currentUser.getId() : null;
+        List<PostDtos.PostResp> posts = postPage.getContent().stream()
+                .map(post -> postMapper.toPostResp(post, viewerId))
+                .toList();
+        return ResponseEntity.ok(new PostDtos.PostListResp(
+                posts,
+                postPage.getTotalElements(),
+                page,
+                pageSize
+        ));
+    }
+
+    /**
      * 删除帖子
      */
     @DeleteMapping("/{postId}")
