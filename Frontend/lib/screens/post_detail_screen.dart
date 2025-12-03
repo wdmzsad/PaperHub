@@ -1,4 +1,4 @@
-// lib/screens/post_detail_screen.dart
+﻿// lib/screens/post_detail_screen.dart
 // merge request 测试 1104: 单个帖子界面
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -8,6 +8,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/post_model.dart';
 import '../models/user_profile.dart';
 import '../services/api_service.dart';
+import '../pages/note_editor_page.dart';
 import 'dart:io';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
@@ -258,6 +259,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   late bool isSaved;
   late int likeCount;
   late int commentCount;
+  //late Post _post;
   Comment? _currentReplyTo; // 当前正在回复的评论
   String? _currentReplyParentId; // 当前回复的父评论 ID
   final FocusNode _commentFocusNode = FocusNode();
@@ -281,6 +283,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   String? _currentUserId;
   bool? _isFollowingAuthor; // 是否关注了作者
   bool _followInFlight = false; // 关注操作进行中
+  
   
   // 图片实际尺寸（用于动态计算宽高比）
   double? _actualImageWidth;
@@ -1928,12 +1931,25 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     );
   }
 
-  void _openMoreActions() {
-            showModalBottomSheet(
-              context: context,
-              builder: (_) => SafeArea(
-                child: Wrap(
-                  children: [
+    void _openMoreActions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Wrap(
+          children: [
+            // 只有作者可以看到“编辑”和“删除”
+            if (_isOwner)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('编辑笔记'),
+                onTap: () async {
+                  // 先关闭底部弹窗
+                  Navigator.pop(context);
+                  // 复用已有的编辑逻辑
+                  await _openEditPost();
+                },
+              ),
+
             if (_isOwner)
               ListTile(
                 leading: const Icon(Icons.delete_forever, color: Colors.red),
@@ -1946,31 +1962,33 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                   _confirmDeletePost();
                 },
               ),
-                    ListTile(
-                      leading: const Icon(Icons.flag),
-                      title: const Text('举报'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('已举报（演示）')),
-                        );
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.copy),
-                      title: const Text('复制链接'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('链接已复制（演示）')),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            );
+
+            ListTile(
+              leading: const Icon(Icons.flag),
+              title: const Text('举报'),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('已举报（演示）')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('复制链接'),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('链接已复制（演示）')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
+
 
   Future<void> _confirmDeletePost() async {
     final confirmed = await showDialog<bool>(
@@ -2022,6 +2040,22 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       if (mounted) {
         setState(() => _isDeleting = false);
       }
+    }
+  }
+
+    /// 进入编辑页面
+  Future<void> _openEditPost() async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => NoteEditorPage(
+          initialPost: widget.post,
+        ),
+      ),
+    );
+
+    // 编辑页返回 true，表示“保存成功，需要刷新详情”
+    if (result == true) {
+      await _loadPostDetail();
     }
   }
 

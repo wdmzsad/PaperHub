@@ -141,6 +141,59 @@ public class PostService {
         return postRepository.save(post);
     }
 
+    /**
+     * 更新帖子（编辑）
+     */
+    @Transactional
+    public Post updatePost(Long postId,
+                           User operator,
+                           String title,
+                           String content,
+                           List<String> media,
+                           List<String> tags,
+                           String doi,
+                           String journal,
+                           Integer year,
+                           List<String> externalLinks,
+                           String arxivId,
+                           List<String> arxivAuthors,
+                           String arxivPublishedDate,
+                           List<String> arxivCategories) {
+
+        // 1. 找到帖子
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+
+        // 2. 权限校验：只能作者本人编辑
+        if (operator == null || !post.getAuthor().getId().equals(operator.getId())) {
+            throw new SecurityException("无权编辑他人的笔记");
+        }
+
+        // 3. 按照请求更新字段（与创建时保持一致）
+        post.setTitle(title);
+        post.setContent(content != null ? content : "");
+        post.setMedia(media != null ? media : List.of());
+        post.setTags(tags != null ? tags : List.of());
+        post.setDoi(doi);
+        post.setJournal(journal);
+        post.setYear(year);
+
+        // 外部链接列表（可为空）
+        post.setExternalLinks(externalLinks != null ? externalLinks : List.of());
+
+        // arXiv 相关元数据
+        post.setArxivId(arxivId);
+        post.setArxivAuthors(arxivAuthors != null ? arxivAuthors : List.of());
+        post.setArxivPublishedDate(arxivPublishedDate);
+        post.setArxivCategories(arxivCategories != null ? arxivCategories : List.of());
+
+        // 更新时间
+        post.setUpdatedAt(Instant.now());
+
+        // 4. 保存并返回
+        return postRepository.save(post);
+    }
+
     @Transactional
     public Post save(Post post) {
         return postRepository.save(post);
