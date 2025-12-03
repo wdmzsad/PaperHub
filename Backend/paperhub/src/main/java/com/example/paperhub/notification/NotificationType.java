@@ -9,6 +9,9 @@ public enum NotificationType {
     COMMENT_LIKE,   // 点赞评论
     COMMENT,        // 评论帖子
     MENTION,        // @提到
-    FOLLOW          // 关注
+    FOLLOW,         // 关注
+    POST_REMOVED,   // 帖子被下架
+    POST_APPROVED,  // 帖子审核通过
+    POST_REJECTED   // 帖子审核拒绝
 }
 

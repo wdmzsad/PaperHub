@@ -7,6 +7,9 @@ import com.example.paperhub.comment.CommentRepository;
 import com.example.paperhub.favorite.FavoritePostRepository;
 import com.example.paperhub.like.CommentLikeRepository;
 import com.example.paperhub.like.PostLikeRepository;
+import com.example.paperhub.report.ReportPost;
+import com.example.paperhub.report.ReportPostRepository;
+import com.example.paperhub.report.ReportStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -25,6 +28,7 @@ public class PostService {
     private final FavoritePostRepository favoritePostRepository;
     private final CommentRepository commentRepository;
     private final CommentLikeRepository commentLikeRepository;
+    private final ReportPostRepository reportPostRepository;
 
     public PostService(
             PostRepository postRepository,
@@ -32,13 +36,15 @@ public class PostService {
             PostLikeRepository postLikeRepository,
             FavoritePostRepository favoritePostRepository,
             CommentRepository commentRepository,
-            CommentLikeRepository commentLikeRepository) {
+            CommentLikeRepository commentLikeRepository,
+            ReportPostRepository reportPostRepository) {
         this.postRepository = postRepository;
         this.userRepository = userRepository;
         this.postLikeRepository = postLikeRepository;
         this.favoritePostRepository = favoritePostRepository;
         this.commentRepository = commentRepository;
         this.commentLikeRepository = commentLikeRepository;
+        this.reportPostRepository = reportPostRepository;
     }
 
     public Optional<Post> findById(Long id) {
@@ -46,16 +52,16 @@ public class PostService {
     }
 
     /**
-     * 获取帖子列表（分页）
+     * 获取帖子列表（分页）- 只返回正常状态的帖子
      */
     public Page<Post> getPosts(int page, int pageSize) {
         Pageable pageable = PageRequest.of(page - 1, pageSize);
-        return postRepository.findAllByOrderByCreatedAtDesc(pageable);
+        return postRepository.findByStatusOrderByCreatedAtDesc(PostStatus.NORMAL, pageable);
     }
 
     public Page<Post> getPostsByAuthor(Long authorId, int page, int pageSize) {
         Pageable pageable = PageRequest.of(page - 1, pageSize);
-        return postRepository.findByAuthorIdOrderByCreatedAtDesc(authorId, pageable);
+        return postRepository.findByAuthorIdAndStatusOrderByCreatedAtDesc(authorId, PostStatus.NORMAL, pageable);
     }
 
     /**
@@ -181,6 +187,38 @@ public class PostService {
         favoritePostRepository.deleteByPostId(postId);
 
         postRepository.delete(post);
+    }
+
+    /**
+     * 举报帖子
+     */
+    @Transactional
+    public ReportPost reportPost(Long postId, String description, User reporter) {
+        if (reporter == null) {
+            throw new IllegalArgumentException("用户未登录");
+        }
+
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+
+        // 检查是否已经举报过
+        if (reportPostRepository.existsByReporterAndPost(reporter, post)) {
+            throw new IllegalArgumentException("您已经举报过该帖子");
+        }
+
+        // 不能举报自己的帖子
+        if (post.getAuthor().getId().equals(reporter.getId())) {
+            throw new IllegalArgumentException("不能举报自己的帖子");
+        }
+
+        ReportPost report = new ReportPost();
+        report.setReporter(reporter);
+        report.setPost(post);
+        report.setDescription(description);
+        report.setStatus(ReportStatus.PENDING);
+        report.setReportTime(Instant.now());
+
+        return reportPostRepository.save(report);
     }
 
     private void ensureUserCanInteract(User user) {

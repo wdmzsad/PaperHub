@@ -423,4 +423,46 @@ public class PostController {
                     .body(Map.of("message", "删除帖子失败: " + ex.getMessage()));
         }
     }
+
+    /**
+     * 举报帖子
+     * POST /posts/{postId}/report
+     */
+    @PostMapping("/{postId}/report")
+    public ResponseEntity<?> reportPost(
+            @PathVariable Long postId,
+            @RequestBody Map<String, String> request,
+            @AuthenticationPrincipal User user) {
+
+        if (user == null) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("success", false, "message", "未认证，请先登录"));
+        }
+
+        try {
+            String description = request.get("description");
+            if (description == null || description.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("success", false, "message", "举报描述不能为空"));
+            }
+
+            // 调用举报服务
+            com.example.paperhub.report.ReportPost report =
+                postService.reportPost(postId, description, user);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "举报成功，我们会尽快处理");
+            response.put("reportId", report.getId());
+
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", ex.getMessage()));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            return ResponseEntity.status(500)
+                    .body(Map.of("success", false, "message", "举报失败: " + ex.getMessage()));
+        }
+    }
 }
