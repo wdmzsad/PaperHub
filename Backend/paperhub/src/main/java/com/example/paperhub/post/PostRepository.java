@@ -23,10 +23,9 @@ public interface PostRepository extends JpaRepository<Post, Long> {
      * 搜索范围：标题、内容、标签
      */
     @Query("SELECT DISTINCT p FROM Post p LEFT JOIN p.tags t " +
-           "WHERE (LOWER(p.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "WHERE LOWER(p.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "   OR LOWER(p.content) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-           "   OR LOWER(t) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
-           "AND p.status = 'NORMAL' " +
+           "   OR LOWER(t) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "ORDER BY (p.likesCount + p.commentsCount) DESC")
     Page<Post> searchByKeywordOrderByHot(@Param("keyword") String keyword, Pageable pageable);
 
@@ -62,5 +61,22 @@ public interface PostRepository extends JpaRepository<Post, Long> {
      */
     Page<Post> findByAuthorIdAndStatusInOrderByCreatedAtDesc(
             Long authorId, java.util.List<PostStatus> statuses, Pageable pageable);
+
+    /**
+     * 按标签查询帖子（支持精确匹配标签名）
+     * @param tag 标签名称
+     * @param pageable 分页参数
+     * @return 包含指定标签的帖子分页
+     */
+    @Query("SELECT DISTINCT p FROM Post p JOIN p.tags t WHERE t = :tag ORDER BY p.createdAt DESC")
+    Page<Post> findByTagOrderByCreatedAtDesc(@Param("tag") String tag, Pageable pageable);
+
+    /**
+     * 统计包含指定标签的帖子数量
+     * @param tag 标签名称
+     * @return 包含指定标签的帖子数量
+     */
+    @Query("SELECT COUNT(DISTINCT p) FROM Post p JOIN p.tags t WHERE t = :tag")
+    long countByTag(@Param("tag") String tag);
 }
 

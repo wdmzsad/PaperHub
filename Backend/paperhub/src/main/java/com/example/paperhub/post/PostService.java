@@ -16,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +24,7 @@ import java.util.Optional;
 @Service
 public class PostService {
     private final PostRepository postRepository;
+    private final FollowFeedRepository followFeedRepository;
     private final UserRepository userRepository;
     private final PostLikeRepository postLikeRepository;
     private final FavoritePostRepository favoritePostRepository;
@@ -32,6 +34,7 @@ public class PostService {
 
     public PostService(
             PostRepository postRepository,
+            FollowFeedRepository followFeedRepository,
             UserRepository userRepository,
             PostLikeRepository postLikeRepository,
             FavoritePostRepository favoritePostRepository,
@@ -39,6 +42,7 @@ public class PostService {
             CommentLikeRepository commentLikeRepository,
             ReportPostRepository reportPostRepository) {
         this.postRepository = postRepository;
+        this.followFeedRepository = followFeedRepository;
         this.userRepository = userRepository;
         this.postLikeRepository = postLikeRepository;
         this.favoritePostRepository = favoritePostRepository;
@@ -62,6 +66,35 @@ public class PostService {
     public Page<Post> getPostsByAuthor(Long authorId, int page, int pageSize) {
         Pageable pageable = PageRequest.of(page - 1, pageSize);
         return postRepository.findByAuthorIdAndStatusOrderByCreatedAtDesc(authorId, PostStatus.NORMAL, pageable);
+    }
+
+    /**
+     * 获取帖子列表（分页），支持按标签过滤
+     * @param page 页码（从1开始）
+     * @param pageSize 每页大小
+     * @param tag 标签名称（可选，为null时返回所有帖子）
+     * @return 帖子分页结果
+     */
+    public Page<Post> getPosts(int page, int pageSize, String tag) {
+        Pageable pageable = PageRequest.of(page - 1, pageSize);
+        if (tag != null && !tag.trim().isEmpty()) {
+            return postRepository.findByTagOrderByCreatedAtDesc(tag.trim(), pageable);
+        } else {
+            return postRepository.findAllByOrderByCreatedAtDesc(pageable);
+        }
+    }
+
+    /**
+     * 获取“关注”信息流：只包含当前用户关注的作者发布的帖子。
+     *
+     * @param followerId 当前用户ID
+     * @param page       页码（从1开始）
+     * @param pageSize   每页大小
+     * @return 关注作者的帖子分页结果
+     */
+    public Page<Post> getFollowingFeed(Long followerId, int page, int pageSize) {
+        Pageable pageable = PageRequest.of(page - 1, pageSize);
+        return followFeedRepository.findFollowingPosts(followerId, pageable);
     }
 
     /**
@@ -112,6 +145,59 @@ public class PostService {
         post.setCreatedAt(Instant.now());
         post.setUpdatedAt(Instant.now());
         
+        return postRepository.save(post);
+    }
+
+    /**
+     * 更新帖子（编辑）
+     */
+    @Transactional
+    public Post updatePost(Long postId,
+                           User operator,
+                           String title,
+                           String content,
+                           List<String> media,
+                           List<String> tags,
+                           String doi,
+                           String journal,
+                           Integer year,
+                           List<String> externalLinks,
+                           String arxivId,
+                           List<String> arxivAuthors,
+                           String arxivPublishedDate,
+                           List<String> arxivCategories) {
+
+        // 1. 找到帖子
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+
+        // 2. 权限校验：只能作者本人编辑
+        if (operator == null || !post.getAuthor().getId().equals(operator.getId())) {
+            throw new SecurityException("无权编辑他人的笔记");
+        }
+
+        // 3. 按照请求更新字段（与创建时保持一致）
+        post.setTitle(title);
+        post.setContent(content != null ? content : "");
+        post.setMedia(media != null ? media : List.of());
+        post.setTags(tags != null ? tags : List.of());
+        post.setDoi(doi);
+        post.setJournal(journal);
+        post.setYear(year);
+
+        // 外部链接列表（可为空）
+        post.setExternalLinks(externalLinks != null ? externalLinks : List.of());
+
+        // arXiv 相关元数据
+        post.setArxivId(arxivId);
+        post.setArxivAuthors(arxivAuthors != null ? arxivAuthors : List.of());
+        post.setArxivPublishedDate(arxivPublishedDate);
+        post.setArxivCategories(arxivCategories != null ? arxivCategories : List.of());
+
+        // 更新时间
+        post.setUpdatedAt(Instant.now());
+
+        // 4. 保存并返回
         return postRepository.save(post);
     }
 

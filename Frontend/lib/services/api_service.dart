@@ -1190,16 +1190,21 @@ class ApiService {
   /// 获取帖子列表
   /// @param page 页码，从1开始
   /// @param pageSize 每页数量，默认20
+  /// @param disciplineTag 可选：按分区 / 标签过滤帖子
   static Future<Map<String, dynamic>> getPosts({
     int page = 1,
     int pageSize = 20,
+    String? disciplineTag,
   }) async {
     try {
+      final queryParameters = <String, String>{
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+        if (disciplineTag != null && disciplineTag.isNotEmpty)
+          'tag': disciplineTag,
+      };
       final uri = Uri.parse('$baseUrl/posts').replace(
-        queryParameters: {
-          'page': page.toString(),
-          'pageSize': pageSize.toString(),
-        },
+        queryParameters: queryParameters,
       );
       print('请求帖子列表: $uri'); // 调试日志
       final result = await _makeRequest(
@@ -1217,6 +1222,39 @@ class ApiService {
       return result;
     } catch (e) {
       print('API请求异常: $e'); // 调试日志
+      rethrow;
+    }
+  }
+
+  /// 获取“关注”信息流
+  /// 只返回当前登录用户关注的作者发布的帖子
+  /// GET /posts/following?page=1&pageSize=20
+  static Future<Map<String, dynamic>> getFollowingPosts({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    try {
+      final queryParameters = <String, String>{
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      };
+      final uri = Uri.parse('$baseUrl/posts/following').replace(
+        queryParameters: queryParameters,
+      );
+      final result = await _makeRequest(
+        () => http
+            .get(uri, headers: _buildHeaders())
+            .timeout(
+              const Duration(seconds: 10),
+              onTimeout: () {
+                throw Exception('请求超时，请检查后端服务是否启动');
+              },
+            ),
+        '/posts/following',
+      );
+      return result;
+    } catch (e) {
+      print('获取关注信息流失败: $e');
       rethrow;
     }
   }
@@ -1282,6 +1320,51 @@ class ApiService {
       '/posts',
     );
   }
+
+  //编辑帖子
+  /// postId: 要编辑的帖子 ID
+  static Future<Map<String, dynamic>> updatePost({
+    required String postId,
+    required String title,
+    String? content,
+    required List<String> media,
+    List<String>? tags,
+    String? doi,
+    String? journal,
+    int? year,
+    List<String>? externalLinks,
+    String? arxivId,
+    List<String>? arxivAuthors,
+    String? arxivPublishedDate,
+    List<String>? arxivCategories,
+  }) async {
+    return await _makeRequest(
+      () => http.put(
+        Uri.parse('$baseUrl/posts/$postId'),
+        headers: _buildHeaders(),
+        body: jsonEncode({
+          'title': title,
+          if (content != null) 'content': content,
+          // 编辑时 media 传“完整列表”（已有 + 新上传）
+          'media': media,
+          if (tags != null) 'tags': tags,
+          if (doi != null) 'doi': doi,
+          if (journal != null) 'journal': journal,
+          if (year != null) 'year': year,
+          if (externalLinks != null) 'externalLinks': externalLinks,
+          if (arxivId != null) 'arxivId': arxivId,
+          if (arxivAuthors != null && arxivAuthors.isNotEmpty)
+            'arxivAuthors': arxivAuthors,
+          if (arxivPublishedDate != null)
+            'arxivPublishedDate': arxivPublishedDate,
+          if (arxivCategories != null && arxivCategories.isNotEmpty)
+            'arxivCategories': arxivCategories,
+        }),
+      ),
+      '/posts/$postId',
+    );
+  }
+
 
   /// 删除帖子
   static Future<Map<String, dynamic>> deletePost(String postId) async {

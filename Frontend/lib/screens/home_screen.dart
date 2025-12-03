@@ -23,6 +23,7 @@
 /// - 释放资源：在 `dispose` 中释放 `ScrollController`。
 ///
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import '../models/post_model.dart';
 import '../widgets/post_card.dart';
 import 'search_screen.dart';
@@ -36,6 +37,9 @@ import '../services/api_service.dart';
 import '../services/chat_service.dart';
 import '../services/unread_service.dart';
 import '../models/notification_model.dart';
+import '../services/local_storage.dart';
+import '../services/browse_history_service.dart';
+import '../constants/discipline_constants.dart';
 
 /// 首页入口组件（Stateful）：承载发现流与分区切换
 class HomeScreen extends StatefulWidget {
@@ -64,8 +68,34 @@ class _HomeScreenState extends State<HomeScreen> {
   final Set<String> _likeInFlight = {};
 
   /// 顶部 tab 选择（0=发现，1=分区）。
-  int _selectedTab = 0; //  0=发现, 1=分区
+  /// 0=关注, 1=发现, 2=分区
+  int _selectedTab = 1;
   final ChatService _chatService = ChatService();
+
+  /// 分区页当前选中的主分区
+  String _currentZoneDiscipline = kMainDisciplines.first;
+
+  /// 分区页帖子列表（独立于发现页）
+  final List<Post> _zonePosts = [];
+
+  /// 分区页加载状态
+  bool _zoneLoading = false;
+
+  /// 分区页是否还有更多数据
+  bool _zoneHasMore = true;
+
+  /// 分区页当前页码
+  int _zonePage = 1;
+
+  /// 关注页帖子列表与加载状态
+  final List<Post> _followingPosts = [];
+  bool _followingLoading = false;
+  bool _followingHasMore = true;
+  int _followingPage = 1;
+  final ScrollController _followingScrollController = ScrollController();
+
+  /// 已浏览过的帖子ID集合（用于在关注流中标记未读红点）
+  final Set<String> _viewedPostIds = {};
 
   @override
   void initState() {
@@ -73,7 +103,67 @@ class _HomeScreenState extends State<HomeScreen> {
     // 初始化加载首屏数据，并注册滚动监听。
     _loadInitialPosts();
     _scrollController.addListener(_scrollListener);
+    _followingScrollController.addListener(_followingScrollListener);
     _preloadUnreadBadges();
+    _loadViewedPostIds();
+  }
+
+  /// 加载当前用户的浏览历史，用于关注流“未读”标记
+  Future<void> _loadViewedPostIds() async {
+    try {
+      final userId = LocalStorage.instance.read('userId')?.toString() ?? '';
+      if (userId.isEmpty) return;
+      final historyItems = await BrowseHistoryService.getHistory(userId);
+      setState(() {
+        _viewedPostIds
+          ..clear()
+          ..addAll(historyItems.map((e) => e.postId));
+      });
+    } catch (_) {
+      // 忽略错误，不影响主流程
+    }
+  }
+
+  /// 加载分区帖子
+  Future<void> _loadZonePosts() async {
+    if (_zoneLoading || !_zoneHasMore) return;
+
+    setState(() {
+      _zoneLoading = true;
+    });
+
+    try {
+      final resp = await ApiService.getPosts(
+        page: _zonePage,
+        pageSize: 12,
+        disciplineTag: _currentZoneDiscipline,
+      );
+      final status = resp['statusCode'] as int? ?? 500;
+      final body = resp['body'] as Map<String, dynamic>?;
+
+      if (status >= 200 && status < 300 && body != null) {
+        final postsData = (body['posts'] as List<dynamic>?) ?? [];
+        final total = body['total'] as int? ?? postsData.length;
+        final newPosts = postsData
+            .map((e) => Post.fromJson(e as Map<String, dynamic>))
+            .toList();
+
+        setState(() {
+          _zonePosts.addAll(newPosts);
+          _zoneHasMore = _zonePosts.length < total;
+          _zonePage += 1;
+          _zoneLoading = false;
+        });
+      } else {
+        setState(() {
+          _zoneLoading = false;
+        });
+      }
+    } catch (_) {
+      setState(() {
+        _zoneLoading = false;
+      });
+    }
   }
 
   Future<void> _preloadUnreadBadges() async {
@@ -284,8 +374,106 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// 关注流：初次加载
+  Future<void> _loadInitialFollowingPosts() async {
+    if (_followingLoading) return;
+
+    setState(() {
+      _followingLoading = true;
+    });
+
+    try {
+      final resp = await ApiService.getFollowingPosts(page: 1, pageSize: 6);
+      final status = resp['statusCode'] as int? ?? 500;
+      final body = resp['body'] as Map<String, dynamic>?;
+
+      if (status >= 200 && status < 300 && body != null) {
+        final postsData = (body['posts'] as List<dynamic>?) ?? <dynamic>[];
+        final total = body['total'] as int? ?? 0;
+
+        final newPosts = postsData
+            .map((p) => Post.fromJson(p as Map<String, dynamic>))
+            .toList();
+
+        setState(() {
+          _followingPosts
+            ..clear()
+            ..addAll(newPosts);
+          _followingHasMore = _followingPosts.length < total;
+          _followingPage = 2;
+          _followingLoading = false;
+        });
+      } else {
+        setState(() {
+          _followingLoading = false;
+        });
+      }
+    } catch (_) {
+      setState(() {
+        _followingLoading = false;
+      });
+    }
+  }
+
+  /// 关注流：加载更多
+  Future<void> _loadMoreFollowingPosts() async {
+    if (_followingLoading || !_followingHasMore) return;
+
+    setState(() {
+      _followingLoading = true;
+    });
+
+    try {
+      final resp = await ApiService.getFollowingPosts(
+        page: _followingPage,
+        pageSize: 6,
+      );
+      final status = resp['statusCode'] as int? ?? 500;
+      final body = resp['body'] as Map<String, dynamic>?;
+
+      if (status >= 200 && status < 300 && body != null) {
+        final postsData = (body['posts'] as List<dynamic>?) ?? <dynamic>[];
+        final total = body['total'] as int? ?? 0;
+
+        final newPosts = postsData
+            .map((p) => Post.fromJson(p as Map<String, dynamic>))
+            .toList();
+
+        setState(() {
+          _followingPosts.addAll(newPosts);
+          _followingHasMore = _followingPosts.length < total;
+          _followingPage += 1;
+          _followingLoading = false;
+        });
+      } else {
+        setState(() {
+          _followingLoading = false;
+        });
+      }
+    } catch (_) {
+      setState(() {
+        _followingLoading = false;
+      });
+    }
+  }
+
+  /// 关注流滚动监听
+  void _followingScrollListener() {
+    if (_followingScrollController.offset >=
+        _followingScrollController.position.maxScrollExtent - 200) {
+      _loadMoreFollowingPosts();
+    }
+  }
+
   /// 卡片点击 -> 打开详情页
   void _onPostTap(Post post) {
+    // 本地立即标记为已浏览，移除“未读”红点
+    if (!_viewedPostIds.contains(post.id)) {
+      setState(() {
+        _viewedPostIds.add(post.id);
+      });
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => PostDetailScreen(post: post)),
@@ -392,10 +580,12 @@ class _HomeScreenState extends State<HomeScreen> {
             // 内容区域
             Expanded(
               child: _selectedTab == 0
-                  ? (_posts.isEmpty
-                        ? _buildInitialLoading()
-                        : _buildWaterfallGrid())
-                  : _buildZonePlaceholder(), // 分区占位
+                  ? _buildFollowingTabContent()
+                  : _selectedTab == 1
+                      ? (_posts.isEmpty
+                          ? _buildInitialLoading()
+                          : _buildWaterfallGrid())
+                      : _buildZoneTabContent(), // 分区页
             ),
           ],
         ),
@@ -426,9 +616,11 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildTabButton("发现", 0),
+                _buildTabButton("关注", 0),
                 const SizedBox(width: 24),
-                _buildTabButton("分区", 1),
+                _buildTabButton("发现", 1),
+                const SizedBox(width: 24),
+                _buildTabButton("分区", 2),
               ],
             ),
           ),
@@ -455,6 +647,16 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _selectedTab = index;
         });
+
+        // 懒加载关注流 / 分区内容
+        if (index == 0 && _followingPosts.isEmpty && !_followingLoading) {
+          _loadInitialFollowingPosts();
+        } else if (index == 2 &&
+            _zonePosts.isEmpty &&
+            !_zoneLoading &&
+            _zoneHasMore) {
+          _loadZonePosts();
+        }
       },
       child: Text(
         label,
@@ -531,10 +733,151 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  //  分区占位内容
-  Widget _buildZonePlaceholder() {
-    return const Center(
-      child: Text('分区内容开发中...', style: TextStyle(color: Colors.grey)),
+  /// 分区首页内容：顶部分区滑条 + 当前分区的瀑布流
+  Widget _buildZoneTabContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildZoneSelectorBar(),
+        const Divider(height: 1),
+        Expanded(
+          child: _buildZoneWaterfallGrid(),
+        ),
+      ],
+    );
+  }
+
+  /// 关注页内容：如果没有数据显示占位，否则使用瀑布流布局
+  Widget _buildFollowingTabContent() {
+    if (_followingLoading && _followingPosts.isEmpty) {
+      return _buildInitialLoading();
+    }
+
+    if (_followingPosts.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Text(
+            '还没有关注的人的动态，去发现页多关注一些优质作者吧～',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+        ),
+      );
+    }
+
+    return MasonryGridView.count(
+      controller: _followingScrollController,
+      crossAxisCount: 2,
+      crossAxisSpacing: 8,
+      mainAxisSpacing: 8,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      itemCount: _followingPosts.length + (_followingLoading ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index == _followingPosts.length) {
+          return _buildLoadMoreIndicator();
+        }
+        final post = _followingPosts[index];
+        final isUnread = !_viewedPostIds.contains(post.id);
+        return PostCard(
+          post: post,
+          onTap: () => _onPostTap(post),
+          onAuthorTap: () => _openUserProfile(post.author.id),
+          onLikeTap: _handlePostLike,
+          showUnreadDot: isUnread,
+        );
+      },
+    );
+  }
+
+  /// 顶部分区滑条
+  Widget _buildZoneSelectorBar() {
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        itemBuilder: (context, index) {
+          final discipline = kMainDisciplines[index];
+          final selected = discipline == _currentZoneDiscipline;
+          final color = kDisciplineColors[discipline] ?? Colors.blue;
+          return GestureDetector(
+            onTap: () {
+              if (_currentZoneDiscipline == discipline) return;
+              setState(() {
+                _currentZoneDiscipline = discipline;
+                // 切换分区时重置状态并加载新分区的数据
+                _zonePosts.clear();
+                _zonePage = 1;
+                _zoneHasMore = true;
+              });
+              _loadZonePosts();
+            },
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: selected ? color.withOpacity(0.12) : Colors.transparent,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: selected ? color : Colors.grey.shade300,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  discipline,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight:
+                        selected ? FontWeight.w600 : FontWeight.normal,
+                    color: selected ? color : Colors.black87,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemCount: kMainDisciplines.length,
+      ),
+    );
+  }
+
+  /// 分区内瀑布流（使用后端标签过滤）
+  Widget _buildZoneWaterfallGrid() {
+    // 使用独立的帖子列表和加载状态
+    if (_zonePosts.isEmpty && _zoneLoading) {
+      return _buildInitialLoading();
+    }
+
+    if (_zonePosts.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Text(
+            '当前分区暂时没有内容，试试切换到其他分区或先在该分区发布一条笔记吧～',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+        ),
+      );
+    }
+
+    return MasonryGridView.count(
+      crossAxisCount: 2,
+      crossAxisSpacing: 8,
+      mainAxisSpacing: 8,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      itemCount: _zonePosts.length,
+      itemBuilder: (context, index) {
+        final post = _zonePosts[index];
+        return PostCard(
+          post: post,
+          onTap: () => _onPostTap(post),
+          onAuthorTap: () => _openUserProfile(post.author.id),
+          onLikeTap: _handlePostLike,
+        );
+      },
     );
   }
 
@@ -600,6 +943,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     // 释放滚动控制器，避免内存泄漏。
     _scrollController.dispose();
+    _followingScrollController.dispose();
     super.dispose();
   }
 }
