@@ -2,6 +2,8 @@ package com.example.paperhub.user;
 
 import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
+import com.example.paperhub.auth.UserRole;
+import com.example.paperhub.auth.UserStatus;
 import com.example.paperhub.favorite.FavoritePostRepository;
 import com.example.paperhub.follow.UserFollowRepository;
 import com.example.paperhub.like.PostLikeRepository;
@@ -60,9 +62,22 @@ public class UserService {
             isFollowerToViewer = followRepository.existsByFollowerIdAndFollowingId(user.getId(), viewer.getId());
         }
 
+        UserRole role = user.getRole() == null ? UserRole.USER : user.getRole();
+        UserStatus status = user.getStatus() == null ? UserStatus.NORMAL : user.getStatus();
+
+        String statusMessage = null;
+        if (status == UserStatus.BANNED) {
+            statusMessage = "该用户被封禁中";
+        } else if (status == UserStatus.MUTED && isMuteActive(user)) {
+            statusMessage = "该用户被禁言中";
+        }
+
         return new UserDtos.ProfileResp(
                 user.getId(),
                 user.getEmail(),
+                role.name(),
+                status.name(),
+                statusMessage,
                 safeName(user),
                 resolveAvatar(user.getAvatar()),
                 resolveBackground(user.getProfileBackground()),
@@ -143,6 +158,16 @@ public class UserService {
             return "images/profile_bg.jpg";
         }
         return background;
+    }
+
+    private boolean isMuteActive(User user) {
+        if (user.getStatus() != UserStatus.MUTED) {
+            return false;
+        }
+        if (user.getMuteUntil() == null) {
+            return true;
+        }
+        return java.time.Instant.now().isBefore(user.getMuteUntil());
     }
 }
 

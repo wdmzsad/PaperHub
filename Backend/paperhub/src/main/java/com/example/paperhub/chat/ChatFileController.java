@@ -86,6 +86,8 @@ public class ChatFileController {
                lowerExt.equals(".gif") || lowerExt.equals(".mp3") || lowerExt.equals(".wav") ||
                lowerExt.equals(".mp4") || lowerExt.equals(".pdf") || lowerExt.equals(".doc") ||
                lowerExt.equals(".docx") || lowerExt.equals(".txt") || lowerExt.equals(".zip") ||
-               lowerExt.equals(".rar");
+               lowerExt.equals(".rar") || lowerExt.equals(".ppt") || lowerExt.equals(".pptx") ||
+               lowerExt.equals(".xls") || lowerExt.equals(".xlsx") || lowerExt.equals(".csv") ||
+               lowerExt.equals(".7z") || lowerExt.equals(".exe");
     }
 }

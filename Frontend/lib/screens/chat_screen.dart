@@ -17,8 +17,10 @@ import '../models/conversation_model.dart';
 import '../models/message_model.dart';
 import '../services/chat_service.dart';
 import '../services/api_service.dart';
+import '../services/local_storage.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
+import 'profile_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final Conversation? conversation;
@@ -45,6 +47,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Conversation? _loadedConversation;
   bool _initialLoadComplete = false;
   int _previousMessageCount = 0;
+  String? _currentUserId;
 
   // 轮询配置
   Timer? _pollingTimer;
@@ -53,6 +56,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _currentUserId = LocalStorage.instance.read('userId');
     _initializeConversation();
     _scrollController.addListener(_scrollListener);
     _chatService.addListener(_onChatServiceChanged);
@@ -232,6 +236,8 @@ class _ChatScreenState extends State<ChatScreen> {
       type = MessageType.file;
     } else if (messageType == 'IMAGE') {
       type = MessageType.image;
+    } else if (messageType == 'VIDEO') {
+      type = MessageType.video;
     }
 
     _chatService.sendMessageWithMedia(
@@ -272,6 +278,20 @@ class _ChatScreenState extends State<ChatScreen> {
         return '昨天';
       default:
         return '${dateTime.month}月${dateTime.day}日';
+    }
+  }
+
+  void _navigateToUserProfile(String userId) {
+    if (userId == _currentUserId) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ProfilePage()),
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ProfilePage(userId: userId)),
+      );
     }
   }
 
@@ -320,52 +340,60 @@ class _ChatScreenState extends State<ChatScreen> {
         icon: const Icon(Icons.arrow_back, color: Colors.black87),
         onPressed: () => Navigator.pop(context),
       ),
-      title: Row(
-        children: [
-          _buildAppBarAvatar(conversation),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  conversation.displayName,
-                  style: const TextStyle(
-                    color: Colors.black87,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (_isTyping)
+      title: GestureDetector(
+        onTap: () {
+          if (conversation.type == ConversationType.private && conversation.participants.isNotEmpty) {
+            final otherUser = conversation.participants.firstWhere((p) => !p.isMe, orElse: () => conversation.participants.first);
+            _navigateToUserProfile(otherUser.id);
+          }
+        },
+        child: Row(
+          children: [
+            _buildAppBarAvatar(conversation),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    '$_typingUser 正在输入...',
-                    style: TextStyle(
-                      color: const Color(0xFF1976D2),
-                      fontSize: 12,
-                    ),
-                  )
-                else if (conversation.type == ConversationType.private)
-                  Text(
-                    conversation.isOnline ? '在线' : '离线',
-                    style: TextStyle(
-                      color: conversation.isOnline
-                          ? const Color(0xFF4CAF50)
-                          : Colors.grey[500],
-                      fontSize: 12,
-                    ),
-                  )
-                else
-                  Text(
-                    '${conversation.participants.length} 位成员',
-                    style: TextStyle(
-                      color: Colors.grey[500],
-                      fontSize: 12,
+                    conversation.displayName,
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-              ],
+                  if (_isTyping)
+                    Text(
+                      '$_typingUser 正在输入...',
+                      style: TextStyle(
+                        color: const Color(0xFF1976D2),
+                        fontSize: 12,
+                      ),
+                    )
+                  else if (conversation.type == ConversationType.private)
+                    Text(
+                      conversation.isOnline ? '在线' : '离线',
+                      style: TextStyle(
+                        color: conversation.isOnline
+                            ? const Color(0xFF4CAF50)
+                            : Colors.grey[500],
+                        fontSize: 12,
+                      ),
+                    )
+                  else
+                    Text(
+                      '${conversation.participants.length} 位成员',
+                      style: TextStyle(
+                        color: Colors.grey[500],
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       actions: [
         IconButton(
@@ -452,8 +480,8 @@ class _ChatScreenState extends State<ChatScreen> {
             if (showDateHeader) _buildDateHeader(message.createdAt),
             MessageBubble(
               message: message,
-              showAvatar: index == messages.length - 1 ||
-                  messages[index + 1].senderId != message.senderId,
+              showAvatar: true,
+              onAvatarTap: () => _navigateToUserProfile(message.senderId),
             ),
           ],
         );

@@ -211,11 +211,11 @@ class _ChatInputState extends State<ChatInput> {
                 Icons.photo_library,
                 color: Color(0xFF1976D2),
               ),
-              title: const Text('图片'),
-              subtitle: const Text('从相册选择图片'),
+              title: const Text('图片和视频'),
+              subtitle: const Text('从相册选择图片或视频'),
               onTap: () {
                 Navigator.pop(context);
-                _pickImage(ImageSource.gallery);
+                _pickMedia();
               },
             ),
             ListTile(
@@ -243,6 +243,44 @@ class _ChatInputState extends State<ChatInput> {
     );
   }
 
+  Future<void> _pickMedia() async {
+    final ImagePicker picker = ImagePicker();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('选择类型'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.image),
+              title: const Text('图片'),
+              onTap: () async {
+                Navigator.pop(context);
+                final XFile? file = await picker.pickImage(source: ImageSource.gallery);
+                if (file != null && widget.onSendMedia != null) {
+                  await _uploadAndSendMediaFile(file, 'IMAGE');
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.video_library),
+              title: const Text('视频'),
+              onTap: () async {
+                Navigator.pop(context);
+                final XFile? file = await picker.pickVideo(source: ImageSource.gallery);
+                if (file != null && widget.onSendMedia != null) {
+                  await _uploadAndSendMediaFile(file, 'VIDEO');
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _pickImage(ImageSource source) async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: source);
@@ -253,7 +291,11 @@ class _ChatInputState extends State<ChatInput> {
   }
 
   Future<void> _pickFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles();
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx',
+                          'txt', 'csv', 'zip', 'rar', '7z', 'exe', 'mp4'],
+    );
 
     if (result != null && widget.onSendMedia != null) {
       final file = result.files.single;

@@ -1,6 +1,7 @@
 package com.example.paperhub.favorite;
 
 import com.example.paperhub.auth.User;
+import com.example.paperhub.auth.UserStatus;
 import com.example.paperhub.notification.NotificationService;
 import com.example.paperhub.post.Post;
 import com.example.paperhub.post.PostRepository;
@@ -34,6 +35,7 @@ public class FavoriteService {
 
     @Transactional
     public void favoritePost(Long postId, User user) {
+        ensureUserCanInteract(user);
         if (favoriteRepository.existsByUserIdAndPostId(user.getId(), postId)) {
             return;
         }
@@ -55,6 +57,7 @@ public class FavoriteService {
 
     @Transactional
     public void unfavoritePost(Long postId, User user) {
+        ensureUserCanInteract(user);
         favoriteRepository.deleteByUserIdAndPostId(user.getId(), postId);
     }
 
@@ -73,6 +76,21 @@ public class FavoriteService {
                 .map(FavoritePost::getPost)
                 .toList();
         return new PageImpl<>(posts, pageable, favorites.getTotalElements());
+    }
+
+    private void ensureUserCanInteract(User user) {
+        if (user == null) {
+            throw new IllegalArgumentException("未认证用户无法执行此操作");
+        }
+        if (user.getStatus() == UserStatus.BANNED) {
+            throw new IllegalArgumentException("账号已被封禁，无法执行此操作");
+        }
+        if (user.getStatus() == UserStatus.MUTED) {
+            java.time.Instant muteUntil = user.getMuteUntil();
+            if (muteUntil == null || java.time.Instant.now().isBefore(muteUntil)) {
+                throw new IllegalArgumentException("账号被禁言中，暂时无法收藏");
+            }
+        }
     }
 }
 

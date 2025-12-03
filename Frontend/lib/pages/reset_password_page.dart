@@ -14,6 +14,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   String newPassword = '';
   String confirm = '';
   bool loading = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
 
   bool _validPassword(String p) {
     if (p.length < 8) return false;
@@ -74,8 +76,14 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   ),
                   SizedBox(height: 12),
                   TextFormField(
-                    decoration: InputDecoration(labelText: '新密码 (至少8位，含字母和数字)'),
-                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: '新密码 (至少8位，含字母和数字)',
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
+                    ),
+                    obscureText: _obscurePassword,
                     onChanged: (v) => newPassword = v,
                     validator: (v) {
                       if (v == null || v.isEmpty) return '请输入新密码';
@@ -85,8 +93,14 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   ),
                   SizedBox(height: 12),
                   TextFormField(
-                    decoration: InputDecoration(labelText: '确认新密码'),
-                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: '确认新密码',
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                      ),
+                    ),
+                    obscureText: _obscureConfirm,
                     onChanged: (v) => confirm = v,
                     validator: (v) {
                       if (v == null || v.isEmpty) return '请确认密码';
