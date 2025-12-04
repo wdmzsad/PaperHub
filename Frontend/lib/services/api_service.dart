@@ -1226,6 +1226,38 @@ class ApiService {
     }
   }
 
+  /// 获取首页推荐帖子列表
+  /// - 登录用户：后端根据研究方向、浏览历史、收藏、发帖兴趣、时间和热度综合排序
+  /// - 未登录用户：后端会退化为普通按时间排序（等价于 /posts）
+  static Future<Map<String, dynamic>> getRecommendedPosts({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    try {
+      final queryParameters = <String, String>{
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      };
+      final uri = Uri.parse('$baseUrl/posts/recommendations').replace(
+        queryParameters: queryParameters,
+      );
+      final result = await _makeRequest(
+        () => http
+            .get(uri, headers: _buildHeaders())
+            .timeout(
+              const Duration(seconds: 10),
+              onTimeout: () {
+                throw Exception('请求超时，请检查后端服务是否启动');
+              },
+            ),
+        '/posts/recommendations',
+      );
+      return result;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   /// 获取“关注”信息流
   /// 只返回当前登录用户关注的作者发布的帖子
   /// GET /posts/following?page=1&pageSize=20
