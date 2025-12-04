@@ -12,8 +12,10 @@ import 'package:image_picker/image_picker.dart';
 import '../config/app_env.dart';
 import '../services/api_service.dart';
 import '../services/arxiv_service.dart';
+import '../services/local_storage.dart';
 import '../constants/discipline_constants.dart';
 import '../models/post_model.dart';
+import '../models/user_profile.dart';
 
 class NoteEditorPage extends StatefulWidget {
   /// 如果传入 initialPost，则进入“编辑模式”，否则是“新建笔记”
@@ -53,6 +55,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   // 分区与推荐细分类标签
   String? _selectedDiscipline; // 必选：学科分区
+  bool _showDisciplineDropdown = false; // 控制下拉菜单显示
+  String? _currentUserRole; // 当前用户角色
 
   // #符号触发标签选择相关状态
   bool _showTagSuggestions = false;
@@ -74,6 +78,54 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     // 如果传入了 initialPost，则进入编辑模式，预填内容
     if (_isEditing && widget.initialPost != null) {
       _applyExistingPost(widget.initialPost!);
+    }
+    // 获取当前用户角色
+    _loadCurrentUserRole();
+  }
+
+  // 加载当前用户角色
+  Future<void> _loadCurrentUserRole() async {
+    try {
+      // 尝试从API获取当前用户信息
+      final response = await ApiService.getCurrentUserProfile();
+      final status = response['statusCode'] as int? ?? 500;
+
+      if (status >= 200 && status < 300) {
+        final body = response['body'] as Map<String, dynamic>?;
+        if (body != null) {
+          final userProfile = UserProfile.fromJson(body);
+          setState(() {
+            _currentUserRole = userProfile.role.toUpperCase();
+          });
+          return;
+        }
+      }
+
+      // 如果API调用失败，尝试从本地存储获取
+      final userJson = LocalStorage.instance.read('currentUser');
+      if (userJson != null) {
+        try {
+          final userData = jsonDecode(userJson) as Map<String, dynamic>;
+          final userProfile = UserProfile.fromJson(userData);
+          setState(() {
+            _currentUserRole = userProfile.role.toUpperCase();
+          });
+          return;
+        } catch (e) {
+          print('解析本地用户数据失败: $e');
+        }
+      }
+
+      // 如果都失败，设置为普通用户
+      setState(() {
+        _currentUserRole = 'USER';
+      });
+    } catch (e) {
+      print('获取用户角色失败: $e');
+      // 失败时设置为普通用户
+      setState(() {
+        _currentUserRole = 'USER';
+      });
     }
   }
 
@@ -896,15 +948,18 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 
-  // 一级标签选择（放在外部链接之上）
+  // 一级标签选择（放在外部链接之上）- 下拉隐藏式选择器
   Widget _buildDisciplineSelector() {
+    final filteredDisciplines = _getFilteredDisciplines();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 标题行
         Row(
           children: [
             const Text(
-              '选择学科分区',
+              '选择分区',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -927,85 +982,222 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               ),
             ),
             const Spacer(),
-            if (_selectedDiscipline != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.1) ?? const Color(0xFF1976D2).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.3) ?? const Color(0xFF1976D2).withOpacity(0.3),
-                    width: 1,
+
+            // 显示已选分区和下拉按钮
+            Row(
+              children: [
+                if (_selectedDiscipline != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.1) ?? const Color(0xFF1976D2).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.3) ?? const Color(0xFF1976D2).withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      _selectedDiscipline!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: kDisciplineColors[_selectedDiscipline] ?? const Color(0xFF1976D2),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                // 下拉按钮
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _showDisciplineDropdown = !_showDisciplineDropdown;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Icon(
+                      _showDisciplineDropdown ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                      size: 20,
+                      color: Colors.grey.shade700,
+                    ),
                   ),
                 ),
-                child: Text(
-                  _selectedDiscipline!,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: kDisciplineColors[_selectedDiscipline] ?? const Color(0xFF1976D2),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+              ],
+            ),
           ],
         ),
         const SizedBox(height: 8),
 
-        // 一级标签水平滚动选择
-        SizedBox(
-          height: 36,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: kMainDisciplines.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 6),
-            itemBuilder: (context, index) {
-              final d = kMainDisciplines[index];
-              final bool selected = _selectedDiscipline == d;
-              final color = kDisciplineColors[d] ?? const Color(0xFF1976D2);
-
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    if (_selectedDiscipline == d) {
-                      _selectedDiscipline = null;
-                    } else {
-                      _selectedDiscipline = d;
-                    }
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: selected ? color.withOpacity(0.15) : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: selected ? color : Colors.grey.shade300,
-                      width: selected ? 1.5 : 1,
-                    ),
-                    boxShadow: selected
-                        ? [
-                            BoxShadow(
-                              color: color.withOpacity(0.2),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Text(
-                    d,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: selected ? color : Colors.black87,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                  ),
+        // 下拉菜单区域 - 椭圆形文字泡矩阵排布
+        if (_showDisciplineDropdown)
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
                 ),
-              );
-            },
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 标题和关闭按钮
+                Row(
+                  children: [
+                    const Text(
+                      '选择分区',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _showDisciplineDropdown = false;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          Icons.close,
+                          size: 16,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // 椭圆形文字泡矩阵
+                Wrap(
+                  spacing: 10, // 水平间距
+                  runSpacing: 10, // 垂直间距
+                  children: filteredDisciplines.map((discipline) {
+                    final bool selected = _selectedDiscipline == discipline;
+                    final color = kDisciplineColors[discipline] ?? const Color(0xFF1976D2);
+
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedDiscipline = discipline;
+                          _showDisciplineDropdown = false; // 选择后收起下拉菜单
+                        });
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: selected ? color.withOpacity(0.12) : Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(20), // 椭圆形
+                          border: Border.all(
+                            color: selected ? color : Colors.grey.shade300,
+                            width: selected ? 1.5 : 1,
+                          ),
+                          boxShadow: selected
+                              ? [
+                                  BoxShadow(
+                                    color: color.withOpacity(0.25),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ]
+                              : [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // 颜色指示点
+                            Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: color.withOpacity(0.4),
+                                    blurRadius: 3,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              discipline,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: selected ? color : Colors.black87,
+                                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                              ),
+                            ),
+                            if (selected)
+                              Container(
+                                margin: const EdgeInsets.only(left: 6),
+                                child: Icon(
+                                  Icons.check_circle,
+                                  size: 14,
+                                  color: color,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+
+                // 如果没有选择任何分区，显示提示
+                if (_selectedDiscipline == null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 14, color: Colors.orange.shade700),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '请点击上方的椭圆形标签选择一个分区',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
+
+        const SizedBox(height: 8),
         const Text(
           '选择学科分区后，在正文中输入#可添加相关细分类标签',
           style: TextStyle(fontSize: 12, color: Colors.grey),
@@ -1025,6 +1217,17 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         set.addAll(list);
       }
       return set.toList();
+    }
+  }
+
+  // 获取过滤后的分区列表（根据用户角色隐藏"公告区"）
+  List<String> _getFilteredDisciplines() {
+    // 如果用户角色未加载或不是管理员，隐藏"公告区"
+    if (_currentUserRole == 'ADMIN') {
+      return kMainDisciplines; // 管理员可以看到所有分区
+    } else {
+      // 普通用户或角色未加载时隐藏"公告区"
+      return kMainDisciplines.where((discipline) => discipline != '公告区').toList();
     }
   }
 
