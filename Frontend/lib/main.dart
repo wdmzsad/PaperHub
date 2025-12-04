@@ -9,11 +9,15 @@ import 'screens/profile_screen.dart';
 import 'screens/chat_screen.dart';
 import 'services/local_storage.dart';
 
-void main() {
-  runApp(PaperHubApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await LocalStorage.instance.init();
+  runApp(const PaperHubApp());
 }
 
 class PaperHubApp extends StatelessWidget {
+  const PaperHubApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
