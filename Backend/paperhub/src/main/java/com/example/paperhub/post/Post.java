@@ -32,7 +32,11 @@ public class Post {
     @CollectionTable(name = "post_tags", joinColumns = @JoinColumn(name = "post_id"))
     @Column(name = "tag")
     private List<String> tags = new ArrayList<>();
-    
+
+    // 主分区（一级标签）
+    @Column(name = "main_discipline")
+    private String mainDiscipline;
+
     //外部链接列表
     @ElementCollection
     @CollectionTable(name = "post_external_links", joinColumns = @JoinColumn(name = "post_id"))
@@ -87,6 +91,20 @@ public class Post {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
+    // 举报系统相关字段
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private PostStatus status = PostStatus.NORMAL;
+
+    @Column(name = "hidden_reason")
+    private String hiddenReason;
+
+    @Column(name = "updated_by_admin")
+    private Long updatedByAdmin;
+
+    @Column(name = "visible_to_author", nullable = false)
+    private Boolean visibleToAuthor = true;
+
     // Getters and Setters
     public Long getId() {
         return id;
@@ -126,6 +144,14 @@ public class Post {
 
     public void setTags(List<String> tags) {
         this.tags = tags;
+    }
+
+    public String getMainDiscipline() {
+        return mainDiscipline;
+    }
+
+    public void setMainDiscipline(String mainDiscipline) {
+        this.mainDiscipline = mainDiscipline;
     }
 
     public User getAuthor() {
@@ -239,6 +265,39 @@ public class Post {
 
     public void setArxivCategories(List<String> arxivCategories) {
         this.arxivCategories = arxivCategories != null ? arxivCategories : new ArrayList<>();
+    }
+
+    // 举报系统相关字段的 Getter 和 Setter
+    public PostStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(PostStatus status) {
+        this.status = status;
+    }
+
+    public String getHiddenReason() {
+        return hiddenReason;
+    }
+
+    public void setHiddenReason(String hiddenReason) {
+        this.hiddenReason = hiddenReason;
+    }
+
+    public Long getUpdatedByAdmin() {
+        return updatedByAdmin;
+    }
+
+    public void setUpdatedByAdmin(Long updatedByAdmin) {
+        this.updatedByAdmin = updatedByAdmin;
+    }
+
+    public Boolean getVisibleToAuthor() {
+        return visibleToAuthor;
+    }
+
+    public void setVisibleToAuthor(Boolean visibleToAuthor) {
+        this.visibleToAuthor = visibleToAuthor;
     }
 }
 

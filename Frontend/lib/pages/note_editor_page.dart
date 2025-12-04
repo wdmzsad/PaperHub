@@ -389,7 +389,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           title: title,
           content: content.isNotEmpty ? content : null,
           media: mediaUrls,
-          tags: null,
+          mainDiscipline: _selectedDiscipline!,
           doi: _doi,
           journal: _journal,
           year: _year,
@@ -405,7 +405,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           title: title,
           content: content.isNotEmpty ? content : null,
           media: mediaUrls.isNotEmpty ? mediaUrls : null,
-          tags: tags.isNotEmpty ? tags : null,
+          mainDiscipline: _selectedDiscipline!,
           doi: _doi,
           journal: _journal,
           year: _year,
@@ -1040,10 +1040,18 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       final nextSpaceIndex = afterHash.indexOf(' ');
       final nextNewlineIndex = afterHash.indexOf('\n');
 
-      // 如果#后面直接是空格或换行，表示标签已结束
-      if (nextSpaceIndex == 0 || nextNewlineIndex == 0) {
+      // 如果#后面有空格或换行，表示标签已结束
+      if (nextSpaceIndex != -1 || nextNewlineIndex != -1) {
         // 完成自定义标签输入
         _completeCustomTag();
+
+        // 立即隐藏建议
+        setState(() {
+          _showTagSuggestions = false;
+          _currentTagInput = '';
+          _filteredTagSuggestions.clear();
+          _isTypingCustomTag = false;
+        });
         return;
       }
 
@@ -1074,8 +1082,6 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
           // 过滤标签建议
           final availableTags = _getAvailableSubTags();
-          print('可用标签数量: ${availableTags.length}'); // 调试
-          print('当前输入: "$tagInput"'); // 调试
           _filteredTagSuggestions.clear();
           if (tagInput.isNotEmpty) {
             _filteredTagSuggestions.addAll(
@@ -1085,7 +1091,6 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             );
           }
 
-          print('过滤后标签数量: ${_filteredTagSuggestions.length}'); // 调试
           // 限制显示数量
           if (_filteredTagSuggestions.length > 10) {
             _filteredTagSuggestions = _filteredTagSuggestions.sublist(0, 10);
@@ -1201,9 +1206,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   // 构建标签建议列表
   Widget _buildTagSuggestions() {
-    print('构建标签建议: _showTagSuggestions=$_showTagSuggestions, _filteredTagSuggestions.length=${_filteredTagSuggestions.length}, _isTypingCustomTag=$_isTypingCustomTag'); // 调试
-    if (!_showTagSuggestions) {
-      print('不显示标签建议'); // 调试
+        if (!_showTagSuggestions) {
       return const SizedBox.shrink();
     }
 

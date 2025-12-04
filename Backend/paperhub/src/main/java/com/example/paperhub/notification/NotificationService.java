@@ -140,8 +140,65 @@ public class NotificationService {
     public void createFollowNotification(User actor, Long targetUserId) {
         User target = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
-        
+
         createNotification(actor, target, NotificationType.FOLLOW, null, null);
+    }
+
+    /**
+     * 创建帖子被下架通知
+     */
+    @Transactional
+    public void createPostRemovedNotification(User admin, Long postId, String reason) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+
+        Notification notification = new Notification();
+        notification.setActor(admin);
+        notification.setRecipient(post.getAuthor());
+        notification.setType(NotificationType.POST_REMOVED);
+        notification.setPost(post);
+        notification.setComment(null);
+        notification.setRead(false);
+
+        notificationRepository.save(notification);
+    }
+
+    /**
+     * 创建帖子审核通过通知
+     */
+    @Transactional
+    public void createPostApprovedNotification(User admin, Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+
+        Notification notification = new Notification();
+        notification.setActor(admin);
+        notification.setRecipient(post.getAuthor());
+        notification.setType(NotificationType.POST_APPROVED);
+        notification.setPost(post);
+        notification.setComment(null);
+        notification.setRead(false);
+
+        notificationRepository.save(notification);
+    }
+
+    /**
+     * 创建帖子审核拒绝通知
+     */
+    @Transactional
+    public void createPostRejectedNotification(User admin, Long postId, String reason) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+
+        Notification notification = new Notification();
+        notification.setActor(admin);
+        notification.setRecipient(post.getAuthor());
+        notification.setType(NotificationType.POST_REJECTED);
+        notification.setPost(post);
+        notification.setComment(null);
+        notification.setRead(false);
+
+        notificationRepository.save(notification);
     }
 
     /**

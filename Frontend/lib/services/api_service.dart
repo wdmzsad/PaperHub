@@ -261,6 +261,59 @@ class ApiService {
     );
   }
 
+  /// 获取当前登录用户的浏览历史（最新在前）
+  /// GET /browse-history?limit=50
+  static Future<Map<String, dynamic>> getBrowseHistory({int limit = 50}) async {
+    return await _makeRequest(
+      () => http.get(
+        Uri.parse('$baseUrl/browse-history?limit=$limit'),
+        headers: _buildHeaders(),
+      ),
+      '/browse-history',
+    );
+  }
+
+  /// 记录一条浏览历史
+  /// POST /browse-history  body: { postId, title }
+  static Future<Map<String, dynamic>> addBrowseHistory({
+    required String postId,
+    required String title,
+  }) async {
+    final body = {'postId': postId, 'title': title};
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/browse-history'),
+        headers: _buildHeaders(),
+        body: jsonEncode(body),
+      ),
+      '/browse-history',
+    );
+  }
+
+  /// 删除一条浏览历史
+  /// DELETE /browse-history/{postId}
+  static Future<Map<String, dynamic>> deleteBrowseHistory(String postId) async {
+    return await _makeRequest(
+      () => http.delete(
+        Uri.parse('$baseUrl/browse-history/$postId'),
+        headers: _buildHeaders(),
+      ),
+      '/browse-history/$postId',
+    );
+  }
+
+  /// 清空当前用户的浏览历史
+  /// DELETE /browse-history
+  static Future<Map<String, dynamic>> clearBrowseHistory() async {
+    return await _makeRequest(
+      () => http.delete(
+        Uri.parse('$baseUrl/browse-history'),
+        headers: _buildHeaders(),
+      ),
+      '/browse-history',
+    );
+  }
+
   static Future<Map<String, dynamic>> updateProfile({
     required String displayName,
     String? bio,
@@ -1226,6 +1279,38 @@ class ApiService {
     }
   }
 
+  /// 获取首页推荐帖子列表
+  /// - 登录用户：后端根据研究方向、浏览历史、收藏、发帖兴趣、时间和热度综合排序
+  /// - 未登录用户：后端会退化为普通按时间排序（等价于 /posts）
+  static Future<Map<String, dynamic>> getRecommendedPosts({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    try {
+      final queryParameters = <String, String>{
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      };
+      final uri = Uri.parse('$baseUrl/posts/recommendations').replace(
+        queryParameters: queryParameters,
+      );
+      final result = await _makeRequest(
+        () => http
+            .get(uri, headers: _buildHeaders())
+            .timeout(
+              const Duration(seconds: 10),
+              onTimeout: () {
+                throw Exception('请求超时，请检查后端服务是否启动');
+              },
+            ),
+        '/posts/recommendations',
+      );
+      return result;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   /// 获取“关注”信息流
   /// 只返回当前登录用户关注的作者发布的帖子
   /// GET /posts/following?page=1&pageSize=20
@@ -1288,7 +1373,7 @@ class ApiService {
     required String title,
     String? content,
     List<String>? media,
-    List<String>? tags,
+    required String mainDiscipline,
     String? doi,
     String? journal,
     int? year,
@@ -1306,7 +1391,7 @@ class ApiService {
           'title': title,
           if (content != null) 'content': content,
           if (media != null) 'media': media,
-          if (tags != null) 'tags': tags,
+          'mainDiscipline': mainDiscipline,
           if (doi != null) 'doi': doi,
           if (journal != null) 'journal': journal,
           if (year != null) 'year': year,
@@ -1328,7 +1413,7 @@ class ApiService {
     required String title,
     String? content,
     required List<String> media,
-    List<String>? tags,
+    required String mainDiscipline,
     String? doi,
     String? journal,
     int? year,
@@ -1345,9 +1430,9 @@ class ApiService {
         body: jsonEncode({
           'title': title,
           if (content != null) 'content': content,
-          // 编辑时 media 传“完整列表”（已有 + 新上传）
+          // 编辑时 media 传"完整列表"（已有 + 新上传）
           'media': media,
-          if (tags != null) 'tags': tags,
+          'mainDiscipline': mainDiscipline,
           if (doi != null) 'doi': doi,
           if (journal != null) 'journal': journal,
           if (year != null) 'year': year,
@@ -1374,51 +1459,6 @@ class ApiService {
         headers: _buildHeaders(),
       ),
       '/posts/$postId',
-    );
-  }
-
-  /// ==================== 浏览历史 API ====================
-
-  static Future<Map<String, dynamic>> recordBrowseHistory(
-    String postId,
-    String title,
-  ) async {
-    return await _makeRequest(
-      () => http.post(
-        Uri.parse('$baseUrl/browse-history'),
-        headers: _buildHeaders(),
-        body: jsonEncode({'postId': postId, 'title': title}),
-      ),
-      '/browse-history',
-    );
-  }
-
-  static Future<Map<String, dynamic>> getBrowseHistory({int limit = 50}) async {
-    final uri = Uri.parse('$baseUrl/browse-history')
-        .replace(queryParameters: {'limit': limit.toString()});
-    return await _makeRequest(
-      () => http.get(uri, headers: _buildHeaders()),
-      '/browse-history',
-    );
-  }
-
-  static Future<Map<String, dynamic>> deleteBrowseHistory(String postId) async {
-    return await _makeRequest(
-      () => http.delete(
-        Uri.parse('$baseUrl/browse-history/$postId'),
-        headers: _buildHeaders(),
-      ),
-      '/browse-history/$postId',
-    );
-  }
-
-  static Future<Map<String, dynamic>> clearBrowseHistory() async {
-    return await _makeRequest(
-      () => http.delete(
-        Uri.parse('$baseUrl/browse-history'),
-        headers: _buildHeaders(),
-      ),
-      '/browse-history',
     );
   }
 
@@ -1610,6 +1650,199 @@ class ApiService {
         },
       };
     }
+  }
+
+  // ==================== 举报系统相关接口 ====================
+
+  /// 举报帖子
+  static Future<Map<String, dynamic>> reportPost({
+    required int postId,
+    required String description,
+  }) async {
+    final resp = await _retryWithRefresh(
+      () => http.post(
+        Uri.parse('$baseUrl/posts/$postId/report'),
+        headers: _buildHeaders(),
+        body: jsonEncode({
+          'description': description,
+        }),
+      ),
+      '/posts/$postId/report',
+    );
+    return resp;
+  }
+
+  /// 获取帖子详情（支持不同状态的帖子）
+  static Future<Map<String, dynamic>> getPostDetailWithStatus(int postId) async {
+    final resp = await _retryWithRefresh(
+      () => http.get(
+        Uri.parse('$baseUrl/api/post/$postId'),
+        headers: _buildHeaders(),
+      ),
+      '/api/post/$postId',
+    );
+    return resp;
+  }
+
+  /// 作者保存草稿（修改被下架的帖子）
+  static Future<Map<String, dynamic>> saveDraft({
+    required int postId,
+    required String title,
+    required String content,
+    List<String>? media,
+    List<String>? tags,
+  }) async {
+    final resp = await _retryWithRefresh(
+      () => http.post(
+        Uri.parse('$baseUrl/api/post/$postId/draft'),
+        headers: _buildHeaders(),
+        body: jsonEncode({
+          'title': title,
+          'content': content,
+          'media': media ?? [],
+          'tags': tags ?? [],
+        }),
+      ),
+      '/api/post/$postId/draft',
+    );
+    return resp;
+  }
+
+  /// 作者提交审核
+  static Future<Map<String, dynamic>> submitForAudit(int postId) async {
+    final resp = await _retryWithRefresh(
+      () => http.post(
+        Uri.parse('$baseUrl/api/post/$postId/submit'),
+        headers: _buildHeaders(),
+      ),
+      '/api/post/$postId/submit',
+    );
+    return resp;
+  }
+
+  /// 查询作者的被下架帖子列表
+  static Future<Map<String, dynamic>> getAuthorRemovedPosts({
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final resp = await _retryWithRefresh(
+      () => http.get(
+        Uri.parse('$baseUrl/api/post/removed?page=$page&pageSize=$pageSize'),
+        headers: _buildHeaders(),
+      ),
+      '/api/post/removed',
+    );
+    return resp;
+  }
+
+  // ==================== 管理员端举报系统接口 ====================
+
+  /// 管理员查看举报列表
+  static Future<Map<String, dynamic>> adminGetReportPosts({
+    String? status,
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    String url = '$baseUrl/api/admin/report/posts?page=$page&pageSize=$pageSize';
+    if (status != null && status.isNotEmpty) {
+      url += '&status=$status';
+    }
+
+    final resp = await _retryWithRefresh(
+      () => http.get(
+        Uri.parse(url),
+        headers: _buildHeaders(),
+      ),
+      '/api/admin/report/posts',
+    );
+    return resp;
+  }
+
+  /// 管理员下架帖子
+  static Future<Map<String, dynamic>> adminRemovePost({
+    required int reportId,
+    required String reason,
+  }) async {
+    final resp = await _retryWithRefresh(
+      () => http.post(
+        Uri.parse('$baseUrl/api/admin/report/$reportId/remove'),
+        headers: _buildHeaders(),
+        body: jsonEncode({'reason': reason}),
+      ),
+      '/api/admin/report/$reportId/remove',
+    );
+    return resp;
+  }
+
+  /// 管理员忽略举报
+  static Future<Map<String, dynamic>> adminIgnoreReport({
+    required int reportId,
+    String? reason,
+  }) async {
+    final resp = await _retryWithRefresh(
+      () => http.post(
+        Uri.parse('$baseUrl/api/admin/report/$reportId/ignore'),
+        headers: _buildHeaders(),
+        body: jsonEncode({'reason': reason ?? '未发现违规'}),
+      ),
+      '/api/admin/report/$reportId/ignore',
+    );
+    return resp;
+  }
+
+  /// 管理员审核通过
+  static Future<Map<String, dynamic>> adminApprovePost(int postId) async {
+    final resp = await _retryWithRefresh(
+      () => http.post(
+        Uri.parse('$baseUrl/api/admin/post/$postId/approve'),
+        headers: _buildHeaders(),
+      ),
+      '/api/admin/post/$postId/approve',
+    );
+    return resp;
+  }
+
+  /// 管理员拒绝审核
+  static Future<Map<String, dynamic>> adminRejectPost({
+    required int postId,
+    required String reason,
+  }) async {
+    final resp = await _retryWithRefresh(
+      () => http.post(
+        Uri.parse('$baseUrl/api/admin/post/$postId/reject'),
+        headers: _buildHeaders(),
+        body: jsonEncode({'reason': reason}),
+      ),
+      '/api/admin/post/$postId/reject',
+    );
+    return resp;
+  }
+
+  /// 管理员查询待审核的帖子列表
+  static Future<Map<String, dynamic>> adminGetAuditPosts({
+    int page = 0,
+    int pageSize = 20,
+  }) async {
+    final resp = await _retryWithRefresh(
+      () => http.get(
+        Uri.parse('$baseUrl/api/admin/post/audit?page=$page&pageSize=$pageSize'),
+        headers: _buildHeaders(),
+      ),
+      '/api/admin/post/audit',
+    );
+    return resp;
+  }
+
+  /// 管理员统计待处理举报数量
+  static Future<Map<String, dynamic>> adminCountPendingReports() async {
+    final resp = await _retryWithRefresh(
+      () => http.get(
+        Uri.parse('$baseUrl/api/admin/report/count'),
+        headers: _buildHeaders(),
+      ),
+      '/api/admin/report/count',
+    );
+    return resp;
   }
 
 }

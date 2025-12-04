@@ -192,7 +192,8 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final resp = await ApiService.getPosts(page: 1, pageSize: 6);
+      // 首页默认使用推荐接口（已登录时会根据兴趣排序，未登录则等价于按时间排序）
+      final resp = await ApiService.getRecommendedPosts(page: 1, pageSize: 6);
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
 
@@ -299,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// 刷新第一页（用于发布后获取最新内容）
   Future<void> _refreshFirstPage() async {
     try {
-      final resp = await ApiService.getPosts(page: 1, pageSize: 6);
+      final resp = await ApiService.getRecommendedPosts(page: 1, pageSize: 6);
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
 
@@ -336,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final currentPage = (_posts.length ~/ 6) + 1;
-      final resp = await ApiService.getPosts(page: currentPage, pageSize: 6);
+      final resp = await ApiService.getRecommendedPosts(page: currentPage, pageSize: 6);
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
 

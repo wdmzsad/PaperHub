@@ -5,6 +5,8 @@ enum _AdminSection {
   users,
   posts,
   reports,
+  userReports,
+  postReports,
   notices,
   recommend, // 管理员推荐
   applyReview,
@@ -80,7 +82,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
 
   bool get _isSuperAdmin => widget.role.toUpperCase() == 'SUPER_ADMIN';
 
-  static const List<_AdminMenuItem> _basicMenuItems = [
+  static const List<_AdminMenuItem> _superAdminMenuItems = [
     _AdminMenuItem(
       section: _AdminSection.users,
       label: '用户管理',
@@ -89,26 +91,18 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     _AdminMenuItem(
       section: _AdminSection.posts,
       label: '帖子管理',
+      icon: Icons.description_outlined,
+    ),
+    _AdminMenuItem(
+      section: _AdminSection.userReports,
+      label: '用户举报管理',
+      icon: Icons.person_off_outlined,
+    ),
+    _AdminMenuItem(
+      section: _AdminSection.postReports,
+      label: '帖子举报管理',
       icon: Icons.article_outlined,
     ),
-    _AdminMenuItem(
-      section: _AdminSection.reports,
-      label: '举报管理',
-      icon: Icons.report_gmailerrorred_outlined,
-    ),
-    _AdminMenuItem(
-      section: _AdminSection.notices,
-      label: '公告管理',
-      icon: Icons.campaign_outlined,
-    ),
-    _AdminMenuItem(
-      section: _AdminSection.recommend,
-      label: '管理员推荐',
-      icon: Icons.person_add_alt_1_outlined,
-    ),
-  ];
-
-  static const List<_AdminMenuItem> _superMenuItems = [
     _AdminMenuItem(
       section: _AdminSection.applyReview,
       label: '管理员申请审核',
@@ -121,8 +115,21 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     ),
   ];
 
+  static const List<_AdminMenuItem> _regularAdminMenuItems = [
+    _AdminMenuItem(
+      section: _AdminSection.userReports,
+      label: '用户举报管理',
+      icon: Icons.person_off_outlined,
+    ),
+    _AdminMenuItem(
+      section: _AdminSection.postReports,
+      label: '帖子举报管理',
+      icon: Icons.article_outlined,
+    ),
+  ];
+
   List<_AdminMenuItem> get _menuItems =>
-      _isSuperAdmin ? [..._basicMenuItems, ..._superMenuItems] : _basicMenuItems;
+      _isSuperAdmin ? _superAdminMenuItems : _regularAdminMenuItems;
 
   @override
   void initState() {
@@ -133,11 +140,11 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
 
   Future<void> _loadInitialData() async {
     await Future.wait([
-      _loadUsers(page: 0),
-      _loadPosts(page: 0),
+      if (_isSuperAdmin) _loadUsers(page: 0),
+      if (_isSuperAdmin) _loadPosts(page: 0),
       _loadReports(page: 0),
-      _loadNotices(page: 0),
-      _loadRecommendUsers(page: 0),
+      if (_isSuperAdmin) _loadNotices(page: 0),
+      if (_isSuperAdmin) _loadRecommendUsers(page: 0),
       if (_isSuperAdmin) _loadApplications(page: 0),
       if (_isSuperAdmin) _loadPermissionUsers(),
     ]);
@@ -225,9 +232,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: Color(0xFFEAEAEA)),
-              ),
+              border: Border(bottom: BorderSide(color: Color(0xFFEAEAEA))),
             ),
             child: const Text(
               '管理员后台',
@@ -237,7 +242,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
           Expanded(
             child: ListView(
               children: [
-                ..._basicMenuItems.map(
+                ..._menuItems.map(
                   (item) => _AdminMenuTile(
                     label: item.label,
                     icon: item.icon,
@@ -261,31 +266,6 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                     },
                   ),
                 ),
-                if (_isSuperAdmin)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
-                    child: Text(
-                      'Super Admin',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                if (_isSuperAdmin)
-                  ..._superMenuItems.map(
-                    (item) => _AdminMenuTile(
-                      label: item.label,
-                      icon: item.icon,
-                      selected: _selectedSection == item.section,
-                      onTap: () {
-                        setState(() {
-                          _selectedSection = item.section;
-                        });
-                      },
-                    ),
-                  ),
               ],
             ),
           ),
@@ -302,6 +282,10 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         return _buildPostManagementSection();
       case _AdminSection.reports:
         return _buildReportManagementSection();
+      case _AdminSection.userReports:
+        return _buildUserReportManagementSection();
+      case _AdminSection.postReports:
+        return _buildPostReportManagementSection();
       case _AdminSection.notices:
         return _buildNoticeManagementSection();
       case _AdminSection.recommend:
@@ -332,13 +316,15 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
             _buildPlaceholderTable(
               headers: const ['用户名', '邮箱', '角色', '状态', '操作'],
               rows: _userList
-                  .map((u) => [
-                        Text(u['name']?.toString() ?? ''),
-                        Text(u['email']?.toString() ?? ''),
-                        Text(u['role']?.toString() ?? ''),
-                        _buildStatusChip(u['status']?.toString()),
-                        _buildUserActions(u),
-                      ])
+                  .map(
+                    (u) => [
+                      Text(u['name']?.toString() ?? ''),
+                      Text(u['email']?.toString() ?? ''),
+                      Text(u['role']?.toString() ?? ''),
+                      _buildStatusChip(u['status']?.toString()),
+                      _buildUserActions(u),
+                    ],
+                  )
                   .toList(),
             ),
           const SizedBox(height: 12),
@@ -378,36 +364,36 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
             _buildPlaceholderTable(
               headers: const ['ID', '标题', '作者信息', '发布时间', '操作'],
               rows: _postList
-                  .map((p) => [
-                        Text(p['id']?.toString() ?? ''),
-                        Text(
-                          _truncateTitle(p['title']?.toString() ?? ''),
-                          overflow: TextOverflow.ellipsis,
+                  .map(
+                    (p) => [
+                      Text(p['id']?.toString() ?? ''),
+                      Text(
+                        _truncateTitle(p['title']?.toString() ?? ''),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'ID: ${p['authorId'] ?? ''} | 昵称: ${p['authorName'] ?? ''} | 邮箱: ${p['authorEmail'] ?? ''}',
+                      ),
+                      Text(_formatPostTime(p['createdAt']?.toString())),
+                      ElevatedButton(
+                        onPressed: () async {
+                          final id = (p['id'] ?? '').toString();
+                          if (id.isEmpty) return;
+                          final resp = await ApiService.adminHidePost(id);
+                          final msg =
+                              resp['body']?['message']?.toString() ?? '已发送下架请求';
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(msg)));
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
                         ),
-                        Text(
-                          'ID: ${p['authorId'] ?? ''} | 昵称: ${p['authorName'] ?? ''} | 邮箱: ${p['authorEmail'] ?? ''}',
-                        ),
-                        Text(_formatPostTime(p['createdAt']?.toString())),
-                        ElevatedButton(
-                          onPressed: () async {
-                            final id = (p['id'] ?? '').toString();
-                            if (id.isEmpty) return;
-                            final resp =
-                                await ApiService.adminHidePost(id);
-                            final msg = resp['body']?['message']
-                                    ?.toString() ??
-                                '已发送下架请求';
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(msg)),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.redAccent,
-                          ),
-                          child: const Text('下架'),
-                        ),
-                      ])
+                        child: const Text('下架'),
+                      ),
+                    ],
+                  )
                   .toList(),
             ),
           const SizedBox(height: 12),
@@ -443,23 +429,138 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                 '被举报对象(ID/昵称)',
                 '理由',
                 '状态',
-                '操作'
+                '操作',
               ],
               rows: _reportList
-                  .map((r) => [
-                        Text(
-                            'U${r['reporter']?['id'] ?? ''} / ${r['reporter']?['name'] ?? ''}'),
-                        Text(r['targetType']?.toString() ?? ''),
-                        Text(_formatPostTime(r['createdAt']?.toString())),
-                        Text(_formatReportedTarget(r)),
-                        Text(r['reason']?.toString() ?? ''),
-                        Text(r['status']?.toString() ?? ''),
-                        OutlinedButton(
-                          onPressed: () =>
-                              _showReportDialog(reportId: r['id'].toString()),
-                          child: const Text('处理'),
-                        ),
-                      ])
+                  .map(
+                    (r) => [
+                      Text(
+                        'U${r['reporter']?['id'] ?? ''} / ${r['reporter']?['name'] ?? ''}',
+                      ),
+                      Text(r['targetType']?.toString() ?? ''),
+                      Text(_formatPostTime(r['createdAt']?.toString())),
+                      Text(_formatReportedTarget(r)),
+                      Text(r['reason']?.toString() ?? ''),
+                      Text(r['status']?.toString() ?? ''),
+                      OutlinedButton(
+                        onPressed: () =>
+                            _showReportDialog(reportId: r['id'].toString()),
+                        child: const Text('处理'),
+                      ),
+                    ],
+                  )
+                  .toList(),
+            ),
+          const SizedBox(height: 12),
+          _buildPagination(
+            currentPage: _reportPage,
+            totalItems: _reportTotal,
+            onPageChanged: (p) => _loadReports(page: p),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUserReportManagementSection() {
+    return _AdminSectionScaffold(
+      title: '用户举报管理',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ReportFilterBar(
+            onSearchChanged: (v) => _reportSearchKeyword = v,
+            onSearch: () => _loadReports(page: 0),
+          ),
+          const SizedBox(height: 16),
+          if (_reportLoading)
+            const Center(child: CircularProgressIndicator())
+          else
+            _buildPlaceholderTable(
+              headers: const [
+                '举报人(ID/昵称)',
+                '举报时间',
+                '被举报用户(ID/昵称)',
+                '理由',
+                '状态',
+                '操作',
+              ],
+              rows: _reportList
+                  .where((r) => r['targetType']?.toString() == 'USER')
+                  .map(
+                    (r) => [
+                      Text(
+                        'U${r['reporter']?['id'] ?? ''} / ${r['reporter']?['name'] ?? ''}',
+                      ),
+                      Text(_formatPostTime(r['createdAt']?.toString())),
+                      Text(_formatReportedTarget(r)),
+                      Text(r['reason']?.toString() ?? ''),
+                      Text(r['status']?.toString() ?? ''),
+                      OutlinedButton(
+                        onPressed: () =>
+                            _showReportDialog(reportId: r['id'].toString()),
+                        child: const Text('处理'),
+                      ),
+                    ],
+                  )
+                  .toList(),
+            ),
+          const SizedBox(height: 12),
+          _buildPagination(
+            currentPage: _reportPage,
+            totalItems: _reportList
+                .where((r) => r['targetType']?.toString() == 'USER')
+                .length,
+            onPageChanged: (p) => _loadReports(page: p),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPostReportManagementSection() {
+    return _AdminSectionScaffold(
+      title: '帖子举报管理',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ReportFilterBar(
+            onSearchChanged: (v) => _reportSearchKeyword = v,
+            onSearch: () => _loadReports(page: 0),
+          ),
+          const SizedBox(height: 16),
+          if (_reportLoading)
+            const Center(child: CircularProgressIndicator())
+          else
+            _buildPlaceholderTable(
+              headers: const [
+                '举报人',
+                '举报时间',
+                '被举报帖子',
+                '理由',
+                '举报状态',
+                '帖子状态',
+                '操作',
+              ],
+              rows: _reportList
+                  .map(
+                    (r) => [
+                      Text(
+                        '${r['reporterName'] ?? ''} (ID: ${r['reporterId'] ?? ''})',
+                      ),
+                      Text(_formatPostTime(r['reportTime']?.toString())),
+                      Text('${r['postTitle'] ?? ''} (ID: ${r['postId'] ?? ''})'),
+                      Text(r['description']?.toString() ?? ''),
+                      _buildStatusChip(r['status']?.toString()),
+                      _buildPostStatusChip(r['postStatusAfter']?.toString()),
+                      OutlinedButton(
+                        onPressed: r['status']?.toString() == 'PENDING'
+                            ? () => _showPostReportDialog(r)
+                            : null,
+                        child: const Text('处理'),
+                      ),
+                    ],
+                  )
                   .toList(),
             ),
           const SizedBox(height: 12),
@@ -507,31 +608,34 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
             _buildPlaceholderTable(
               headers: const ['标题', '发布时间', '状态', '操作'],
               rows: _noticeList
-                  .map((n) => [
-                        Text(n['title']?.toString() ?? ''),
-                        Text(_formatPostTime(n['createdAt']?.toString())),
-                        Text((n['published'] == true) ? '已发布' : '草稿'),
-                        Row(
-                          children: [
-                            TextButton(
-                              onPressed: () {
-                                _noticeTitleCtrl.text =
-                                    n['title']?.toString() ?? '';
-                                _noticeContentCtrl.text =
-                                    n['content']?.toString() ?? '';
-                              },
-                              child: const Text('编辑'),
+                  .map(
+                    (n) => [
+                      Text(n['title']?.toString() ?? ''),
+                      Text(_formatPostTime(n['createdAt']?.toString())),
+                      Text((n['published'] == true) ? '已发布' : '草稿'),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              _noticeTitleCtrl.text =
+                                  n['title']?.toString() ?? '';
+                              _noticeContentCtrl.text =
+                                  n['content']?.toString() ?? '';
+                            },
+                            child: const Text('编辑'),
+                          ),
+                          TextButton(
+                            onPressed: () =>
+                                _deleteNotice((n['id'] ?? '').toString()),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.red,
                             ),
-                            TextButton(
-                              onPressed: () => _deleteNotice(
-                                  (n['id'] ?? '').toString()),
-                              style: TextButton.styleFrom(
-                                  foregroundColor: Colors.red),
-                              child: const Text('删除'),
-                            ),
-                          ],
-                        ),
-                      ])
+                            child: const Text('删除'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
                   .toList(),
             ),
           const SizedBox(height: 12),
@@ -621,35 +725,39 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                 '被推荐用户(ID/昵称)',
                 '申请理由',
                 '申请时间',
-                '操作'
+                '操作',
               ],
               rows: _applicationList
-                  .map((a) => [
-                        Text(
-                            'A${a['recommender']?['id'] ?? ''} / ${a['recommender']?['name'] ?? ''}'),
-                        Text(
-                            'U${a['candidate']?['id'] ?? ''} / ${a['candidate']?['name'] ?? ''}'),
-                        Text(a['reason']?.toString() ?? ''),
-                        Text(_formatPostTime(a['createdAt']?.toString())),
-                        Row(
-                          children: [
-                            ElevatedButton(
-                              onPressed: () => _approveApplication(
-                                  (a['id'] ?? '').toString()),
-                              child: const Text('批准'),
+                  .map(
+                    (a) => [
+                      Text(
+                        'A${a['recommender']?['id'] ?? ''} / ${a['recommender']?['name'] ?? ''}',
+                      ),
+                      Text(
+                        'U${a['candidate']?['id'] ?? ''} / ${a['candidate']?['name'] ?? ''}',
+                      ),
+                      Text(a['reason']?.toString() ?? ''),
+                      Text(_formatPostTime(a['createdAt']?.toString())),
+                      Row(
+                        children: [
+                          ElevatedButton(
+                            onPressed: () =>
+                                _approveApplication((a['id'] ?? '').toString()),
+                            child: const Text('批准'),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton(
+                            onPressed: () =>
+                                _rejectApplication((a['id'] ?? '').toString()),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.redAccent,
                             ),
-                            const SizedBox(width: 8),
-                            OutlinedButton(
-                              onPressed: () => _rejectApplication(
-                                  (a['id'] ?? '').toString()),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.redAccent,
-                              ),
-                              child: const Text('拒绝'),
-                            ),
-                          ],
-                        ),
-                      ])
+                            child: const Text('拒绝'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
                   .toList(),
             ),
           const SizedBox(height: 12),
@@ -690,8 +798,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                 final source = _adminList.isNotEmpty
                     ? _adminList
                     : _userList.where((u) {
-                        final role =
-                            (u['role'] ?? '').toString().toUpperCase();
+                        final role = (u['role'] ?? '').toString().toUpperCase();
                         return role == 'ADMIN' || role == 'SUPER_ADMIN';
                       }).toList();
                 const pageSize = 10;
@@ -703,24 +810,24 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                     _buildPlaceholderTable(
                       headers: const ['用户名', '当前角色', '操作'],
                       rows: visible
-                          .map((u) => [
-                                Text(u['name']?.toString() ?? ''),
-                                Text(u['role']?.toString() ?? ''),
-                                if ((u['role'] ?? '')
-                                        .toString()
-                                        .toUpperCase() ==
-                                    'SUPER_ADMIN')
-                                  const Text('无法操作')
-                                else
-                                  OutlinedButton(
-                                    onPressed: () => _revokeAdmin(
-                                        (u['id'] ?? '').toString()),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: Colors.redAccent,
-                                    ),
-                                    child: const Text('收回权限'),
+                          .map(
+                            (u) => [
+                              Text(u['name']?.toString() ?? ''),
+                              Text(u['role']?.toString() ?? ''),
+                              if ((u['role'] ?? '').toString().toUpperCase() ==
+                                  'SUPER_ADMIN')
+                                const Text('无法操作')
+                              else
+                                OutlinedButton(
+                                  onPressed: () =>
+                                      _revokeAdmin((u['id'] ?? '').toString()),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.redAccent,
                                   ),
-                              ])
+                                  child: const Text('收回权限'),
+                                ),
+                            ],
+                          )
                           .toList(),
                     ),
                     const SizedBox(height: 8),
@@ -759,10 +866,12 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                 final source = _normalUserList.isNotEmpty
                     ? _normalUserList
                     : _userList
-                        .where((u) =>
-                            (u['role'] ?? '').toString().toUpperCase() ==
-                            'USER')
-                        .toList();
+                          .where(
+                            (u) =>
+                                (u['role'] ?? '').toString().toUpperCase() ==
+                                'USER',
+                          )
+                          .toList();
                 const pageSize = 10;
                 final total = source.length;
                 final start = _normalPageLocal * pageSize;
@@ -772,18 +881,20 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                     _buildPlaceholderTable(
                       headers: const ['用户名', '当前角色', '操作'],
                       rows: visible
-                          .map((u) => [
-                                Text(u['name']?.toString() ?? ''),
-                                Text(u['role']?.toString() ?? ''),
-                                ElevatedButton(
-                                  onPressed: () => _grantAdmin(
-                                      (u['id'] ?? '').toString()),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
-                                  ),
-                                  child: const Text('授权为管理员'),
+                          .map(
+                            (u) => [
+                              Text(u['name']?.toString() ?? ''),
+                              Text(u['role']?.toString() ?? ''),
+                              ElevatedButton(
+                                onPressed: () =>
+                                    _grantAdmin((u['id'] ?? '').toString()),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
                                 ),
-                              ])
+                                child: const Text('授权为管理员'),
+                              ),
+                            ],
+                          )
                           .toList(),
                     ),
                     const SizedBox(height: 8),
@@ -818,13 +929,13 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
             child: ConstrainedBox(
               constraints: BoxConstraints(minWidth: constraints.maxWidth),
               child: DataTable(
-                columns: headers.map((h) => DataColumn(label: Text(h))).toList(),
+                columns: headers
+                    .map((h) => DataColumn(label: Text(h)))
+                    .toList(),
                 rows: rows
                     .map(
                       (cells) => DataRow(
-                        cells: cells
-                            .map((cell) => DataCell(cell))
-                            .toList(),
+                        cells: cells.map((cell) => DataCell(cell)).toList(),
                       ),
                     )
                     .toList(),
@@ -885,6 +996,102 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     );
   }
 
+  void _showPostReportDialog(Map<String, dynamic> report) {
+    final reasonController = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('处理帖子举报'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('举报人: ${report['reporterName']}'),
+              const SizedBox(height: 8),
+              Text('被举报帖子: ${report['postTitle']}'),
+              const SizedBox(height: 8),
+              Text('举报理由: ${report['description']}'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reasonController,
+                decoration: const InputDecoration(
+                  labelText: '处理原因',
+                  hintText: '请输入下架或忽略的原因',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _handleIgnoreReport(report['id'], reasonController.text);
+            },
+            child: const Text('忽略举报'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _handleRemovePost(report['id'], reasonController.text);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('下架帖子'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleRemovePost(int reportId, String reason) async {
+    try {
+      final resp = await ApiService.adminRemovePost(
+        reportId: reportId,
+        reason: reason.isEmpty ? '违规内容' : reason,
+      );
+      if (resp['statusCode'] == 200 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('帖子已下架')),
+        );
+        _loadReports(page: _reportPage);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('操作失败: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleIgnoreReport(int reportId, String reason) async {
+    try {
+      final resp = await ApiService.adminIgnoreReport(
+        reportId: reportId,
+        reason: reason.isEmpty ? '未发现违规' : reason,
+      );
+      if (resp['statusCode'] == 200 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已忽略该举报')),
+        );
+        _loadReports(page: _reportPage);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('操作失败: $e')),
+        );
+      }
+    }
+  }
+
   // ===================== 数据加载 & 动作 =====================
 
   Future<void> _loadUsers({int page = 0}) async {
@@ -897,7 +1104,8 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         pageSize: pageSize,
       );
       final body = resp['body'] as Map<String, dynamic>?;
-      _userList = (body?['users'] as List<dynamic>?)
+      _userList =
+          (body?['users'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [];
@@ -918,7 +1126,8 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         pageSize: pageSize,
       );
       final body = resp['body'] as Map<String, dynamic>?;
-      _noticeList = (body?['notices'] as List<dynamic>?)
+      _noticeList =
+          (body?['notices'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [];
@@ -933,18 +1142,17 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     setState(() => _reportLoading = true);
     try {
       const pageSize = 10;
-      final resp = await ApiService.adminGetReports(
-        query: _reportSearchKeyword,
+      final resp = await ApiService.adminGetReportPosts(
         status: _reportStatus.isEmpty ? null : _reportStatus,
-        targetType: _reportTargetType.isEmpty ? null : _reportTargetType,
         page: page,
         pageSize: pageSize,
       );
       final body = resp['body'] as Map<String, dynamic>?;
-      _reportList = (body?['reports'] as List<dynamic>?)
-              ?.map((e) => Map<String, dynamic>.from(e as Map))
-              .toList() ??
-          [];
+      _reportList = (body != null && body['reports'] is List)
+          ? (body['reports'] as List)
+                .map((e) => Map<String, dynamic>.from(e as Map))
+                .toList()
+          : [];
       _reportTotal = (body?['total'] as num?)?.toInt() ?? 0;
       _reportPage = (body?['page'] as num?)?.toInt() ?? page;
     } finally {
@@ -962,7 +1170,8 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         pageSize: pageSize,
       );
       final body = resp['body'] as Map<String, dynamic>?;
-      _applicationList = (body?['applications'] as List<dynamic>?)
+      _applicationList =
+          (body?['applications'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [];
@@ -986,14 +1195,13 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         pageSize: 100,
       );
       final adminBody = adminResp['body'] as Map<String, dynamic>?;
-      final allUsers = (adminBody?['users'] as List<dynamic>?)
+      final allUsers =
+          (adminBody?['users'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [];
       _adminList = allUsers
-          .where((u) =>
-              u['role'] == 'ADMIN' ||
-              u['role'] == 'SUPER_ADMIN')
+          .where((u) => u['role'] == 'ADMIN' || u['role'] == 'SUPER_ADMIN')
           .toList();
 
       // 普通用户列表
@@ -1003,7 +1211,8 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         pageSize: 100,
       );
       final userBody = userResp['body'] as Map<String, dynamic>?;
-      final allUsers2 = (userBody?['users'] as List<dynamic>?)
+      final allUsers2 =
+          (userBody?['users'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [];
@@ -1019,9 +1228,9 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     final title = _noticeTitleCtrl.text.trim();
     final content = _noticeContentCtrl.text.trim();
     if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('公告标题不能为空')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('公告标题不能为空')));
       return;
     }
     setState(() => _noticeLoading = true);
@@ -1032,9 +1241,9 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         published: true,
       );
       await _loadNotices();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('公告发布成功')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('公告发布成功')));
     } finally {
       if (mounted) setState(() => _noticeLoading = false);
     }
@@ -1094,7 +1303,8 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         pageSize: pageSize,
       );
       final body = resp['body'] as Map<String, dynamic>?;
-      _postList = (body?['posts'] as List<dynamic>?)
+      _postList =
+          (body?['posts'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [];
@@ -1115,13 +1325,15 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         pageSize: pageSize,
       );
       final body = resp['body'] as Map<String, dynamic>?;
-      final users = (body?['users'] as List<dynamic>?)
+      final users =
+          (body?['users'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [];
       // 只展示普通用户
-      _recommendUserList =
-          users.where((u) => (u['role'] ?? '').toString() == 'USER').toList();
+      _recommendUserList = users
+          .where((u) => (u['role'] ?? '').toString() == 'USER')
+          .toList();
       _recommendTotal = (body?['total'] as num?)?.toInt() ?? 0;
       _recommendPage = (body?['page'] as num?)?.toInt() ?? page;
     } finally {
@@ -1134,8 +1346,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     final resp = await ApiService.adminBanUser(userId);
     final msg = resp['body']?['message']?.toString() ?? '操作已提交';
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     await _loadUsers();
   }
 
@@ -1144,8 +1355,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     final resp = await ApiService.adminUnbanUser(userId);
     final msg = resp['body']?['message']?.toString() ?? '操作已提交';
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     await _loadUsers();
   }
 
@@ -1191,6 +1401,46 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     );
   }
 
+  Widget _buildPostStatusChip(String? rawStatus) {
+    if (rawStatus == null || rawStatus.isEmpty) {
+      return const Text('-', style: TextStyle(color: Colors.grey));
+    }
+
+    final status = rawStatus.toUpperCase();
+    Color bg;
+    Color fg = Colors.white;
+    String label;
+
+    switch (status) {
+      case 'NORMAL':
+        bg = Colors.green;
+        label = '正常';
+        break;
+      case 'AUDIT':
+        bg = Colors.orange;
+        label = '审核中';
+        break;
+      case 'DRAFT':
+        bg = Colors.blue;
+        label = '打回草稿';
+        break;
+      case 'REMOVED':
+        bg = Colors.red;
+        label = '下架';
+        break;
+      default:
+        bg = Colors.grey;
+        label = rawStatus;
+        break;
+    }
+
+    return Chip(
+      label: Text(label),
+      backgroundColor: bg,
+      labelStyle: TextStyle(color: fg, fontSize: 12),
+    );
+  }
+
   Widget _buildUserActions(Map<String, dynamic> u) {
     final role = (u['role'] ?? '').toString().toUpperCase();
     final status = (u['status'] ?? 'NORMAL').toString().toUpperCase();
@@ -1211,27 +1461,19 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
       children: [
         OutlinedButton(
           onPressed: isBanned ? null : () => _banUser(id),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.redAccent,
-          ),
+          style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent),
           child: const Text('封禁'),
         ),
         const SizedBox(width: 8),
         OutlinedButton(
           onPressed: (!isBanned && !isMuted) ? null : () => _unbanUser(id),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.green,
-          ),
+          style: OutlinedButton.styleFrom(foregroundColor: Colors.green),
           child: const Text('解封'),
         ),
         const SizedBox(width: 8),
         OutlinedButton(
-          onPressed: isBanned
-              ? null
-              : () => _showMuteDialog(id),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.orange,
-          ),
+          onPressed: isBanned ? null : () => _showMuteDialog(id),
+          style: OutlinedButton.styleFrom(foregroundColor: Colors.orange),
           child: Text(isMuted ? '重新禁言' : '禁言'),
         ),
       ],
@@ -1265,22 +1507,10 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                   DropdownButton<String>(
                     value: unit,
                     items: const [
-                      DropdownMenuItem(
-                        value: 'HOURS',
-                        child: Text('小时'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'DAYS',
-                        child: Text('天'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'MONTHS',
-                        child: Text('月'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'YEARS',
-                        child: Text('年'),
-                      ),
+                      DropdownMenuItem(value: 'HOURS', child: Text('小时')),
+                      DropdownMenuItem(value: 'DAYS', child: Text('天')),
+                      DropdownMenuItem(value: 'MONTHS', child: Text('月')),
+                      DropdownMenuItem(value: 'YEARS', child: Text('年')),
                     ],
                     onChanged: (v) {
                       if (v != null) {
@@ -1309,16 +1539,19 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     if (result != true) return;
     final duration = int.tryParse(durationCtrl.text.trim()) ?? 0;
     if (duration <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入正确的禁言时长')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入正确的禁言时长')));
       return;
     }
     await _muteUserWithDuration(userId, duration, unit);
   }
 
   Future<void> _muteUserWithDuration(
-      String userId, int duration, String unit) async {
+    String userId,
+    int duration,
+    String unit,
+  ) async {
     final resp = await ApiService.adminMuteUser(
       userId,
       duration: duration,
@@ -1326,8 +1559,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     );
     final msg = resp['body']?['message']?.toString() ?? '操作已提交';
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     await _loadUsers();
   }
 
@@ -1350,17 +1582,19 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
             _buildPlaceholderTable(
               headers: const ['用户名', '邮箱', '角色', '状态', '操作'],
               rows: _recommendUserList
-                  .map((u) => [
-                        Text(u['name']?.toString() ?? ''),
-                        Text(u['email']?.toString() ?? ''),
-                        Text(u['role']?.toString() ?? ''),
-                        _buildStatusChip(u['status']?.toString()),
-                        ElevatedButton(
-                          onPressed: () =>
-                              _showRecommendDialog((u['id'] ?? '').toString()),
-                          child: const Text('推荐为管理员'),
-                        ),
-                      ])
+                  .map(
+                    (u) => [
+                      Text(u['name']?.toString() ?? ''),
+                      Text(u['email']?.toString() ?? ''),
+                      Text(u['role']?.toString() ?? ''),
+                      _buildStatusChip(u['status']?.toString()),
+                      ElevatedButton(
+                        onPressed: () =>
+                            _showRecommendDialog((u['id'] ?? '').toString()),
+                        child: const Text('推荐为管理员'),
+                      ),
+                    ],
+                  )
                   .toList(),
             ),
           const SizedBox(height: 12),
@@ -1406,9 +1640,9 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     if (ok != true) return;
     final reason = reasonCtrl.text.trim();
     if (reason.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('推荐理由不能为空')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('推荐理由不能为空')));
       return;
     }
     final resp = await ApiService.adminCreateApplication(
@@ -1417,9 +1651,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     );
     final msg = resp['body']?['message']?.toString() ?? '推荐已提交，等待超级管理员审核';
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   // 标题截断（最多20个字符，超出加省略号）
@@ -1504,10 +1736,7 @@ class _AdminSectionScaffold extends StatelessWidget {
   final String title;
   final Widget child;
 
-  const _AdminSectionScaffold({
-    required this.title,
-    required this.child,
-  });
+  const _AdminSectionScaffold({required this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -1579,10 +1808,7 @@ class _SearchBar extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        ElevatedButton(
-          onPressed: onPressed ?? () {},
-          child: Text(buttonLabel),
-        ),
+        ElevatedButton(onPressed: onPressed ?? () {}, child: Text(buttonLabel)),
       ],
     );
   }
@@ -1596,15 +1822,9 @@ class _PaginationPlaceholder extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(Icons.chevron_left),
-        ),
+        IconButton(onPressed: () {}, icon: const Icon(Icons.chevron_left)),
         const Text('第 1 / 5 页'),
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(Icons.chevron_right),
-        ),
+        IconButton(onPressed: () {}, icon: const Icon(Icons.chevron_right)),
       ],
     );
   }
@@ -1666,4 +1886,3 @@ class _AdminMenuTile extends StatelessWidget {
     );
   }
 }
-

@@ -8,7 +8,6 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/post_model.dart';
 import '../models/user_profile.dart';
 import '../services/api_service.dart';
-import '../pages/note_editor_page.dart';
 import 'dart:io';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
@@ -20,9 +19,12 @@ import '../config/app_env.dart';
 import 'profile_screen.dart';
 import '../constants/discipline_constants.dart';
 import 'zone_screen.dart';
+import 'search_results_screen.dart';
 import '../services/chat_service.dart';
+import '../widgets/report_post_dialog.dart';
 import '../models/message_model.dart';
 import 'chat_screen.dart';
+import '../pages/note_editor_page.dart';
 
 /*
 ================================================================================
@@ -126,7 +128,6 @@ import 'chat_screen.dart';
 ================================================================================
 */
 
-
 class PostDetailScreen extends StatefulWidget {
   final Post post;
   const PostDetailScreen({Key? key, required this.post}) : super(key: key);
@@ -139,11 +140,7 @@ class PdfPreviewScreen extends StatefulWidget {
   final String url;
   final String title;
 
-  const PdfPreviewScreen({
-    super.key,
-    required this.url,
-    required this.title,
-  });
+  const PdfPreviewScreen({super.key, required this.url, required this.title});
 
   @override
   State<PdfPreviewScreen> createState() => _PdfPreviewScreenState();
@@ -160,14 +157,10 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: _hasError
-                ? _buildErrorWidget()
-                : _buildViewer(),
+            child: _hasError ? _buildErrorWidget() : _buildViewer(),
           ),
           if (_isLoading)
-            const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            ),
+            const Center(child: CircularProgressIndicator(color: Colors.white)),
           _buildAppBar(),
         ],
       ),
@@ -203,10 +196,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         children: [
           Icon(Icons.error_outline, color: Colors.white, size: 64),
           SizedBox(height: 16),
-          Text(
-            'PDF加载失败',
-            style: TextStyle(color: Colors.white, fontSize: 18),
-          ),
+          Text('PDF加载失败', style: TextStyle(color: Colors.white, fontSize: 18)),
           SizedBox(height: 8),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -251,7 +241,6 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   }
 }
 
-
 class _PostDetailScreenState extends State<PostDetailScreen>
     with SingleTickerProviderStateMixin {
   WebSocketChannel? _wsChannel;
@@ -283,13 +272,12 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   String? _currentUserId;
   bool? _isFollowingAuthor; // 是否关注了作者
   bool _followInFlight = false; // 关注操作进行中
-  
-  
+
   // 图片实际尺寸（用于动态计算宽高比）
   double? _actualImageWidth;
   double? _actualImageHeight;
   bool _isLoadingImageSize = false;
-  
+
   // @功能相关状态
   bool _showMentionList = false;
   List<Author> _mentionCandidates = [];
@@ -305,45 +293,42 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   Future<void> _openExternalLink(String url) async {
     final trimmed = url.trim();
     if (trimmed.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('链接为空')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('链接为空')));
       return;
     }
 
     final uri = Uri.tryParse(trimmed);
     if (uri == null || !(uri.isScheme('http') || uri.isScheme('https'))) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('无法识别的链接：$trimmed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('无法识别的链接：$trimmed')));
       return;
     }
 
     if (!await canLaunchUrl(uri)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('当前环境无法打开链接：$trimmed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('当前环境无法打开链接：$trimmed')));
       return;
     }
 
-    await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
+
   List<String> get _imageMedia =>
       widget.post.media.where((m) => !_isPdf(m)).toList();
 
-  List<String> get _pdfMedia =>
-      widget.post.media.where(_isPdf).toList();
+  List<String> get _pdfMedia => widget.post.media.where(_isPdf).toList();
   bool get _isOwner =>
       _currentUserId != null && widget.post.author.id == _currentUserId;
-  
+
   // 检查是否有 arXiv 元数据
   bool _hasArxivMetadata() {
-    return widget.post.arxivId != null && 
-           (widget.post.arxivAuthors.isNotEmpty || 
-            widget.post.arxivPublishedDate != null || 
+    return widget.post.arxivId != null &&
+        (widget.post.arxivAuthors.isNotEmpty ||
+            widget.post.arxivPublishedDate != null ||
             widget.post.arxivCategories.isNotEmpty);
   }
 
@@ -386,28 +371,30 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
     // 加载评论
     _loadComments();
-    
+
     // 获取当前用户ID
     _loadCurrentUserId();
 
     // 记录浏览历史（最多 50 条由 BrowseHistoryService 自己控制）
     final userId = LocalStorage.instance.read('userId')?.toString();
     if (userId != null && userId.isNotEmpty) {
-      unawaited(BrowseHistoryService.addHistory(
-        userId: userId,
-        postId: widget.post.id,
-        title: widget.post.title,
-      ));
+      unawaited(
+        BrowseHistoryService.addHistory(
+          userId: userId,
+          postId: widget.post.id,
+          title: widget.post.title,
+        ),
+      );
     }
 
     // WebSocket 实时点赞监听
     _initWebSocket();
 
     _currentUserId = LocalStorage.instance.read('userId');
-    
+
     // 检查是否已关注作者
     _checkFollowStatus();
-    
+
     // 如果后端返回的尺寸看起来是默认值（800x600），尝试加载图片获取真实尺寸
     if (_imageMedia.isNotEmpty &&
         widget.post.imageNaturalWidth == 800.0 &&
@@ -415,11 +402,11 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       _loadImageSize();
     }
   }
-  
+
   /// 加载图片获取真实尺寸
   Future<void> _loadImageSize() async {
     if (_isLoadingImageSize || _imageMedia.isEmpty) return;
-    
+
     setState(() {
       _isLoadingImageSize = true;
     });
@@ -427,38 +414,43 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     try {
       final imageUrl = _imageMedia.first;
       final imageProvider = NetworkImage(imageUrl);
-      
+
       // 使用 ImageProvider.resolve 获取图片信息
-      final ImageStream stream = imageProvider.resolve(const ImageConfiguration());
+      final ImageStream stream = imageProvider.resolve(
+        const ImageConfiguration(),
+      );
       final Completer<void> completer = Completer<void>();
-      
+
       ImageStreamListener? listener;
-      listener = ImageStreamListener((ImageInfo info, bool synchronousCall) {
-        if (!mounted) return;
-        
-        final image = info.image;
-        setState(() {
-          _actualImageWidth = image.width.toDouble();
-          _actualImageHeight = image.height.toDouble();
-          _isLoadingImageSize = false;
-        });
-        
-        stream.removeListener(listener!);
-        if (!completer.isCompleted) {
-          completer.complete();
-        }
-      }, onError: (exception, stackTrace) {
-        stream.removeListener(listener!);
-        if (!completer.isCompleted) {
-          completer.complete();
-        }
-        if (mounted) {
+      listener = ImageStreamListener(
+        (ImageInfo info, bool synchronousCall) {
+          if (!mounted) return;
+
+          final image = info.image;
           setState(() {
+            _actualImageWidth = image.width.toDouble();
+            _actualImageHeight = image.height.toDouble();
             _isLoadingImageSize = false;
           });
-        }
-      });
-      
+
+          stream.removeListener(listener!);
+          if (!completer.isCompleted) {
+            completer.complete();
+          }
+        },
+        onError: (exception, stackTrace) {
+          stream.removeListener(listener!);
+          if (!completer.isCompleted) {
+            completer.complete();
+          }
+          if (mounted) {
+            setState(() {
+              _isLoadingImageSize = false;
+            });
+          }
+        },
+      );
+
       stream.addListener(listener);
       await completer.future;
     } catch (e) {
@@ -538,7 +530,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     if (_currentUserId == null || widget.post.author.id.isEmpty) {
       return;
     }
-    
+
     // 如果是查看自己的帖子，不需要显示关注按钮
     if (_currentUserId == widget.post.author.id) {
       setState(() {
@@ -571,13 +563,13 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   /// 切换关注状态
   Future<void> _toggleFollow() async {
     if (_followInFlight || _isFollowingAuthor == null) return;
-    
+
     final authorId = widget.post.author.id;
     if (authorId.isEmpty || _currentUserId == authorId) return;
 
     final prev = _isFollowingAuthor!;
     final next = !prev;
-    
+
     setState(() {
       _followInFlight = true;
       _isFollowingAuthor = next;
@@ -587,13 +579,13 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       final resp = next
           ? await ApiService.followUser(authorId)
           : await ApiService.unfollowUser(authorId);
-      
+
       if (resp['statusCode'] != 200) {
         throw Exception(
           (resp['body'] as Map<String, dynamic>?)?['message'] ?? '操作失败',
         );
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(next ? '已关注 ${widget.post.author.name}' : '已取消关注'),
@@ -606,9 +598,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         setState(() {
           _isFollowingAuthor = prev;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败：$e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('操作失败：$e')));
       }
     } finally {
       if (mounted) {
@@ -711,7 +703,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   void _onCommentTextChanged() {
     final text = _commentController.text;
     final cursorPosition = _commentController.selection.baseOffset;
-    
+
     if (cursorPosition < 0 || cursorPosition > text.length) {
       setState(() {
         _showMentionList = false;
@@ -720,13 +712,13 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       });
       return;
     }
-    
+
     // 如果正在自动添加@用户名，不处理文本变化（避免误判为单选模式）
     if (_isAutoAddingMention) {
       print('[@功能] 正在自动添加@用户名，跳过文本变化处理');
       return;
     }
-    
+
     // 解析评论内容中实际存在的@用户名（格式：@A @B @C，有空格）
     // 使用与提交时相同的正则表达式，确保一致性
     final RegExp mentionRegex = RegExp(r'@([^\s@]+)');
@@ -737,8 +729,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         actualMentionedNames.add(userName.toLowerCase());
       }
     }
-    print('[@功能] _onCommentTextChanged: 解析到的@用户名: ${actualMentionedNames.toList()}');
-    
+    print(
+      '[@功能] _onCommentTextChanged: 解析到的@用户名: ${actualMentionedNames.toList()}',
+    );
+
     // 移除评论内容中不存在的@用户
     final keysToRemove = <String>[];
     for (final key in _selectedMentions.keys) {
@@ -754,7 +748,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       });
       print('[@功能] 移除了不存在的@用户: $keysToRemove');
     }
-    
+
     // 当选择列表为空且没有检测到@时，关闭横栏
     if (_selectedMentions.isEmpty && _mentionStartIndex == -1) {
       setState(() {
@@ -763,7 +757,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         _mentionStartIndex = -1;
       });
     }
-    
+
     // 查找最近的@符号（用于检测是否正在输入@）
     // 在多选模式下，如果@后面跟着已选择的用户名，说明是自动添加的，不处理
     int atIndex = -1;
@@ -773,7 +767,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         bool isMentioned = false;
         if (i + 1 < text.length) {
           for (final user in _selectedMentions.values) {
-            if (text.length >= i + 1 + user.name.length && 
+            if (text.length >= i + 1 + user.name.length &&
                 text.substring(i + 1, i + 1 + user.name.length) == user.name) {
               isMentioned = true;
               break;
@@ -788,18 +782,18 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         break; // 遇到空格或换行，说明不在@上下文中
       }
     }
-    
+
     if (atIndex != -1) {
       // 检测到@符号
       final query = text.substring(atIndex + 1, cursorPosition).trim();
       print('[@功能] 检测到@符号，位置: $atIndex, 查询: "$query"');
-      
+
       setState(() {
         _mentionStartIndex = atIndex;
         _mentionQuery = query;
         _showMentionList = true;
       });
-      
+
       if (query.isEmpty) {
         // 多选模式：@后面没有内容，显示关注用户列表
         print('[@功能] 多选模式：显示关注用户列表');
@@ -823,23 +817,26 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         final textBeforeCursor = text.substring(0, cursorPosition);
         final RegExp mentionRegex = RegExp(r'@([^\s@]+)');
         final matches = mentionRegex.allMatches(textBeforeCursor);
-        
+
         if (matches.isNotEmpty) {
           // 找到最后一个@用户名
           final lastMatch = matches.last;
           final lastMentionEnd = lastMatch.end;
-          
+
           // 如果光标在最后一个@用户名之后，且中间有非@字符，说明用户在输入普通文字
           if (cursorPosition > lastMentionEnd) {
-            final textAfterLastMention = textBeforeCursor.substring(lastMentionEnd);
+            final textAfterLastMention = textBeforeCursor.substring(
+              lastMentionEnd,
+            );
             // 如果@用户名后面有非@非空格的字符，说明用户在输入普通文字，应该关闭@功能
-            if (textAfterLastMention.isNotEmpty && !textAfterLastMention.trim().isEmpty) {
+            if (textAfterLastMention.isNotEmpty &&
+                !textAfterLastMention.trim().isEmpty) {
               isTypingAfterMentions = true;
             }
           }
         }
       }
-      
+
       if (isTypingAfterMentions) {
         // 用户在@用户名后输入了普通文字，关闭@功能
         print('[@功能] 检测到在@用户名后输入普通文字，关闭@功能');
@@ -855,29 +852,30 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         final textBeforeCursor = text.substring(0, cursorPosition);
         final RegExp mentionRegex = RegExp(r'@([^\s@]+)');
         final matches = mentionRegex.allMatches(textBeforeCursor);
-        
+
         bool shouldKeepOpen = false;
         if (matches.isNotEmpty) {
           final lastMatch = matches.last;
           final lastMentionEnd = lastMatch.end;
           // 检查光标位置：如果光标在@用户名后面，且紧跟在@用户名或空格后面，保持打开
           // 格式是@A @B @C，所以光标应该在@用户名后面，或者在空格后面（但空格后面不应该保持打开）
-          final textAfterLastMention = cursorPosition > lastMentionEnd 
+          final textAfterLastMention = cursorPosition > lastMentionEnd
               ? textBeforeCursor.substring(lastMentionEnd, cursorPosition)
               : '';
-          
+
           // 如果光标紧跟在@用户名后面（没有空格），或者光标在@用户名后的空格位置，保持打开
           // 但如果光标在空格后面（有非空格字符），应该关闭
           if (cursorPosition == lastMentionEnd) {
             // 光标紧跟在@用户名后面，保持打开
             shouldKeepOpen = true;
-          } else if (textAfterLastMention.trim().isEmpty && textAfterLastMention.length <= 1) {
+          } else if (textAfterLastMention.trim().isEmpty &&
+              textAfterLastMention.length <= 1) {
             // 光标在@用户名后的空格位置（最多一个空格），保持打开
             shouldKeepOpen = true;
           }
           // 其他情况（光标在空格后面有字符），不保持打开
         }
-        
+
         if (shouldKeepOpen) {
           setState(() {
             _mentionQuery = '';
@@ -910,15 +908,23 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   Future<void> _searchMentionUsers(String query) async {
     try {
       Map<String, dynamic> resp;
-      
+
       if (query.isEmpty) {
         // 如果查询为空，显示关注的人
-        resp = await ApiService.searchUsers(query: '', type: 'following', pageSize: 10);
+        resp = await ApiService.searchUsers(
+          query: '',
+          type: 'following',
+          pageSize: 10,
+        );
       } else {
         // 搜索所有匹配的用户
-        resp = await ApiService.searchUsers(query: query, type: 'all', pageSize: 10);
+        resp = await ApiService.searchUsers(
+          query: query,
+          type: 'all',
+          pageSize: 10,
+        );
       }
-      
+
       if (resp['statusCode'] == 200 && mounted) {
         final body = resp['body'] as Map<String, dynamic>?;
         if (body != null) {
@@ -935,7 +941,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                       userName = userName.split('@')[0];
                     }
                   }
-                  print('[@功能] 解析用户: id=${u['id']}, displayName=$userName, email=${u['email']}');
+                  print(
+                    '[@功能] 解析用户: id=${u['id']}, displayName=$userName, email=${u['email']}',
+                  );
                   return Author(
                     id: u['id']?.toString() ?? '',
                     name: userName,
@@ -950,7 +958,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
               .where((u) => u != null && u!.name.isNotEmpty)
               .cast<Author>()
               .toList();
-          
+
           if (mounted) {
             setState(() {
               _mentionCandidates = users;
@@ -968,67 +976,77 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   }
 
   void _selectMentionUser(Author user) {
-    print('[@功能] _selectMentionUser 被调用，用户: ${user.name}, _mentionStartIndex: $_mentionStartIndex, _mentionQuery: "$_mentionQuery"');
-    
+    print(
+      '[@功能] _selectMentionUser 被调用，用户: ${user.name}, _mentionStartIndex: $_mentionStartIndex, _mentionQuery: "$_mentionQuery"',
+    );
+
     final userNameLower = user.name.toLowerCase();
     final isCurrentlySelected = _selectedMentions.containsKey(userNameLower);
-    
+
     if (isCurrentlySelected) {
       // 如果已经选择，取消选择
       _toggleMentionUser(user);
       return;
     }
-    
+
     try {
       final text = _commentController.text;
       final cursorPosition = _commentController.selection.baseOffset;
-      
+
       // 判断是单选模式还是多选模式
       final isMultiSelectMode = _mentionQuery.isEmpty; // @后面没有内容 = 多选模式
-      
+
       if (_mentionStartIndex != -1 && _mentionStartIndex < text.length) {
         // 正在输入@状态
         final beforeAt = text.substring(0, _mentionStartIndex);
-        final afterCursor = cursorPosition < text.length 
-            ? text.substring(cursorPosition) 
+        final afterCursor = cursorPosition < text.length
+            ? text.substring(cursorPosition)
             : '';
-        
+
         String newText;
         int newCursorPosition;
-        
+
         if (isMultiSelectMode) {
           // 多选模式：替换@为@用户名，或追加@用户名（格式：@A @B @C，每个后面加空格）
           if (_selectedMentions.isEmpty) {
             // 第一个选择：替换@为@用户名 + 空格
             newText = '$beforeAt@${user.name} $afterCursor';
-            newCursorPosition = beforeAt.length + user.name.length + 2; // +2 for '@' and ' '
+            newCursorPosition =
+                beforeAt.length + user.name.length + 2; // +2 for '@' and ' '
           } else {
             // 后续选择：在已有@用户名后追加 @用户名 + 空格（格式：@A @B @C @D）
             // 查找最后一个@用户名（可能后面有空格）
-            final lastMentionMatch = RegExp(r'@([^\s@]+)\s*').allMatches(text).lastOrNull;
+            final lastMentionMatch = RegExp(
+              r'@([^\s@]+)\s*',
+            ).allMatches(text).lastOrNull;
             if (lastMentionMatch != null) {
               final lastMentionEnd = lastMentionMatch.end;
               final beforeLastMention = text.substring(0, lastMentionEnd);
               final afterLastMention = text.substring(lastMentionEnd);
               newText = '$beforeLastMention@${user.name} $afterLastMention';
-              newCursorPosition = lastMentionEnd + user.name.length + 2; // +2 for '@' and ' '
+              newCursorPosition =
+                  lastMentionEnd + user.name.length + 2; // +2 for '@' and ' '
             } else {
               newText = '$beforeAt@${user.name} $afterCursor';
-              newCursorPosition = beforeAt.length + user.name.length + 2; // +2 for '@' and ' '
+              newCursorPosition =
+                  beforeAt.length + user.name.length + 2; // +2 for '@' and ' '
             }
           }
         } else {
           // 单选模式：替换@到光标位置的内容为@用户名，然后关闭横栏
           // 注意：单选模式选择的用户也要累积到_selectedMentions中，支持叠加
           newText = '$beforeAt@${user.name} $afterCursor';
-          newCursorPosition = beforeAt.length + user.name.length + 2; // +2 for '@' and ' '
+          newCursorPosition =
+              beforeAt.length + user.name.length + 2; // +2 for '@' and ' '
         }
-        
+
         // 设置自动添加标志，避免触发_onCommentTextChanged时误判
         _isAutoAddingMention = true;
         _commentController.text = newText;
-        _commentController.selection = TextSelection.collapsed(offset: newCursorPosition);
-        
+        _commentController.selection = TextSelection.collapsed(
+          offset: newCursorPosition,
+        );
+
         // 添加到已选择列表（单选和多选都累积）
         setState(() {
           _selectedMentions[userNameLower] = user;
@@ -1044,7 +1062,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             _mentionStartIndex = -1;
           }
         });
-        
+
         // 延迟重置标志，确保_onCommentTextChanged不会误判
         Future.delayed(const Duration(milliseconds: 100), () {
           if (mounted) {
@@ -1053,21 +1071,25 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             });
           }
         });
-        
-        print('[@功能] 成功选择了用户: ${user.name}（${isMultiSelectMode ? "多选" : "单选"}模式），当前已选择: ${_selectedMentions.keys.toList()}');
+
+        print(
+          '[@功能] 成功选择了用户: ${user.name}（${isMultiSelectMode ? "多选" : "单选"}模式），当前已选择: ${_selectedMentions.keys.toList()}',
+        );
         print('[@功能] _showMentionList: $_showMentionList');
       } else {
         // 不在输入@状态：在文本末尾追加@用户名 + 空格（多选模式）
         print('[@功能] 不在输入@状态，在末尾追加@用户名（多选模式）');
-        
+
         final newText = '${text}@${user.name} ';
         final newCursorPosition = newText.length;
-        
+
         // 设置自动添加标志，避免触发_onCommentTextChanged时误判
         _isAutoAddingMention = true;
         _commentController.text = newText;
-        _commentController.selection = TextSelection.collapsed(offset: newCursorPosition);
-        
+        _commentController.selection = TextSelection.collapsed(
+          offset: newCursorPosition,
+        );
+
         // 添加到已选择列表
         setState(() {
           _selectedMentions[userNameLower] = user;
@@ -1076,7 +1098,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           _mentionQuery = '';
           _mentionStartIndex = -1;
         });
-        
+
         // 延迟重置标志，确保_onCommentTextChanged不会误判
         Future.delayed(const Duration(milliseconds: 100), () {
           if (mounted) {
@@ -1085,8 +1107,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             });
           }
         });
-        
-        print('[@功能] 成功选择了用户: ${user.name}（追加），当前已选择: ${_selectedMentions.keys.toList()}');
+
+        print(
+          '[@功能] 成功选择了用户: ${user.name}（追加），当前已选择: ${_selectedMentions.keys.toList()}',
+        );
         print('[@功能] _showMentionList: $_showMentionList');
       }
     } catch (e, stackTrace) {
@@ -1094,35 +1118,35 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       print('[@功能] 堆栈跟踪: $stackTrace');
     }
   }
-  
+
   void _toggleMentionUser(Author user) {
     final userNameLower = user.name.toLowerCase();
     final isCurrentlySelected = _selectedMentions.containsKey(userNameLower);
-    
+
     if (isCurrentlySelected) {
       // 取消选择：从评论框中删除@用户名（格式：@A @B @C，删除@B后变成@A @C）
       final text = _commentController.text;
       final RegExp mentionRegex = RegExp(r'@([^\s@]+)\s*');
-      
+
       // 查找所有@用户名，找到匹配的并删除（包括后面的空格）
       String newText = text;
       for (final match in mentionRegex.allMatches(text)) {
         final mentionedName = match.group(1)!.trim();
-        
+
         if (mentionedName.toLowerCase() == userNameLower) {
           // 找到匹配的@用户名，删除它（包括@和后面的空格）
           final startIndex = match.start;
           final endIndex = match.end;
-          
+
           newText = text.substring(0, startIndex) + text.substring(endIndex);
           break; // 只删除第一个匹配的
         }
       }
-      
+
       // 设置自动添加标志，避免触发_onCommentTextChanged时误判
       _isAutoAddingMention = true;
       _commentController.text = newText;
-      
+
       // 延迟重置标志
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
@@ -1131,11 +1155,11 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           });
         }
       });
-      
+
       // 从已选择列表移除
       setState(() {
         _selectedMentions.remove(userNameLower);
-        
+
         // 如果选择列表为空，关闭横栏
         if (_selectedMentions.isEmpty) {
           _showMentionList = false;
@@ -1143,8 +1167,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           _mentionStartIndex = -1;
         }
       });
-      
-      print('[@功能] 取消选择用户: ${user.name}，已从评论框删除，剩余: ${_selectedMentions.keys.toList()}');
+
+      print(
+        '[@功能] 取消选择用户: ${user.name}，已从评论框删除，剩余: ${_selectedMentions.keys.toList()}',
+      );
     } else {
       // 选择：调用_selectMentionUser
       _selectMentionUser(user);
@@ -1152,7 +1178,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   }
 
   /// 构建包含@提及的评论内容（可点击的@链接）
-  Widget _buildCommentContentWithMentions(String content, List<Author> mentions) {
+  Widget _buildCommentContentWithMentions(
+    String content,
+    List<Author> mentions,
+  ) {
     final List<TextSpan> spans = [];
     // 使用与提交时相同的正则表达式，匹配@后面跟着非@非空格的字符（格式：@A @B @C，有空格）
     final RegExp mentionRegex = RegExp(r'@([^\s@]+)');
@@ -1163,59 +1192,64 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     for (final mention in mentions) {
       mentionMap[mention.name.toLowerCase()] = mention.id;
     }
-    
-    print('[@功能] _buildCommentContentWithMentions: content="$content", mentions=${mentions.map((m) => m.name).toList()}');
+
+    print(
+      '[@功能] _buildCommentContentWithMentions: content="$content", mentions=${mentions.map((m) => m.name).toList()}',
+    );
     print('[@功能] mentionMap: $mentionMap');
 
     for (final match in mentionRegex.allMatches(content)) {
       // 添加@之前的文本
       if (match.start > lastIndex) {
-        spans.add(TextSpan(
-          text: content.substring(lastIndex, match.start),
-          style: const TextStyle(fontSize: 13, color: Colors.black87),
-        ));
+        spans.add(
+          TextSpan(
+            text: content.substring(lastIndex, match.start),
+            style: const TextStyle(fontSize: 13, color: Colors.black87),
+          ),
+        );
       }
 
       // 添加@提及（可点击）
       final mentionText = match.group(0)!; // 包含@的完整文本，如 "@用户名"
       final userName = match.group(1)!; // 用户名部分
-      
+
       print('[@功能] 匹配到@用户名: "$userName"');
-      
+
       // 从mentions列表中查找对应的用户ID
       final userId = mentionMap[userName.toLowerCase()];
-      
+
       if (userId != null) {
         // 如果用户ID存在，显示为可点击的蓝色链接
         print('[@功能] 找到用户ID: $userId，创建可点击链接');
-        spans.add(TextSpan(
-          text: mentionText,
-          style: const TextStyle(
-            fontSize: 13,
-            color: Colors.blue,
-            fontWeight: FontWeight.w500,
+        spans.add(
+          TextSpan(
+            text: mentionText,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Colors.blue,
+              fontWeight: FontWeight.w500,
+            ),
+            recognizer: TapGestureRecognizer()
+              ..onTap = () {
+                // 使用用户ID直接跳转
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfilePage(userId: userId),
+                  ),
+                );
+              },
           ),
-          recognizer: TapGestureRecognizer()
-            ..onTap = () {
-              // 使用用户ID直接跳转
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ProfilePage(userId: userId),
-                ),
-              );
-            },
-        ));
+        );
       } else {
         // 如果用户ID不存在（用户直接输入@用户名，没有从列表选择），显示为普通文本
         print('[@功能] 未找到用户ID，显示为普通文本');
-        spans.add(TextSpan(
-          text: mentionText,
-          style: const TextStyle(
-            fontSize: 13,
-            color: Colors.black87,
+        spans.add(
+          TextSpan(
+            text: mentionText,
+            style: const TextStyle(fontSize: 13, color: Colors.black87),
           ),
-        ));
+        );
       }
 
       lastIndex = match.end;
@@ -1223,15 +1257,15 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
     // 添加剩余的文本
     if (lastIndex < content.length) {
-      spans.add(TextSpan(
-        text: content.substring(lastIndex),
-        style: const TextStyle(fontSize: 13, color: Colors.black87),
-      ));
+      spans.add(
+        TextSpan(
+          text: content.substring(lastIndex),
+          style: const TextStyle(fontSize: 13, color: Colors.black87),
+        ),
+      );
     }
 
-    return RichText(
-      text: TextSpan(children: spans),
-    );
+    return RichText(text: TextSpan(children: spans));
   }
 
   /// 通过用户名导航到用户主页
@@ -1239,21 +1273,25 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     try {
       print('[@功能] 尝试查找用户: $userName');
       // 先搜索用户（搜索name和email）
-      final resp = await ApiService.searchUsers(query: userName, type: 'all', pageSize: 20);
+      final resp = await ApiService.searchUsers(
+        query: userName,
+        type: 'all',
+        pageSize: 20,
+      );
       if (resp['statusCode'] == 200) {
         final body = resp['body'] as Map<String, dynamic>?;
         if (body != null) {
           final users = (body['users'] as List? ?? []);
           print('[@功能] 搜索到 ${users.length} 个用户');
-          
+
           // 精确匹配：先尝试匹配displayName，再尝试匹配email前缀
           for (final user in users) {
             final displayName = user['displayName']?.toString() ?? '';
             final email = user['email']?.toString() ?? '';
             final emailPrefix = email.contains('@') ? email.split('@')[0] : '';
-            
+
             // 精确匹配displayName或email前缀
-            if (displayName.toLowerCase() == userName.toLowerCase() || 
+            if (displayName.toLowerCase() == userName.toLowerCase() ||
                 emailPrefix.toLowerCase() == userName.toLowerCase()) {
               final userId = user['id']?.toString();
               if (userId != null && mounted) {
@@ -1268,7 +1306,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
               }
             }
           }
-          
+
           // 如果没有精确匹配，使用第一个结果
           if (users.isNotEmpty) {
             final user = users[0];
@@ -1277,9 +1315,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
               print('[@功能] 使用第一个搜索结果: id=$userId');
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => ProfilePage(userId: userId),
-                ),
+                MaterialPageRoute(builder: (_) => ProfilePage(userId: userId)),
               );
               return;
             }
@@ -1289,17 +1325,17 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       // 如果搜索失败，显示提示
       print('[@功能] 未找到用户: $userName');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('未找到用户: $userName')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('未找到用户: $userName')));
       }
     } catch (e, stackTrace) {
       print('[@功能] 导航到用户主页失败: $e');
       print('[@功能] 堆栈跟踪: $stackTrace');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('查找用户失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('查找用户失败: $e')));
       }
     }
   }
@@ -1396,7 +1432,6 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       },
     );
   }
- 
 
   void _handleCommentCreated(Map<String, dynamic> data) {
     // 期望 payload 在 data['comment'] 或 data['payload'] 中
@@ -1411,12 +1446,12 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       setState(() {
         // 防止重复插入：检查顶层评论和所有子回复
         bool exists = false;
-        
+
         // 检查顶层评论
         if (_comments.any((c) => c.id == newComment.id)) {
           exists = true;
         }
-        
+
         // 检查所有子回复
         if (!exists) {
           for (var comment in _comments) {
@@ -1426,7 +1461,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             }
           }
         }
-        
+
         if (exists) {
           return; // 已存在，忽略
         }
@@ -1527,7 +1562,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         final deletedComment = _comments[tIdx];
         final deletedCount = 1 + deletedComment.replies.length;
         _comments.removeAt(tIdx);
-        commentCount = (commentCount >= deletedCount) ? commentCount - deletedCount : 0;
+        commentCount = (commentCount >= deletedCount)
+            ? commentCount - deletedCount
+            : 0;
         widget.post.commentsCount = commentCount;
         return;
       }
@@ -1538,7 +1575,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         final rIdx = parent.replies.indexWhere((r) => r.id == commentId);
         if (rIdx != -1) {
           // 重新创建parent评论，移除被删除的回复
-          final updatedReplies = parent.replies.where((r) => r.id != commentId).toList();
+          final updatedReplies = parent.replies
+              .where((r) => r.id != commentId)
+              .toList();
           _comments[i] = Comment(
             id: parent.id,
             author: parent.author,
@@ -1705,9 +1744,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
   Future<void> _openUserProfile(String userId) async {
     await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => ProfilePage(userId: userId),
-      ),
+      MaterialPageRoute(builder: (context) => ProfilePage(userId: userId)),
     );
     // 从用户主页返回时，刷新关注状态（特别是如果用户在该页面取关了作者）
     if (userId == widget.post.author.id && _currentUserId != userId) {
@@ -1717,9 +1754,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
   Future<void> _onShare() async {
     if (_currentUserId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先登录')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先登录')));
       return;
     }
 
@@ -1753,13 +1790,15 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
       // 获取或创建 conversation
       final chatService = ChatService();
-      final conversation = await chatService.createOrGetPrivateConversation(targetUserId);
+      final conversation = await chatService.createOrGetPrivateConversation(
+        targetUserId,
+      );
 
       if (conversation == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('创建会话失败，请稍后重试')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('创建会话失败，请稍后重试')));
         return;
       }
 
@@ -1772,9 +1811,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('分享成功')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('分享成功')));
 
       // 可选：导航到聊天界面
       Navigator.of(context).push(
@@ -1784,9 +1823,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('分享失败: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('分享失败: $e')));
     }
   }
 
@@ -1810,7 +1849,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           actualMentionedNames.add(userName.toLowerCase());
         }
       }
-      
+
       // 从_selectedMentions中提取所有在评论内容中实际存在的@用户的ID
       final List<String> mentionIds = [];
       for (final entry in _selectedMentions.entries) {
@@ -1818,15 +1857,15 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           mentionIds.add(entry.value.id);
         }
       }
-      
+
       // 如果_selectedMentions中没有匹配到，尝试从文本中直接解析（处理手动输入的情况）
       // 但这种情况下的@用户名不会被识别为有效的mention，因为不在_selectedMentions中
-      
+
       print('[@功能] 提交评论，文本: "$text"');
       print('[@功能] 解析到的@用户名: ${actualMentionedNames.toList()}');
       print('[@功能] _selectedMentions中的用户: ${_selectedMentions.keys.toList()}');
       print('[@功能] 最终mentionIds: $mentionIds');
-      
+
       // 调用真实后端 API 创建评论
       final resp = await ApiService.createComment(
         widget.post.id,
@@ -1835,7 +1874,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         replyToId: replyTo?.id,
         mentionIds: mentionIds.isNotEmpty ? mentionIds : null,
       );
-      
+
       // 清空已选择的@用户列表
       _selectedMentions.clear();
 
@@ -1845,8 +1884,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       print('创建评论响应: status=$status, body=$body'); // 调试日志
 
       if (status >= 200 && status < 300 && body != null) {
-      // 评论创建成功，等待 WebSocket 推送来更新列表（避免重复添加）
-      // 如果 WebSocket 没有推送，则手动刷新评论列表
+        // 评论创建成功，等待 WebSocket 推送来更新列表（避免重复添加）
+        // 如果 WebSocket 没有推送，则手动刷新评论列表
         setState(() {
           _commentController.clear();
           _selectedMentions.clear();
@@ -1855,21 +1894,21 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           _mentionStartIndex = -1;
           _mentionCandidates.clear(); // 清空候选列表
         });
-        
+
         // 失去焦点，关闭键盘
         _commentFocusNode.unfocus();
-        
+
         if (_currentReplyTo != null) {
           _cancelReply(); // 清除回复状态
         }
-        
+
         // 延迟刷新评论列表，给 WebSocket 推送一些时间
         Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted) {
             _loadComments(refresh: true);
           }
         });
-        
+
         if (mounted) {
           ScaffoldMessenger.of(
             context,
@@ -1931,7 +1970,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     );
   }
 
-    void _openMoreActions() {
+  void _openMoreActions() {
     showModalBottomSheet(
       context: context,
       builder: (_) => SafeArea(
@@ -1953,24 +1992,27 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             if (_isOwner)
               ListTile(
                 leading: const Icon(Icons.delete_forever, color: Colors.red),
-                title: const Text(
-                  '删除笔记',
-                  style: TextStyle(color: Colors.red),
-                ),
+                title: const Text('删除笔记', style: TextStyle(color: Colors.red)),
                 onTap: () {
                   Navigator.pop(context);
                   _confirmDeletePost();
                 },
               ),
-
             ListTile(
               leading: const Icon(Icons.flag),
               title: const Text('举报'),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('已举报（演示）')),
+                final result = await showDialog(
+                  context: context,
+                  builder: (context) =>
+                      ReportPostDialog(postId: int.parse(widget.post.id)),
                 );
+                if (result == true && mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('举报成功，我们会尽快处理')));
+                }
               },
             ),
             ListTile(
@@ -1978,9 +2020,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
               title: const Text('复制链接'),
               onTap: () {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('链接已复制（演示）')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('链接已复制（演示）')));
               },
             ),
           ],
@@ -1988,7 +2030,6 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       ),
     );
   }
-
 
   Future<void> _confirmDeletePost() async {
     final confirmed = await showDialog<bool>(
@@ -2003,10 +2044,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              '删除',
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text('删除', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -2043,13 +2081,11 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     }
   }
 
-    /// 进入编辑页面
+  /// 进入编辑页面
   Future<void> _openEditPost() async {
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => NoteEditorPage(
-          initialPost: widget.post,
-        ),
+        builder: (_) => NoteEditorPage(initialPost: widget.post),
       ),
     );
 
@@ -2063,36 +2099,43 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = constraints.maxWidth;
-        
+
         // 计算图片宽高比：优先使用实际加载的图片尺寸，然后是后端返回的尺寸，最后是 imageAspectRatio
         double ratio = 1.5;
         if (_imageMedia.isNotEmpty) {
           // 优先使用实际加载的图片尺寸（如果已加载）
-          if (_actualImageWidth != null && _actualImageHeight != null && 
-              _actualImageWidth! > 0 && _actualImageHeight! > 0) {
+          if (_actualImageWidth != null &&
+              _actualImageHeight != null &&
+              _actualImageWidth! > 0 &&
+              _actualImageHeight! > 0) {
             ratio = _actualImageWidth! / _actualImageHeight!;
-          } 
+          }
           // 否则使用后端返回的尺寸（如果看起来不是默认值）
-          else if (widget.post.imageNaturalWidth > 0 && 
-                   widget.post.imageNaturalHeight > 0 &&
-                   !(widget.post.imageNaturalWidth == 800.0 && 
-                     widget.post.imageNaturalHeight == 600.0)) {
-            ratio = widget.post.imageNaturalWidth / widget.post.imageNaturalHeight;
-          } 
+          else if (widget.post.imageNaturalWidth > 0 &&
+              widget.post.imageNaturalHeight > 0 &&
+              !(widget.post.imageNaturalWidth == 800.0 &&
+                  widget.post.imageNaturalHeight == 600.0)) {
+            ratio =
+                widget.post.imageNaturalWidth / widget.post.imageNaturalHeight;
+          }
           // 最后使用 imageAspectRatio
           else if (widget.post.imageAspectRatio > 0) {
             ratio = widget.post.imageAspectRatio;
           }
         }
-        
+
         // 计算如果宽度填满屏幕时的高度
         final calculatedHeight = screenWidth / ratio;
-        
+
         // 判断是否需要限制高度
         final bool needsHeightLimit = calculatedHeight > 450;
-        final double containerHeight = needsHeightLimit ? 450.0 : calculatedHeight;
-        final double containerWidth = needsHeightLimit ? (450.0 * ratio) : screenWidth;
-        
+        final double containerHeight = needsHeightLimit
+            ? 450.0
+            : calculatedHeight;
+        final double containerWidth = needsHeightLimit
+            ? (450.0 * ratio)
+            : screenWidth;
+
         final images = _imageMedia;
         if (images.isEmpty) {
           return Container(
@@ -2116,10 +2159,38 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             child: Stack(
               alignment: Alignment.center,
               children: [
-              if (needsHeightLimit)
-                Center(
-                  child: SizedBox(
-                    width: containerWidth,
+                if (needsHeightLimit)
+                  Center(
+                    child: SizedBox(
+                      width: containerWidth,
+                      height: containerHeight,
+                      child: PageView.builder(
+                        controller: _imagePageController,
+                        itemCount: images.length,
+                        onPageChanged: (index) {
+                          if (_currentImageIndex != index) {
+                            setState(() {
+                              _currentImageIndex = index;
+                            });
+                          }
+                        },
+                        itemBuilder: (_, index) {
+                          return GestureDetector(
+                            onTap: _toggleImageFullscreen,
+                            child: _buildImageDisplay(
+                              images[index],
+                              containerWidth,
+                              containerHeight,
+                              BoxFit.cover,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  )
+                else
+                  SizedBox(
+                    width: screenWidth,
                     height: containerHeight,
                     child: PageView.builder(
                       controller: _imagePageController,
@@ -2136,7 +2207,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                           onTap: _toggleImageFullscreen,
                           child: _buildImageDisplay(
                             images[index],
-                            containerWidth,
+                            screenWidth,
                             containerHeight,
                             BoxFit.cover,
                           ),
@@ -2144,34 +2215,6 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                       },
                     ),
                   ),
-                )
-              else
-                SizedBox(
-                  width: screenWidth,
-                  height: containerHeight,
-                  child: PageView.builder(
-                    controller: _imagePageController,
-                    itemCount: images.length,
-                    onPageChanged: (index) {
-                      if (_currentImageIndex != index) {
-                        setState(() {
-                          _currentImageIndex = index;
-                        });
-                      }
-                    },
-                    itemBuilder: (_, index) {
-                      return GestureDetector(
-                        onTap: _toggleImageFullscreen,
-                        child: _buildImageDisplay(
-                          images[index],
-                          screenWidth,
-                          containerHeight,
-                          BoxFit.cover,
-                        ),
-                      );
-                    },
-                  ),
-                ),
                 if (kIsWeb && images.length > 1 && _isHoveringImage)
                   Positioned(
                     left: 16,
@@ -2222,11 +2265,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       height: height,
       color: Colors.grey[200],
       child: const Center(
-        child: Icon(
-          Icons.broken_image,
-          size: 48,
-          color: Colors.grey,
-        ),
+        child: Icon(Icons.broken_image, size: 48, color: Colors.grey),
       ),
     );
 
@@ -2267,7 +2306,6 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     );
   }
 
-
   Widget _buildAuthorRow() {
     // 如果是查看自己的帖子，不显示关注按钮
     if (_isFollowingAuthor == null) {
@@ -2287,7 +2325,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     }
 
     final isFollowing = _isFollowingAuthor ?? false;
-    
+
     return ListTile(
       onTap: () => _openUserProfile(widget.post.author.id),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2303,7 +2341,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       trailing: ElevatedButton(
         onPressed: _followInFlight ? null : _toggleFollow,
         style: ElevatedButton.styleFrom(
-          backgroundColor: isFollowing ? Colors.grey[300] : const Color(0xFF1976D2),
+          backgroundColor: isFollowing
+              ? Colors.grey[300]
+              : const Color(0xFF1976D2),
           foregroundColor: isFollowing ? Colors.grey[700] : Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           shape: RoundedRectangleBorder(
@@ -2344,18 +2384,18 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           // 分区标签区域（点击可跳转到对应分区页）
           _buildDisciplineTagArea(),
           const SizedBox(height: 12),
-          Text(//标题
+          Text(
+            //标题
             widget.post.title,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          Text(//内容
-            widget.post.content,
-            style: const TextStyle(fontSize: 14, height: 1.6),
+          ContentWithClickableTags(
+            content: widget.post.content,
+            subTags: widget.post.subTags,
+            onTagTap: _onTagTap,
           ),
           const SizedBox(height: 12),
-          _buildSecondaryTagsLine(),
-          const SizedBox(height: 10),
           // arXiv 文献信息（如果有）
           if (_hasArxivMetadata()) _buildArxivMetadataSection(),
           const SizedBox(height: 10),
@@ -2391,40 +2431,37 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
           //外部链接列表
           if (widget.post.externalLinks.isNotEmpty)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '外部链接',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '外部链接',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: widget.post.externalLinks.map((link) {
-                  return InkWell(
-                    onTap: () {
-                      _openExternalLink(link); 
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Text(
-                        link,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Colors.blue,
-                          decoration: TextDecoration.underline,
+                const SizedBox(height: 4),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: widget.post.externalLinks.map((link) {
+                    return InkWell(
+                      onTap: () {
+                        _openExternalLink(link);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Text(
+                          link,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.blue,
+                            decoration: TextDecoration.underline,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
 
           if (widget.post.doi != null)
             Text(
@@ -2482,7 +2519,11 @@ class _PostDetailScreenState extends State<PostDetailScreen>
               padding: const EdgeInsets.only(top: 4),
               child: Text(
                 'arXiv ID: ${widget.post.arxivId}',
-                style: TextStyle(fontSize: 11, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ),
         ],
@@ -2574,10 +2615,20 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     );
   }
 
+  /// 处理标签点击事件
+  void _onTagTap(String tag) {
+    // 跳转到搜索页面，搜索该标签相关的帖子
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SearchResultsScreen(query: '#$tag'),
+      ),
+    );
+  }
+
   /// 帖子正文上方的分区标签区域
   Widget _buildDisciplineTagArea() {
-    final mainDiscipline = findMainDisciplineFromTags(widget.post.tags);
-    if (mainDiscipline == null) {
+    final mainDiscipline = widget.post.mainDiscipline;
+    if (mainDiscipline.isEmpty) {
       return const SizedBox.shrink();
     }
     final color = kDisciplineColors[mainDiscipline] ?? Colors.blue;
@@ -2622,30 +2673,6 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     );
   }
 
-  /// 二级分区 / 细分类标签行（以 #xxx 形式展示在正文和评论之间）
-  Widget _buildSecondaryTagsLine() {
-    if (widget.post.tags.isEmpty) return const SizedBox.shrink();
-
-    final main = findMainDisciplineFromTags(widget.post.tags);
-    final secondary = widget.post.tags
-        .where((t) => !kMainDisciplines.contains(t) && t.trim().isNotEmpty)
-        .toList();
-    if (secondary.isEmpty) return const SizedBox.shrink();
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 4,
-      children: secondary.map((t) {
-        return Text(
-          '#$t',
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.blue,
-          ),
-        );
-      }).toList(),
-    );
-  }
 
   void _openPdfPreview(String url, String title) {
     final uri = Uri.tryParse(url);
@@ -2689,7 +2716,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       // 检查查询参数中是否有 type=pdf 或 format=pdf
       final query = uri?.queryParameters;
       if (query != null) {
-        final type = query['type']?.toLowerCase() ?? query['format']?.toLowerCase();
+        final type =
+            query['type']?.toLowerCase() ?? query['format']?.toLowerCase();
         if (type == 'pdf' || type == 'application/pdf') return true;
       }
       return false;
@@ -2717,20 +2745,22 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _deleteComment(Comment comment, {required bool isTopLevel, Comment? parentComment}) async {
+  Future<void> _deleteComment(
+    Comment comment, {
+    required bool isTopLevel,
+    Comment? parentComment,
+  }) async {
     // 确认删除
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除评论'),
-        content: Text(isTopLevel 
-            ? '确定要删除这条评论吗？删除后所有回复也会被删除。'
-            : '确定要删除这条回复吗？'),
+        content: Text(isTopLevel ? '确定要删除这条评论吗？删除后所有回复也会被删除。' : '确定要删除这条回复吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -2760,14 +2790,20 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             // 计算需要减少的评论数（包括所有子回复）
             final deletedCount = 1 + comment.replies.length;
             _comments.removeWhere((c) => c.id == comment.id);
-            commentCount = (commentCount >= deletedCount) ? commentCount - deletedCount : 0;
+            commentCount = (commentCount >= deletedCount)
+                ? commentCount - deletedCount
+                : 0;
             widget.post.commentsCount = commentCount;
           } else if (parentComment != null) {
             // 找到父评论的索引
-            final parentIndex = _comments.indexWhere((c) => c.id == parentComment.id);
+            final parentIndex = _comments.indexWhere(
+              (c) => c.id == parentComment.id,
+            );
             if (parentIndex != -1) {
               // 重新创建父评论，移除被删除的回复
-              final updatedReplies = parentComment.replies.where((r) => r.id != comment.id).toList();
+              final updatedReplies = parentComment.replies
+                  .where((r) => r.id != comment.id)
+                  .toList();
               _comments[parentIndex] = Comment(
                 id: parentComment.id,
                 author: parentComment.author,
@@ -2902,15 +2938,16 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                     children: [
                       Expanded(
                         child: Text(
-                    c.author.name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+                          c.author.name,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       // 删除按钮（只有作者自己可以看到）
-                      if (_currentUserId != null && c.author.id == _currentUserId)
+                      if (_currentUserId != null &&
+                          c.author.id == _currentUserId)
                         IconButton(
                           icon: const Icon(Icons.delete_outline, size: 18),
                           color: Colors.red[300],
@@ -2990,21 +3027,29 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                             children: [
                               Expanded(
                                 child: Text(
-                            reply.author.name,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
+                                  reply.author.name,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                               // 删除按钮（只有作者自己可以看到）
-                              if (_currentUserId != null && reply.author.id == _currentUserId)
+                              if (_currentUserId != null &&
+                                  reply.author.id == _currentUserId)
                                 IconButton(
-                                  icon: const Icon(Icons.delete_outline, size: 16),
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 16,
+                                  ),
                                   color: Colors.red[300],
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(),
-                                  onPressed: () => _deleteComment(reply, isTopLevel: false, parentComment: c),
+                                  onPressed: () => _deleteComment(
+                                    reply,
+                                    isTopLevel: false,
+                                    parentComment: c,
+                                  ),
                                 ),
                             ],
                           ),
@@ -3022,7 +3067,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                     ),
                                   ),
                                 ),
-                              _buildCommentContentWithMentions(reply.content, reply.mentions),
+                              _buildCommentContentWithMentions(
+                                reply.content,
+                                reply.mentions,
+                              ),
                               Row(
                                 children: [
                                   Text(
@@ -3146,7 +3194,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           children: [
             // @用户选择列表 - 横向滚动，显示在输入框上方（类似小红书风格）
             // 只有当_showMentionList为true时才显示列表（避免提交后还显示）
-            if (_showMentionList && (_selectedMentions.isNotEmpty || _mentionCandidates.isNotEmpty))
+            if (_showMentionList &&
+                (_selectedMentions.isNotEmpty || _mentionCandidates.isNotEmpty))
               Container(
                 height: 100,
                 padding: const EdgeInsets.symmetric(vertical: 10),
@@ -3166,13 +3215,18 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                               height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.grey,
+                                ),
                               ),
                             ),
                             SizedBox(width: 8),
                             Text(
                               '搜索用户中...',
-                              style: TextStyle(color: Colors.grey, fontSize: 12),
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
@@ -3180,11 +3234,21 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                     : ListView.builder(
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
-                        itemCount: _selectedMentions.length + _mentionCandidates.where((u) => !_selectedMentions.containsKey(u.name.toLowerCase())).length,
+                        itemCount:
+                            _selectedMentions.length +
+                            _mentionCandidates
+                                .where(
+                                  (u) => !_selectedMentions.containsKey(
+                                    u.name.toLowerCase(),
+                                  ),
+                                )
+                                .length,
                         itemBuilder: (context, index) {
                           // 先显示已选择的用户（带对勾），再显示未选择的候选用户
                           if (index < _selectedMentions.length) {
-                            final user = _selectedMentions.values.elementAt(index);
+                            final user = _selectedMentions.values.elementAt(
+                              index,
+                            );
                             return Material(
                               color: Colors.transparent,
                               child: InkWell(
@@ -3196,9 +3260,11 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                   child: Stack(
                                     children: [
                                       Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
                                         children: [
                                           Container(
                                             decoration: BoxDecoration(
@@ -3210,18 +3276,36 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                             ),
                                             child: CircleAvatar(
                                               radius: 24,
-                                              backgroundImage: user.avatar.isNotEmpty && 
-                                                  (user.avatar.startsWith('http://') || user.avatar.startsWith('https://'))
+                                              backgroundImage:
+                                                  user.avatar.isNotEmpty &&
+                                                      (user.avatar.startsWith(
+                                                            'http://',
+                                                          ) ||
+                                                          user.avatar
+                                                              .startsWith(
+                                                                'https://',
+                                                              ))
                                                   ? NetworkImage(user.avatar)
                                                   : null,
                                               backgroundColor: Colors.blue[50],
-                                              child: user.avatar.isEmpty || 
-                                                  (!user.avatar.startsWith('http://') && !user.avatar.startsWith('https://'))
+                                              child:
+                                                  user.avatar.isEmpty ||
+                                                      (!user.avatar.startsWith(
+                                                            'http://',
+                                                          ) &&
+                                                          !user.avatar
+                                                              .startsWith(
+                                                                'https://',
+                                                              ))
                                                   ? Text(
-                                                      user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                                                      user.name.isNotEmpty
+                                                          ? user.name[0]
+                                                                .toUpperCase()
+                                                          : '?',
                                                       style: const TextStyle(
                                                         fontSize: 18,
-                                                        fontWeight: FontWeight.bold,
+                                                        fontWeight:
+                                                            FontWeight.bold,
                                                         color: Colors.blue,
                                                       ),
                                                     )
@@ -3230,7 +3314,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                           ),
                                           const SizedBox(height: 8),
                                           Container(
-                                            constraints: const BoxConstraints(maxWidth: 65),
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 65,
+                                            ),
                                             child: Text(
                                               user.name,
                                               style: const TextStyle(
@@ -3256,7 +3342,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                           decoration: BoxDecoration(
                                             color: Colors.blue,
                                             shape: BoxShape.circle,
-                                            border: Border.all(color: Colors.white, width: 2),
+                                            border: Border.all(
+                                              color: Colors.white,
+                                              width: 2,
+                                            ),
                                           ),
                                           child: const Icon(
                                             Icons.check,
@@ -3272,8 +3361,16 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                             );
                           } else {
                             // 显示未选择的候选用户（过滤掉已选择的）
-                            final unselectedCandidates = _mentionCandidates.where((u) => !_selectedMentions.containsKey(u.name.toLowerCase())).toList();
-                            final user = unselectedCandidates[index - _selectedMentions.length];
+                            final unselectedCandidates = _mentionCandidates
+                                .where(
+                                  (u) => !_selectedMentions.containsKey(
+                                    u.name.toLowerCase(),
+                                  ),
+                                )
+                                .toList();
+                            final user =
+                                unselectedCandidates[index -
+                                    _selectedMentions.length];
                             return Material(
                               color: Colors.transparent,
                               child: InkWell(
@@ -3289,7 +3386,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
                                     children: [
                                       Container(
                                         decoration: BoxDecoration(
@@ -3301,15 +3399,30 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                         ),
                                         child: CircleAvatar(
                                           radius: 24,
-                                          backgroundImage: user.avatar.isNotEmpty && 
-                                              (user.avatar.startsWith('http://') || user.avatar.startsWith('https://'))
+                                          backgroundImage:
+                                              user.avatar.isNotEmpty &&
+                                                  (user.avatar.startsWith(
+                                                        'http://',
+                                                      ) ||
+                                                      user.avatar.startsWith(
+                                                        'https://',
+                                                      ))
                                               ? NetworkImage(user.avatar)
                                               : null,
                                           backgroundColor: Colors.grey[200],
-                                          child: user.avatar.isEmpty || 
-                                              (!user.avatar.startsWith('http://') && !user.avatar.startsWith('https://'))
+                                          child:
+                                              user.avatar.isEmpty ||
+                                                  (!user.avatar.startsWith(
+                                                        'http://',
+                                                      ) &&
+                                                      !user.avatar.startsWith(
+                                                        'https://',
+                                                      ))
                                               ? Text(
-                                                  user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                                                  user.name.isNotEmpty
+                                                      ? user.name[0]
+                                                            .toUpperCase()
+                                                      : '?',
                                                   style: const TextStyle(
                                                     fontSize: 18,
                                                     fontWeight: FontWeight.bold,
@@ -3321,7 +3434,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                       ),
                                       const SizedBox(height: 8),
                                       Container(
-                                        constraints: const BoxConstraints(maxWidth: 65),
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 65,
+                                        ),
                                         child: Text(
                                           user.name,
                                           style: const TextStyle(
@@ -3437,9 +3552,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             Positioned.fill(
               child: Container(
                 color: Colors.black.withOpacity(0.25),
-                child: const Center(
-                  child: CircularProgressIndicator(),
-                ),
+                child: const Center(child: CircularProgressIndicator()),
               ),
             ),
         ],
@@ -3490,8 +3603,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                   top: 16,
                   right: 16,
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.5),
                       borderRadius: BorderRadius.circular(20),
@@ -3578,7 +3693,8 @@ class _ShareUserSelectionSheet extends StatefulWidget {
   });
 
   @override
-  State<_ShareUserSelectionSheet> createState() => _ShareUserSelectionSheetState();
+  State<_ShareUserSelectionSheet> createState() =>
+      _ShareUserSelectionSheetState();
 }
 
 class _ShareUserSelectionSheetState extends State<_ShareUserSelectionSheet> {
@@ -3615,8 +3731,9 @@ class _ShareUserSelectionSheetState extends State<_ShareUserSelectionSheet> {
             // 后端返回的是 ProfileResp，包含 displayName 字段
             return {
               'id': userMap['id']?.toString() ?? '',
-              'name': userMap['displayName']?.toString() ?? 
-                      (userMap['email']?.toString() ?? '未知用户'),
+              'name':
+                  userMap['displayName']?.toString() ??
+                  (userMap['email']?.toString() ?? '未知用户'),
               'avatar': userMap['avatar']?.toString(),
             };
           }).toList();
@@ -3628,7 +3745,9 @@ class _ShareUserSelectionSheetState extends State<_ShareUserSelectionSheet> {
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('加载关注列表失败: ${result['body']['message'] ?? '未知错误'}')),
+            SnackBar(
+              content: Text('加载关注列表失败: ${result['body']['message'] ?? '未知错误'}'),
+            ),
           );
         }
       }
@@ -3637,9 +3756,9 @@ class _ShareUserSelectionSheetState extends State<_ShareUserSelectionSheet> {
         _isLoading = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('加载关注列表失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('加载关注列表失败: $e')));
       }
     }
   }
@@ -3681,10 +3800,7 @@ class _ShareUserSelectionSheetState extends State<_ShareUserSelectionSheet> {
               children: [
                 const Text(
                   '分享给',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 IconButton(
@@ -3707,7 +3823,10 @@ class _ShareUserSelectionSheetState extends State<_ShareUserSelectionSheet> {
                 ),
                 filled: true,
                 fillColor: Colors.grey[100],
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
               ),
               onChanged: (value) {
                 setState(() {
@@ -3721,64 +3840,203 @@ class _ShareUserSelectionSheetState extends State<_ShareUserSelectionSheet> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredUsers.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.person_off, size: 64, color: Colors.grey[400]),
-                            const SizedBox(height: 16),
-                            Text(
-                              _searchQuery.isEmpty
-                                  ? '还没有关注任何人'
-                                  : '未找到匹配的用户',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.person_off,
+                          size: 64,
+                          color: Colors.grey[400],
                         ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                        itemCount: _filteredUsers.length,
-                        itemBuilder: (context, index) {
-                          final user = _filteredUsers[index];
-                          return Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              leading: CircleAvatar(
-                                radius: 24,
-                                backgroundImage: user['avatar'] != null && user['avatar'].toString().isNotEmpty
-                                    ? NetworkImage(user['avatar'].toString())
-                                    : null,
-                                child: user['avatar'] == null || user['avatar'].toString().isEmpty
-                                    ? Text(
-                                        (user['name']?.toString().isNotEmpty ?? false)
-                                            ? user['name'].toString()[0].toUpperCase()
-                                            : '?',
-                                        style: const TextStyle(fontSize: 18),
-                                      )
-                                    : null,
-                              ),
-                              title: Text(
-                                user['name']?.toString() ?? '未知用户',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () {
-                                Navigator.pop(context, user['id']?.toString());
-                              },
+                        const SizedBox(height: 16),
+                        Text(
+                          _searchQuery.isEmpty ? '还没有关注任何人' : '未找到匹配的用户',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 4,
+                    ),
+                    itemCount: _filteredUsers.length,
+                    itemBuilder: (context, index) {
+                      final user = _filteredUsers[index];
+                      return Container(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          leading: CircleAvatar(
+                            radius: 24,
+                            backgroundImage:
+                                user['avatar'] != null &&
+                                    user['avatar'].toString().isNotEmpty
+                                ? NetworkImage(user['avatar'].toString())
+                                : null,
+                            child:
+                                user['avatar'] == null ||
+                                    user['avatar'].toString().isEmpty
+                                ? Text(
+                                    (user['name']?.toString().isNotEmpty ??
+                                            false)
+                                        ? user['name']
+                                              .toString()[0]
+                                              .toUpperCase()
+                                        : '?',
+                                    style: const TextStyle(fontSize: 18),
+                                  )
+                                : null,
+                          ),
+                          title: Text(
+                            user['name']?.toString() ?? '未知用户',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {
+                            Navigator.pop(context, user['id']?.toString());
+                          },
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 可点击标签组件
+class ClickableTagWidget extends StatelessWidget {
+  final String tag;
+  final VoidCallback onTap;
+
+  const ClickableTagWidget({
+    super.key,
+    required this.tag,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
+        ),
+        child: Text(
+          '#$tag',
+          style: const TextStyle(
+            color: Colors.blue,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 渲染带可点击标签的正文
+class ContentWithClickableTags extends StatelessWidget {
+  final String content;
+  final List<String> subTags;
+  final Function(String) onTagTap;
+
+  const ContentWithClickableTags({
+    super.key,
+    required this.content,
+    required this.subTags,
+    required this.onTagTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // 如果内容为空，返回空容器
+    if (content.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // 使用正则表达式分割文本和标签
+    final regex = RegExp(r'(#([^\s#]+))');
+    final matches = regex.allMatches(content);
+
+    if (matches.isEmpty) {
+      // 没有标签，直接返回文本
+      return Text(
+        content,
+        style: const TextStyle(fontSize: 14, height: 1.6),
+      );
+    }
+
+    // 构建富文本
+    final textSpans = <TextSpan>[];
+    int lastEnd = 0;
+
+    for (final match in matches) {
+      // 添加匹配前的普通文本
+      if (match.start > lastEnd) {
+        textSpans.add(TextSpan(
+          text: content.substring(lastEnd, match.start),
+          style: const TextStyle(fontSize: 14, height: 1.6),
+        ));
+      }
+
+      // 添加可点击的标签
+      final tag = match.group(2)!; // 获取#后面的标签内容
+      textSpans.add(TextSpan(
+        text: match.group(1), // 完整的#标签文本
+        style: const TextStyle(
+          fontSize: 14,
+          height: 1.6,
+          color: Colors.blue,
+          fontWeight: FontWeight.w500,
+        ),
+        recognizer: TapGestureRecognizer()
+          ..onTap = () {
+            onTagTap(tag);
+          },
+      ));
+
+      lastEnd = match.end;
+    }
+
+    // 添加剩余的文本
+    if (lastEnd < content.length) {
+      textSpans.add(TextSpan(
+        text: content.substring(lastEnd),
+        style: const TextStyle(fontSize: 14, height: 1.6),
+      ));
+    }
+
+    return RichText(
+      text: TextSpan(
+        children: textSpans,
+        style: const TextStyle(
+          fontSize: 14,
+          height: 1.6,
+          color: Colors.black,
+        ),
       ),
     );
   }
