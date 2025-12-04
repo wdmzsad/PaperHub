@@ -44,6 +44,30 @@ class BrowseHistoryService {
   /// 获取指定用户的浏览历史（最新在前）
   static Future<List<BrowseHistoryItem>> getHistory(String userId) async {
     if (userId.isEmpty) return [];
+    // 优先从后端获取，失败时回退到本地缓存
+    try {
+      final resp = await ApiService.getBrowseHistory(limit: _maxHistoryCount);
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>?;
+        final items = (body?['items'] as List<dynamic>? ?? [])
+            .map((e) => e as Map<String, dynamic>)
+            .map(
+              (m) => BrowseHistoryItem(
+                postId: m['postId']?.toString() ?? '',
+                title: m['title']?.toString() ?? '',
+                timestamp: DateTime.parse(
+                  (m['viewedAt'] ?? DateTime.now().toIso8601String()).toString(),
+                ).millisecondsSinceEpoch,
+              ),
+            )
+            .toList();
+        // 同步一份到本地，作为缓存
+        await _saveToLocal(userId, items);
+        return items;
+      }
+    } catch (_) {
+      // ignore and fallback
+    }
     return _getFromLocal(userId);
   }
 
@@ -54,18 +78,28 @@ class BrowseHistoryService {
     required String title,
   }) async {
     if (userId.isEmpty || postId.isEmpty) return;
+    // 后端记录（忽略失败），本地也维护一份缓存
+    try {
+      await ApiService.addBrowseHistory(postId: postId, title: title);
+    } catch (_) {}
     await _addToLocal(userId, postId, title);
   }
 
   /// 按 postId 删除浏览记录（用于帖子被删除时清理）
   static Future<void> removeByPostId(String userId, String postId) async {
     if (userId.isEmpty || postId.isEmpty) return;
+    try {
+      await ApiService.deleteBrowseHistory(postId);
+    } catch (_) {}
     await _removeFromLocal(userId, postId);
   }
 
   /// 清空某个用户的浏览历史
   static Future<void> clearHistory(String userId) async {
     if (userId.isEmpty) return;
+    try {
+      await ApiService.clearBrowseHistory();
+    } catch (_) {}
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_keyForUser(userId));
