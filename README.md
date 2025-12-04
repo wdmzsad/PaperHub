@@ -1,6 +1,6 @@
-# PaperHub Overview
+# PaperHub
 
-PaperHub 是一个服务高校师生与研究人员的学术社区。用户可以在平台上发布灵感笔记、浏览学科分区内容、关注学者、收藏/评论/点赞笔记，并通过即时通讯与通知系统保持交流。项目采用 **Flutter** 打造跨平台前端，后端基于 **Spring Boot + MySQL + Redis**，并实现 Access/Refresh Token 的安全认证与自动刷新机制。
+PaperHub 是一个服务高校师生与研究人员的学术社区。用户可以在平台上发布灵感笔记、浏览学科分区内容、关注学者、收藏/评论/点赞笔记，并通过即时通讯与通知系统保持交流。项目采用 **Flutter** 打造跨平台前端，后端基于 **Spring Boot + MySQL**，并实现 Access/Refresh Token 的安全认证与自动刷新机制。
 
 ---
 
