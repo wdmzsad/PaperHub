@@ -261,6 +261,59 @@ class ApiService {
     );
   }
 
+  /// 获取当前登录用户的浏览历史（最新在前）
+  /// GET /browse-history?limit=50
+  static Future<Map<String, dynamic>> getBrowseHistory({int limit = 50}) async {
+    return await _makeRequest(
+      () => http.get(
+        Uri.parse('$baseUrl/browse-history?limit=$limit'),
+        headers: _buildHeaders(),
+      ),
+      '/browse-history',
+    );
+  }
+
+  /// 记录一条浏览历史
+  /// POST /browse-history  body: { postId, title }
+  static Future<Map<String, dynamic>> addBrowseHistory({
+    required String postId,
+    required String title,
+  }) async {
+    final body = {'postId': postId, 'title': title};
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/browse-history'),
+        headers: _buildHeaders(),
+        body: jsonEncode(body),
+      ),
+      '/browse-history',
+    );
+  }
+
+  /// 删除一条浏览历史
+  /// DELETE /browse-history/{postId}
+  static Future<Map<String, dynamic>> deleteBrowseHistory(String postId) async {
+    return await _makeRequest(
+      () => http.delete(
+        Uri.parse('$baseUrl/browse-history/$postId'),
+        headers: _buildHeaders(),
+      ),
+      '/browse-history/$postId',
+    );
+  }
+
+  /// 清空当前用户的浏览历史
+  /// DELETE /browse-history
+  static Future<Map<String, dynamic>> clearBrowseHistory() async {
+    return await _makeRequest(
+      () => http.delete(
+        Uri.parse('$baseUrl/browse-history'),
+        headers: _buildHeaders(),
+      ),
+      '/browse-history',
+    );
+  }
+
   static Future<Map<String, dynamic>> updateProfile({
     required String displayName,
     String? bio,
@@ -1406,51 +1459,6 @@ class ApiService {
         headers: _buildHeaders(),
       ),
       '/posts/$postId',
-    );
-  }
-
-  /// ==================== 浏览历史 API ====================
-
-  static Future<Map<String, dynamic>> recordBrowseHistory(
-    String postId,
-    String title,
-  ) async {
-    return await _makeRequest(
-      () => http.post(
-        Uri.parse('$baseUrl/browse-history'),
-        headers: _buildHeaders(),
-        body: jsonEncode({'postId': postId, 'title': title}),
-      ),
-      '/browse-history',
-    );
-  }
-
-  static Future<Map<String, dynamic>> getBrowseHistory({int limit = 50}) async {
-    final uri = Uri.parse('$baseUrl/browse-history')
-        .replace(queryParameters: {'limit': limit.toString()});
-    return await _makeRequest(
-      () => http.get(uri, headers: _buildHeaders()),
-      '/browse-history',
-    );
-  }
-
-  static Future<Map<String, dynamic>> deleteBrowseHistory(String postId) async {
-    return await _makeRequest(
-      () => http.delete(
-        Uri.parse('$baseUrl/browse-history/$postId'),
-        headers: _buildHeaders(),
-      ),
-      '/browse-history/$postId',
-    );
-  }
-
-  static Future<Map<String, dynamic>> clearBrowseHistory() async {
-    return await _makeRequest(
-      () => http.delete(
-        Uri.parse('$baseUrl/browse-history'),
-        headers: _buildHeaders(),
-      ),
-      '/browse-history',
     );
   }
 
