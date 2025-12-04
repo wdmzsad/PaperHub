@@ -371,17 +371,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         fontSize: 12,
                       ),
                     )
-                  else if (conversation.type == ConversationType.private)
-                    Text(
-                      conversation.isOnline ? '在线' : '离线',
-                      style: TextStyle(
-                        color: conversation.isOnline
-                            ? const Color(0xFF4CAF50)
-                            : Colors.grey[500],
-                        fontSize: 12,
-                      ),
-                    )
-                  else
+                  else if (conversation.type == ConversationType.group)
                     Text(
                       '${conversation.participants.length} 位成员',
                       style: TextStyle(
@@ -650,10 +640,7 @@ class _ChatScreenState extends State<ChatScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (conversation.type == ConversationType.private)
-              Text('状态: ${conversation.isOnline ? "在线" : "离线"}')
-            else
-              Text('成员数: ${conversation.participants.length}'),
+            Text('成员数: ${conversation.participants.length}'),
             const SizedBox(height: 8),
             Text('创建时间: ${_formatDateHeader(conversation.updatedAt)}'),
           ],

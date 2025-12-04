@@ -81,20 +81,6 @@ class ConversationItem extends StatelessWidget {
                 )
               : _buildDefaultAvatar(),
         ),
-        if (conversation.isOnline && conversation.type == ConversationType.private)
-          Positioned(
-            right: 0,
-            bottom: 0,
-            child: Container(
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(
-                color: const Color(0xFF4CAF50),
-                border: Border.all(color: Colors.white, width: 2),
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-          ),
       ],
     );
   }
