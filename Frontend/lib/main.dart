@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
@@ -12,7 +15,15 @@ import 'services/local_storage.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await LocalStorage.instance.init();
-  runApp(const PaperHubApp());
+
+  runZonedGuarded(() {
+    runApp(const PaperHubApp());
+  }, (error, stack) {
+    // 在 Web 上把顶层未捕获错误打到控制台，方便定位 main.dart.js 中的混淆错误
+    debugPrint('=== TOP LEVEL ERROR ===');
+    debugPrint(error.toString());
+    debugPrint(stack.toString());
+  });
 }
 
 class PaperHubApp extends StatelessWidget {
