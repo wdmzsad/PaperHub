@@ -394,8 +394,8 @@ class _PostCardState extends State<PostCard> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  widget.post.tags.isNotEmpty
-                                      ? '#${widget.post.tags.first}'
+                                  widget.post.mainDiscipline.isNotEmpty
+                                      ? widget.post.mainDiscipline
                                       : '',
                                   style: const TextStyle(
                                     fontSize: 11,

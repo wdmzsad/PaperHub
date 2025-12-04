@@ -11,7 +11,7 @@ public class PostDtos {
         @NotBlank String title,
         String content,
         List<String> media,
-        List<String> tags,
+        @NotBlank String mainDiscipline, // 主分区（一级标签）
         String doi,
         String journal,
         Integer year,
@@ -31,7 +31,8 @@ public class PostDtos {
         String title,
         String content,
         List<String> media,
-        List<String> tags,
+        String mainDiscipline, // 主分区（一级标签）
+        List<String> subTags, // 二级标签列表
         List<String> externalLinks, // 新增：外部链接列表
         AuthorInfo author,
         int likesCount,
