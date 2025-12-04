@@ -93,7 +93,7 @@ public class ChatController {
             @AuthenticationPrincipal com.example.paperhub.auth.User user,
             @PathVariable Long conversationId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "100") int size) {
 
         if (user == null) {
             return ResponseEntity.badRequest().build();

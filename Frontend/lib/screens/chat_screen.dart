@@ -95,7 +95,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void _initializeConversation() async {
     if (widget.conversation != null) {
       _chatService.setCurrentConversation(widget.conversation!);
-      await _chatService.loadMessages(widget.conversation!.id);
+      await _chatService.loadMessages(widget.conversation!.id, page: 0);
       setState(() {
         _initialLoadComplete = true;
         _previousMessageCount = _chatService.messages.length;
@@ -133,7 +133,7 @@ class _ChatScreenState extends State<ChatScreen> {
           });
 
           _chatService.setCurrentConversation(conversation);
-          await _chatService.loadMessages(conversation.id);
+          await _chatService.loadMessages(conversation.id, page: 0);
           setState(() {
             _initialLoadComplete = true;
             _previousMessageCount = _chatService.messages.length;
@@ -155,7 +155,7 @@ class _ChatScreenState extends State<ChatScreen> {
           });
 
           _chatService.setCurrentConversation(fallbackConversation);
-          await _chatService.loadMessages(fallbackConversation.id);
+          await _chatService.loadMessages(fallbackConversation.id, page: 0);
           setState(() {
             _initialLoadComplete = true;
             _previousMessageCount = _chatService.messages.length;
@@ -178,7 +178,7 @@ class _ChatScreenState extends State<ChatScreen> {
         });
 
         _chatService.setCurrentConversation(fallbackConversation);
-        await _chatService.loadMessages(fallbackConversation.id);
+        await _chatService.loadMessages(fallbackConversation.id, page: 0);
         setState(() {
           _initialLoadComplete = true;
           _previousMessageCount = _chatService.messages.length;
@@ -190,11 +190,52 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
 
+  Future<void> _loadMoreMessagesIfNeeded() async {
+    final conversation = widget.conversation ?? _loadedConversation;
+    if (conversation == null) return;
+
+    // 检查是否还有更多消息且当前没有正在加载
+    if (_chatService.hasMoreMessages && !_chatService.isLoadingMoreMessages) {
+      // 记录加载前距离底部的距离
+      double distanceFromBottom = 0;
+      if (_scrollController.hasClients) {
+        final maxExtent = _scrollController.position.maxScrollExtent;
+        final currentOffset = _scrollController.offset;
+        distanceFromBottom = maxExtent - currentOffset;
+      }
+
+      final int beforeMessageCount = _chatService.messages.length;
+
+      // 加载下一页
+      await _chatService.loadMessages(conversation.id, page: _chatService.currentPage + 1);
+
+      // 在下一帧调整滚动位置，保持距离底部的距离不变
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+
+        final int afterMessageCount = _chatService.messages.length;
+        final int loadedMessageCount = afterMessageCount - beforeMessageCount;
+
+        if (loadedMessageCount > 0) {
+          final newMaxExtent = _scrollController.position.maxScrollExtent;
+          // 保持原来的距离底部的距离
+          final double newOffset = newMaxExtent - distanceFromBottom;
+          _scrollController.jumpTo(newOffset.clamp(0.0, newMaxExtent));
+        }
+      });
+    }
+  }
+
   void _scrollListener() {
     // 当用户滚动到底部时，标记消息为已读
     final conversation = widget.conversation ?? _loadedConversation;
     if (conversation != null && _scrollController.offset >= _scrollController.position.maxScrollExtent - 100) {
       _chatService.markAsRead(conversation.id);
+    }
+
+    // 当滚动到顶部时，加载更多历史消息
+    if (_scrollController.hasClients && _scrollController.offset <= 100) {
+      _loadMoreMessagesIfNeeded();
     }
   }
 
@@ -208,7 +249,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final conversation = widget.conversation ?? _loadedConversation;
     if (conversation == null || !_initialLoadComplete) return;
 
-    await _chatService.loadMessages(conversation.id, silent: true);
+    // 轮询刷新时只获取最新消息（第一页）
+    await _chatService.loadMessages(conversation.id, silent: true, page: 0);
   }
 
   void _onSendMessage(String content) {
@@ -253,13 +295,15 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _scrollToBottom() {
+    if (!mounted) return;
+
+    // 等待下一帧确保列表渲染完成
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+      if (!mounted || !_scrollController.hasClients) return;
+
+      final maxExtent = _scrollController.position.maxScrollExtent;
+      if (maxExtent > 0) {
+        _scrollController.jumpTo(maxExtent);
       }
     });
   }
@@ -456,26 +500,48 @@ class _ChatScreenState extends State<ChatScreen> {
       return _buildEmptyView();
     }
 
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      itemCount: messages.length,
-      itemBuilder: (context, index) {
-        final message = messages[index];
-        final showDateHeader = index == 0 ||
-            !_isSameDay(messages[index - 1].createdAt, message.createdAt);
-
-        return Column(
-          children: [
-            if (showDateHeader) _buildDateHeader(message.createdAt),
-            MessageBubble(
-              message: message,
-              showAvatar: true,
-              onAvatarTap: () => _navigateToUserProfile(message.senderId),
+    return Column(
+      children: [
+        // 加载更多指示器
+        if (_chatService.isLoadingMoreMessages)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1976D2)),
+                ),
+              ),
             ),
-          ],
-        );
-      },
+          ),
+        // 消息列表
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            itemCount: messages.length,
+            itemBuilder: (context, index) {
+              final message = messages[index];
+              final showDateHeader = index == 0 ||
+                  !_isSameDay(messages[index - 1].createdAt, message.createdAt);
+
+              return Column(
+                children: [
+                  if (showDateHeader) _buildDateHeader(message.createdAt),
+                  MessageBubble(
+                    message: message,
+                    showAvatar: true,
+                    onAvatarTap: () => _navigateToUserProfile(message.senderId),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
