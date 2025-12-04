@@ -19,6 +19,7 @@ import '../config/app_env.dart';
 import 'profile_screen.dart';
 import '../constants/discipline_constants.dart';
 import 'zone_screen.dart';
+import 'search_results_screen.dart';
 import '../services/chat_service.dart';
 import '../widgets/report_post_dialog.dart';
 import '../models/message_model.dart';
@@ -2389,14 +2390,12 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          Text(
-            //内容
-            widget.post.content,
-            style: const TextStyle(fontSize: 14, height: 1.6),
+          ContentWithClickableTags(
+            content: widget.post.content,
+            subTags: widget.post.subTags,
+            onTagTap: _onTagTap,
           ),
           const SizedBox(height: 12),
-          _buildSecondaryTagsLine(),
-          const SizedBox(height: 10),
           // arXiv 文献信息（如果有）
           if (_hasArxivMetadata()) _buildArxivMetadataSection(),
           const SizedBox(height: 10),
@@ -2616,10 +2615,20 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     );
   }
 
+  /// 处理标签点击事件
+  void _onTagTap(String tag) {
+    // 跳转到搜索页面，搜索该标签相关的帖子
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SearchResultsScreen(query: '#$tag'),
+      ),
+    );
+  }
+
   /// 帖子正文上方的分区标签区域
   Widget _buildDisciplineTagArea() {
-    final mainDiscipline = findMainDisciplineFromTags(widget.post.tags);
-    if (mainDiscipline == null) {
+    final mainDiscipline = widget.post.mainDiscipline;
+    if (mainDiscipline.isEmpty) {
       return const SizedBox.shrink();
     }
     final color = kDisciplineColors[mainDiscipline] ?? Colors.blue;
@@ -2664,27 +2673,6 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     );
   }
 
-  /// 二级分区 / 细分类标签行（以 #xxx 形式展示在正文和评论之间）
-  Widget _buildSecondaryTagsLine() {
-    if (widget.post.tags.isEmpty) return const SizedBox.shrink();
-
-    final main = findMainDisciplineFromTags(widget.post.tags);
-    final secondary = widget.post.tags
-        .where((t) => !kMainDisciplines.contains(t) && t.trim().isNotEmpty)
-        .toList();
-    if (secondary.isEmpty) return const SizedBox.shrink();
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 4,
-      children: secondary.map((t) {
-        return Text(
-          '#$t',
-          style: const TextStyle(fontSize: 12, color: Colors.blue),
-        );
-      }).toList(),
-    );
-  }
 
   void _openPdfPreview(String url, String title) {
     final uri = Uri.tryParse(url);
@@ -3928,6 +3916,127 @@ class _ShareUserSelectionSheetState extends State<_ShareUserSelectionSheet> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 可点击标签组件
+class ClickableTagWidget extends StatelessWidget {
+  final String tag;
+  final VoidCallback onTap;
+
+  const ClickableTagWidget({
+    super.key,
+    required this.tag,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
+        ),
+        child: Text(
+          '#$tag',
+          style: const TextStyle(
+            color: Colors.blue,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 渲染带可点击标签的正文
+class ContentWithClickableTags extends StatelessWidget {
+  final String content;
+  final List<String> subTags;
+  final Function(String) onTagTap;
+
+  const ContentWithClickableTags({
+    super.key,
+    required this.content,
+    required this.subTags,
+    required this.onTagTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // 如果内容为空，返回空容器
+    if (content.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // 使用正则表达式分割文本和标签
+    final regex = RegExp(r'(#([^\s#]+))');
+    final matches = regex.allMatches(content);
+
+    if (matches.isEmpty) {
+      // 没有标签，直接返回文本
+      return Text(
+        content,
+        style: const TextStyle(fontSize: 14, height: 1.6),
+      );
+    }
+
+    // 构建富文本
+    final textSpans = <TextSpan>[];
+    int lastEnd = 0;
+
+    for (final match in matches) {
+      // 添加匹配前的普通文本
+      if (match.start > lastEnd) {
+        textSpans.add(TextSpan(
+          text: content.substring(lastEnd, match.start),
+          style: const TextStyle(fontSize: 14, height: 1.6),
+        ));
+      }
+
+      // 添加可点击的标签
+      final tag = match.group(2)!; // 获取#后面的标签内容
+      textSpans.add(TextSpan(
+        text: match.group(1), // 完整的#标签文本
+        style: const TextStyle(
+          fontSize: 14,
+          height: 1.6,
+          color: Colors.blue,
+          fontWeight: FontWeight.w500,
+        ),
+        recognizer: TapGestureRecognizer()
+          ..onTap = () {
+            onTagTap(tag);
+          },
+      ));
+
+      lastEnd = match.end;
+    }
+
+    // 添加剩余的文本
+    if (lastEnd < content.length) {
+      textSpans.add(TextSpan(
+        text: content.substring(lastEnd),
+        style: const TextStyle(fontSize: 14, height: 1.6),
+      ));
+    }
+
+    return RichText(
+      text: TextSpan(
+        children: textSpans,
+        style: const TextStyle(
+          fontSize: 14,
+          height: 1.6,
+          color: Colors.black,
+        ),
       ),
     );
   }
