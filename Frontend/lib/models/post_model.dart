@@ -185,7 +185,8 @@ class Post {
   final List<String> media; // 图片 url 列表（可为空）
   final List<Attachment> attachments; // PDF 等附件
   final List<String> externalLinks; // 外部链接列表
-  final List<String> tags;
+  final String mainDiscipline; // 主分区（一级标签）
+  final List<String> subTags; // 二级标签列表
   final Author author;
 
   // 统计与状态（通常由后端返回）
@@ -221,7 +222,8 @@ class Post {
     required this.content,
     required this.media,
     required this.attachments,
-    required this.tags,
+    required this.mainDiscipline,
+    required this.subTags,
     required this.author,
     required this.externalLinks,
     this.comments = const [],
@@ -265,7 +267,8 @@ class Post {
       content: json['content'] as String? ?? '',
       media: (json['media'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       attachments: [], // 后端暂时不支持附件，需要后续添加
-      tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      mainDiscipline: json['mainDiscipline'] as String? ?? '',
+      subTags: (json['subTags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
 
       externalLinks: (json['externalLinks'] as List<dynamic>?)
               ?.map((e) => e.toString())

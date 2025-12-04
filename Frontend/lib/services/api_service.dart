@@ -1320,7 +1320,7 @@ class ApiService {
     required String title,
     String? content,
     List<String>? media,
-    List<String>? tags,
+    required String mainDiscipline,
     String? doi,
     String? journal,
     int? year,
@@ -1338,7 +1338,7 @@ class ApiService {
           'title': title,
           if (content != null) 'content': content,
           if (media != null) 'media': media,
-          if (tags != null) 'tags': tags,
+          'mainDiscipline': mainDiscipline,
           if (doi != null) 'doi': doi,
           if (journal != null) 'journal': journal,
           if (year != null) 'year': year,
@@ -1360,7 +1360,7 @@ class ApiService {
     required String title,
     String? content,
     required List<String> media,
-    List<String>? tags,
+    required String mainDiscipline,
     String? doi,
     String? journal,
     int? year,
@@ -1377,9 +1377,9 @@ class ApiService {
         body: jsonEncode({
           'title': title,
           if (content != null) 'content': content,
-          // 编辑时 media 传“完整列表”（已有 + 新上传）
+          // 编辑时 media 传"完整列表"（已有 + 新上传）
           'media': media,
-          if (tags != null) 'tags': tags,
+          'mainDiscipline': mainDiscipline,
           if (doi != null) 'doi': doi,
           if (journal != null) 'journal': journal,
           if (year != null) 'year': year,

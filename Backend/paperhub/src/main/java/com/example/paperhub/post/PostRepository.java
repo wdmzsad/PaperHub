@@ -78,5 +78,20 @@ public interface PostRepository extends JpaRepository<Post, Long> {
      */
     @Query("SELECT COUNT(DISTINCT p) FROM Post p JOIN p.tags t WHERE t = :tag")
     long countByTag(@Param("tag") String tag);
+
+    /**
+     * 按主分区过滤帖子
+     * @param mainDiscipline 主分区名称
+     * @param pageable 分页参数
+     * @return 属于指定主分区的帖子分页
+     */
+    Page<Post> findByMainDisciplineOrderByCreatedAtDesc(String mainDiscipline, Pageable pageable);
+
+    /**
+     * 统计属于指定主分区的帖子数量
+     * @param mainDiscipline 主分区名称
+     * @return 属于指定主分区的帖子数量
+     */
+    long countByMainDiscipline(String mainDiscipline);
 }
 
