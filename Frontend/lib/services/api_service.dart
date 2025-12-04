@@ -1496,7 +1496,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getConversationMessages(
     String conversationId, {
     int page = 0,
-    int pageSize = 20,
+    int pageSize = 100,
   }) async {
     final uri = Uri.parse('$baseUrl/api/conversations/$conversationId/messages').replace(
       queryParameters: {
