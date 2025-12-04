@@ -9,8 +9,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:record/record.dart';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:io';
 import '../services/local_storage.dart';
 import '../config/app_env.dart';
 
@@ -39,6 +41,9 @@ class ChatInput extends StatefulWidget {
 class _ChatInputState extends State<ChatInput> {
   bool _isComposing = false;
   FocusNode _focusNode = FocusNode();
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  bool _isRecording = false;
+  String? _recordingPath;
 
   @override
   void initState() {
@@ -52,6 +57,7 @@ class _ChatInputState extends State<ChatInput> {
     widget.controller.removeListener(_onTextChanged);
     _focusNode.removeListener(_onFocusChanged);
     _focusNode.dispose();
+    _audioRecorder.dispose();
     super.dispose();
   }
 
@@ -374,6 +380,56 @@ class _ChatInputState extends State<ChatInput> {
     }
   }
 
+  Future<void> _startRecording() async {
+    if (await _audioRecorder.hasPermission()) {
+      final path = '${Directory.systemTemp.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _audioRecorder.start(const RecordConfig(), path: path);
+      setState(() {
+        _isRecording = true;
+        _recordingPath = path;
+      });
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    final path = await _audioRecorder.stop();
+    setState(() {
+      _isRecording = false;
+    });
+
+    if (path != null && widget.onSendMedia != null) {
+      final file = File(path);
+      final bytes = await file.readAsBytes();
+      final fileName = path.split('/').last;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      try {
+        final url = await _uploadFileBytes(bytes, fileName);
+        Navigator.pop(context);
+
+        if (url != null) {
+          widget.onSendMedia!([url], 'VOICE', fileName, bytes.length);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('语音上传失败')),
+          );
+        }
+      } catch (e) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('语音上传失败: $e')),
+        );
+      } finally {
+        file.delete();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -454,37 +510,68 @@ class _ChatInputState extends State<ChatInput> {
   }
 
   Widget _buildSendButton() {
+    if (_isComposing) {
+      return Container(
+        margin: const EdgeInsets.only(left: 4, right: 8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: widget.enabled ? const Color(0xFF1976D2) : Colors.grey[300],
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: widget.enabled
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF1976D2).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: IconButton(
+            icon: Icon(
+              Icons.send,
+              color: widget.enabled ? Colors.white : Colors.grey[600],
+              size: 20,
+            ),
+            onPressed: widget.enabled ? _handleSend : null,
+            splashRadius: 20,
+          ),
+        ),
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.only(left: 4, right: 8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: _isComposing ? 40 : 32,
-        height: _isComposing ? 40 : 32,
-        decoration: BoxDecoration(
-          color: _isComposing && widget.enabled
-              ? const Color(0xFF1976D2)
-              : Colors.grey[300],
-          borderRadius: BorderRadius.circular(_isComposing ? 20 : 16),
-          boxShadow: _isComposing && widget.enabled
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF1976D2).withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: IconButton(
-          icon: Icon(
-            _isComposing ? Icons.send : Icons.mic,
-            color: _isComposing && widget.enabled
-                ? Colors.white
-                : Colors.grey[600],
-            size: _isComposing ? 20 : 16,
+      child: GestureDetector(
+        onLongPressStart: (_) => _startRecording(),
+        onLongPressEnd: (_) => _stopRecording(),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: _isRecording ? 48 : 32,
+          height: _isRecording ? 48 : 32,
+          decoration: BoxDecoration(
+            color: _isRecording
+                ? Colors.red
+                : (widget.enabled ? const Color(0xFF1976D2) : Colors.grey[300]),
+            borderRadius: BorderRadius.circular(_isRecording ? 24 : 16),
+            boxShadow: _isRecording
+                ? [
+                    BoxShadow(
+                      color: Colors.red.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
           ),
-          onPressed: _isComposing && widget.enabled ? _handleSend : null,
-          splashRadius: 20,
+          child: Icon(
+            Icons.mic,
+            color: widget.enabled ? Colors.white : Colors.grey[600],
+            size: _isRecording ? 24 : 16,
+          ),
         ),
       ),
     );

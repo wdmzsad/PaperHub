@@ -238,6 +238,8 @@ class _ChatScreenState extends State<ChatScreen> {
       type = MessageType.image;
     } else if (messageType == 'VIDEO') {
       type = MessageType.video;
+    } else if (messageType == 'VOICE') {
+      type = MessageType.voice;
     }
 
     _chatService.sendMessageWithMedia(
