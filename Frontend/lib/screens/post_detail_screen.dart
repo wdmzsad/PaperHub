@@ -261,6 +261,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   static const int _pageSize = 20;
   // 防止重复请求
   bool _postLikeInFlight = false;
+
+  // 引用文献缓存，避免重复加载
+  final Map<int, Map<String, dynamic>> _referencePostCache = {};
   final Set<String> _commentLikeInFlight = {}; // commentId 集合
   bool _isSubmittingComment = false;
   final TextEditingController _commentController = TextEditingController();
@@ -2399,6 +2402,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           // arXiv 文献信息（如果有）
           if (_hasArxivMetadata()) _buildArxivMetadataSection(),
           const SizedBox(height: 10),
+          // 引用文献（如果有）
+          if (widget.post.references.isNotEmpty) _buildReferencesSection(),
+          const SizedBox(height: 10),
           if (_pdfMedia.isNotEmpty) _buildPdfSection(),
           if (widget.post.attachments.isNotEmpty)
             Column(
@@ -2529,6 +2535,164 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         ],
       ),
     );
+  }
+
+  Widget _buildReferencesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '引用文献',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        ...widget.post.references.asMap().entries.map((entry) {
+          final index = entry.key + 1;
+          final postId = entry.value;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: FutureBuilder<Map<String, dynamic>>(
+              future: _fetchReferencePost(postId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '[$index] 加载中...',
+                          style: const TextStyle(fontSize: 12, color: Colors.blue),
+                        ),
+                      ],
+                    ),
+                  );
+                } else if (snapshot.hasError || !snapshot.hasData) {
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Text(
+                      '[$index] 引用内容已不可见',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  );
+                } else {
+                  final refPost = snapshot.data!;
+                  final title = refPost['title'] ?? '未知标题';
+                  final authorName = refPost['author']?['name'] ?? '未知作者';
+                  final discipline = refPost['mainDiscipline'] ?? '';
+                  final createdAt = refPost['createdAt'];
+                  String dateStr = '';
+                  if (createdAt != null) {
+                    try {
+                      final date = DateTime.parse(createdAt);
+                      dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                    } catch (e) {
+                      dateStr = '';
+                    }
+                  }
+
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: InkWell(
+                      onTap: () => _navigateToReferencePost(postId),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.library_books,
+                            size: 16,
+                            color: Colors.blue,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '[$index] $authorName. $title. $discipline${dateStr.isNotEmpty ? ', $dateStr' : ''}.',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Future<Map<String, dynamic>> _fetchReferencePost(int postId) async {
+    // 先检查缓存
+    if (_referencePostCache.containsKey(postId)) {
+      return _referencePostCache[postId]!;
+    }
+
+    try {
+      final resp = await ApiService.getPost(postId.toString());
+      if (resp['statusCode'] == 200) {
+        final postData = resp['body'];
+        // 缓存数据
+        _referencePostCache[postId] = postData;
+        return postData;
+      } else {
+        throw Exception('无法获取引用帖子');
+      }
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  void _navigateToReferencePost(int postId) async {
+    try {
+      final resp = await ApiService.getPost(postId.toString());
+      if (resp['statusCode'] == 200) {
+        final refPostData = resp['body'];
+        final refPost = Post.fromJson(refPostData);
+
+        // 导航到引用帖子详情页
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PostDetailScreen(
+              post: refPost,
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('引用内容已不可见')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('无法访问引用内容')),
+      );
+    }
   }
 
   Widget _buildPdfSection() {

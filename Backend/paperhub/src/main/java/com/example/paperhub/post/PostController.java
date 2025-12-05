@@ -198,7 +198,8 @@ public class PostController {
                 req.arxivId(),
                 req.arxivAuthors() != null ? req.arxivAuthors() : new ArrayList<>(),
                 req.arxivPublishedDate(),
-                req.arxivCategories() != null ? req.arxivCategories() : new ArrayList<>()
+                req.arxivCategories() != null ? req.arxivCategories() : new ArrayList<>(),
+                req.references() != null ? req.references() : new ArrayList<>()
             );
             
             PostDtos.PostResp resp = postMapper.toPostResp(post, user.getId());
@@ -299,7 +300,8 @@ public class PostController {
                     req.arxivId(),
                     req.arxivAuthors() != null ? req.arxivAuthors() : new ArrayList<>(),
                     req.arxivPublishedDate(),
-                    req.arxivCategories() != null ? req.arxivCategories() : new ArrayList<>()
+                    req.arxivCategories() != null ? req.arxivCategories() : new ArrayList<>(),
+                    req.references() != null ? req.references() : new ArrayList<>()
             );
 
             // 4. 映射成响应对象（保持和详情页一致）
