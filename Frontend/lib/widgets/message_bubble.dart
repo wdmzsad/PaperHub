@@ -569,9 +569,13 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Future<void> _toggleAudioPlayback(String audioUrl) async {
+    print('[AudioPlayer] 切换播放状态，URL: $audioUrl');
+
     if (_audioPlayer == null) {
+      print('[AudioPlayer] 初始化播放器');
       _audioPlayer = AudioPlayer();
       _audioPlayer!.onDurationChanged.listen((duration) {
+        print('[AudioPlayer] 时长变化: ${duration.inSeconds}s');
         if (mounted) {
           setState(() {
             _audioDuration = duration;
@@ -586,6 +590,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         }
       });
       _audioPlayer!.onPlayerComplete.listen((_) {
+        print('[AudioPlayer] 播放完成');
         if (mounted) {
           setState(() {
             _isPlayingAudio = false;
@@ -595,16 +600,22 @@ class _MessageBubbleState extends State<MessageBubble> {
       });
     }
 
-    if (_isPlayingAudio) {
-      await _audioPlayer!.pause();
-      setState(() {
-        _isPlayingAudio = false;
-      });
-    } else {
-      await _audioPlayer!.play(UrlSource(audioUrl));
-      setState(() {
-        _isPlayingAudio = true;
-      });
+    try {
+      if (_isPlayingAudio) {
+        print('[AudioPlayer] 暂停播放');
+        await _audioPlayer!.pause();
+        setState(() {
+          _isPlayingAudio = false;
+        });
+      } else {
+        print('[AudioPlayer] 开始播放');
+        await _audioPlayer!.play(UrlSource(audioUrl));
+        setState(() {
+          _isPlayingAudio = true;
+        });
+      }
+    } catch (e) {
+      print('[AudioPlayer] 播放错误: $e');
     }
   }
 

@@ -8,17 +8,25 @@ import com.example.paperhub.chat.Conversation;
 import com.example.paperhub.chat.MessageType;
 import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
+import com.example.paperhub.config.ObsConfig;
+import com.obs.services.ObsClient;
+import com.obs.services.exception.ObsException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import jakarta.validation.Valid;
+import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/conversations")
@@ -31,6 +39,15 @@ public class ChatController {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private ObsClient obsClient;
+
+    @Autowired
+    private ObsConfig obsConfig;
+
+    @Autowired
+    private ConversationParticipantRepository conversationParticipantRepository;
 
     /**
      * 获取当前用户的所有会话列表
@@ -187,6 +204,96 @@ public class ChatController {
 
         List<MessageResponse> messages = chatService.getLatestMessages(conversationId, user.getId(), limit);
         return ResponseEntity.ok(messages);
+    }
+
+    /**
+     * 上传语音消息
+     */
+    @PostMapping("/{conversationId}/messages/voice")
+    public ResponseEntity<?> uploadVoiceMessage(
+            @AuthenticationPrincipal User currentUser,
+            @PathVariable Long conversationId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "duration", required = false, defaultValue = "0") Long duration) {
+
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "未认证，请先登录"));
+        }
+
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "语音文件不能为空"));
+        }
+
+        // 验证用户是否是会话参与者
+        boolean isParticipant = conversationParticipantRepository
+                .existsByConversationIdAndUserId(conversationId, currentUser.getId());
+        if (!isParticipant) {
+            return ResponseEntity.status(403).body(Map.of("message", "无权限访问此会话"));
+        }
+
+        // 验证文件类型
+        String originalName = file.getOriginalFilename();
+        String extension = StringUtils.hasText(originalName) && originalName.contains(".")
+                ? originalName.substring(originalName.lastIndexOf('.'))
+                : "";
+
+        if (!isAudioFile(extension)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "不支持的音频格式"));
+        }
+
+        // 限制文件大小 (10MB)
+        if (file.getSize() > 10 * 1024 * 1024) {
+            return ResponseEntity.badRequest().body(Map.of("message", "语音文件不能超过10MB"));
+        }
+
+        // 上传到 OBS
+        String objectKey = "chat-voice/" + UUID.randomUUID() + extension;
+        String url = "https://" + obsConfig.getBucketName() + ".obs.cn-north-4.myhuaweicloud.com/" + objectKey;
+
+        try {
+            obsClient.putObject(obsConfig.getBucketName(), objectKey, file.getInputStream());
+            logger.info("语音文件上传成功: {}", url);
+
+            // 创建语音消息
+            Message message = chatService.sendMessage(
+                conversationId,
+                currentUser.getId(),
+                "", // 语音消息内容为空
+                MessageType.VOICE,
+                url,
+                originalName,
+                    Long.valueOf(file.getSize())
+            );
+
+            if (message == null) {
+                return ResponseEntity.status(500).body(Map.of("message", "消息发送失败"));
+            }
+
+            // 构建响应
+            MessageResponse response = new MessageResponse(message);
+            response.setSenderName(currentUser.getName());
+            response.setSenderAvatar(currentUser.getAvatar());
+            response.setIsMe(true);
+
+            logger.info("语音消息发送成功: messageId={}, conversationId={}", message.getId(), conversationId);
+            return ResponseEntity.ok(response);
+
+        } catch (ObsException e) {
+            logger.error("OBS上传失败: {}", e.getErrorMessage(), e);
+            return ResponseEntity.status(500).body(Map.of(
+                "message", "文件上传失败: " + e.getErrorMessage(),
+                "code", e.getErrorCode()
+            ));
+        } catch (IOException e) {
+            logger.error("文件读取失败: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("message", "文件读取失败: " + e.getMessage()));
+        }
+    }
+
+    private boolean isAudioFile(String extension) {
+        String lowerExt = extension.toLowerCase();
+        return lowerExt.equals(".mp3") || lowerExt.equals(".wav") || lowerExt.equals(".m4a") ||
+               lowerExt.equals(".ogg") || lowerExt.equals(".aac") || lowerExt.equals(".webm");
     }
 
 }

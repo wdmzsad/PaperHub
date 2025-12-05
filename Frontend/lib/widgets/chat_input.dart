@@ -6,6 +6,7 @@
 /// - 表情和附件按钮
 /// - 发送按钮状态管理
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
@@ -242,6 +243,16 @@ class _ChatInputState extends State<ChatInput> {
                 _pickFile();
               },
             ),
+            if (kIsWeb)
+              ListTile(
+                leading: const Icon(Icons.mic, color: Color(0xFF1976D2)),
+                title: const Text('语音文件'),
+                subtitle: const Text('上传音频文件'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAudioFile();
+                },
+              ),
             const SizedBox(height: 16),
           ],
         ),
@@ -306,6 +317,18 @@ class _ChatInputState extends State<ChatInput> {
     if (result != null && widget.onSendMedia != null) {
       final file = result.files.single;
       await _uploadAndSendMediaBytes(file.bytes!, file.name, 'FILE');
+    }
+  }
+
+  Future<void> _pickAudioFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'webm'],
+    );
+
+    if (result != null && widget.onSendMedia != null) {
+      final file = result.files.single;
+      await _uploadAndSendMediaBytes(file.bytes!, file.name, 'VOICE');
     }
   }
 
@@ -381,49 +404,118 @@ class _ChatInputState extends State<ChatInput> {
   }
 
   Future<void> _startRecording() async {
-    if (await _audioRecorder.hasPermission()) {
+    print('[VoiceRecorder] 开始录音请求');
+
+    if (kIsWeb) {
+      print('[VoiceRecorder] Web平台不支持录音，提示用户上传文件');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Web版本暂不支持录音，请使用移动端或上传音频文件')),
+        );
+      }
+      return;
+    }
+
+    if (!await _audioRecorder.hasPermission()) {
+      print('[VoiceRecorder] 无麦克风权限');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('需要麦克风权限才能录音')),
+        );
+      }
+      return;
+    }
+
+    try {
       final path = '${Directory.systemTemp.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      print('[VoiceRecorder] 录音路径: $path');
+
       await _audioRecorder.start(const RecordConfig(), path: path);
+      print('[VoiceRecorder] 录音已开始');
+
       setState(() {
         _isRecording = true;
         _recordingPath = path;
       });
+    } catch (e) {
+      print('[VoiceRecorder] 录音启动失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('录音失败: $e')),
+        );
+      }
     }
   }
 
   Future<void> _stopRecording() async {
+    print('[VoiceRecorder] 停止录音');
+
     final path = await _audioRecorder.stop();
+    print('[VoiceRecorder] 录音已停止，路径: $path');
+
     setState(() {
       _isRecording = false;
     });
 
     if (path != null && widget.onSendMedia != null) {
       final file = File(path);
+      if (!await file.exists()) {
+        print('[VoiceRecorder] 录音文件不存在');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('录音文件不存在')),
+          );
+        }
+        return;
+      }
+
       final bytes = await file.readAsBytes();
       final fileName = path.split('/').last;
+      print('[VoiceRecorder] 录音文件大小: ${bytes.length} bytes');
 
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
-      );
+      if (bytes.length < 1000) {
+        print('[VoiceRecorder] 录音时间太短');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('录音时间太短')),
+          );
+        }
+        file.delete();
+        return;
+      }
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(child: CircularProgressIndicator()),
+        );
+      }
 
       try {
         final url = await _uploadFileBytes(bytes, fileName);
-        Navigator.pop(context);
+        print('[VoiceRecorder] 上传结果: $url');
+
+        if (mounted) Navigator.pop(context);
 
         if (url != null) {
           widget.onSendMedia!([url], 'VOICE', fileName, bytes.length);
+          print('[VoiceRecorder] 语音消息发送成功');
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('语音上传失败')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('语音上传失败')),
+            );
+          }
         }
       } catch (e) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('语音上传失败: $e')),
-        );
+        print('[VoiceRecorder] 上传异常: $e');
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('语音上传失败: $e')),
+          );
+        }
       } finally {
         file.delete();
       }
@@ -546,8 +638,23 @@ class _ChatInputState extends State<ChatInput> {
     return Container(
       margin: const EdgeInsets.only(left: 4, right: 8),
       child: GestureDetector(
-        onLongPressStart: (_) => _startRecording(),
-        onLongPressEnd: (_) => _stopRecording(),
+        onLongPressStart: (_) {
+          print('[VoiceRecorder] 长按开始');
+          _startRecording();
+        },
+        onLongPressEnd: (_) {
+          print('[VoiceRecorder] 长按结束');
+          _stopRecording();
+        },
+        onLongPressCancel: () {
+          print('[VoiceRecorder] 长按取消');
+          if (_isRecording) {
+            _audioRecorder.stop();
+            setState(() {
+              _isRecording = false;
+            });
+          }
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           width: _isRecording ? 48 : 32,
