@@ -16,6 +16,7 @@ import 'dart:typed_data';
 import 'dart:io';
 import '../services/local_storage.dart';
 import '../config/app_env.dart';
+import 'web_audio_recorder.dart' if (dart.library.io) 'web_audio_recorder_stub.dart';
 
 class ChatInput extends StatefulWidget {
   final TextEditingController controller;
@@ -43,8 +44,10 @@ class _ChatInputState extends State<ChatInput> {
   bool _isComposing = false;
   FocusNode _focusNode = FocusNode();
   final AudioRecorder _audioRecorder = AudioRecorder();
+  WebAudioRecorder? _webAudioRecorder;
   bool _isRecording = false;
   String? _recordingPath;
+  Uint8List? _webRecordingData;
 
   @override
   void initState() {
@@ -59,6 +62,7 @@ class _ChatInputState extends State<ChatInput> {
     _focusNode.removeListener(_onFocusChanged);
     _focusNode.dispose();
     _audioRecorder.dispose();
+    _webAudioRecorder?.dispose();
     super.dispose();
   }
 
@@ -243,16 +247,15 @@ class _ChatInputState extends State<ChatInput> {
                 _pickFile();
               },
             ),
-            if (kIsWeb)
-              ListTile(
-                leading: const Icon(Icons.mic, color: Color(0xFF1976D2)),
-                title: const Text('语音文件'),
-                subtitle: const Text('上传音频文件'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickAudioFile();
-                },
-              ),
+            ListTile(
+              leading: const Icon(Icons.mic, color: Color(0xFF1976D2)),
+              title: const Text('语音文件'),
+              subtitle: const Text('上传音频文件'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAudioFile();
+              },
+            ),
             const SizedBox(height: 16),
           ],
         ),
@@ -407,11 +410,38 @@ class _ChatInputState extends State<ChatInput> {
     print('[VoiceRecorder] 开始录音请求');
 
     if (kIsWeb) {
-      print('[VoiceRecorder] Web平台不支持录音，提示用户上传文件');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Web版本暂不支持录音，请使用移动端或上传音频文件')),
-        );
+      print('[VoiceRecorder] Web平台使用浏览器录音');
+      try {
+        _webAudioRecorder = WebAudioRecorder();
+
+        if (!await _webAudioRecorder!.hasPermission()) {
+          print('[VoiceRecorder] 无麦克风权限');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('需要麦克风权限才能录音')),
+            );
+          }
+          return;
+        }
+
+        _webAudioRecorder!.onStop.listen((data) {
+          print('[VoiceRecorder] Web录音数据接收: ${data.length} bytes');
+          _webRecordingData = data;
+        });
+
+        await _webAudioRecorder!.start();
+        print('[VoiceRecorder] Web录音已开始');
+
+        setState(() {
+          _isRecording = true;
+        });
+      } catch (e) {
+        print('[VoiceRecorder] Web录音启动失败: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('录音失败: $e')),
+          );
+        }
       }
       return;
     }
@@ -450,12 +480,79 @@ class _ChatInputState extends State<ChatInput> {
   Future<void> _stopRecording() async {
     print('[VoiceRecorder] 停止录音');
 
-    final path = await _audioRecorder.stop();
-    print('[VoiceRecorder] 录音已停止，路径: $path');
-
     setState(() {
       _isRecording = false;
     });
+
+    if (kIsWeb) {
+      await _webAudioRecorder?.stop();
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      if (_webRecordingData == null || _webRecordingData!.isEmpty) {
+        print('[VoiceRecorder] Web录音数据为空');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('录音失败，请重试')),
+          );
+        }
+        return;
+      }
+
+      final bytes = _webRecordingData!;
+      final fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.webm';
+      print('[VoiceRecorder] Web录音文件大小: ${bytes.length} bytes');
+
+      if (bytes.length < 1000) {
+        print('[VoiceRecorder] 录音时间太短');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('录音时间太短')),
+          );
+        }
+        _webRecordingData = null;
+        return;
+      }
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(child: CircularProgressIndicator()),
+        );
+      }
+
+      try {
+        final url = await _uploadFileBytes(bytes, fileName);
+        print('[VoiceRecorder] 上传结果: $url');
+
+        if (mounted) Navigator.pop(context);
+
+        if (url != null && widget.onSendMedia != null) {
+          widget.onSendMedia!([url], 'VOICE', fileName, bytes.length);
+          print('[VoiceRecorder] 语音消息发送成功');
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('语音上传失败')),
+            );
+          }
+        }
+      } catch (e) {
+        print('[VoiceRecorder] 上传异常: $e');
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('语音上传失败: $e')),
+          );
+        }
+      } finally {
+        _webRecordingData = null;
+      }
+      return;
+    }
+
+    final path = await _audioRecorder.stop();
+    print('[VoiceRecorder] 录音已停止，路径: $path');
 
     if (path != null && widget.onSendMedia != null) {
       final file = File(path);
@@ -649,7 +746,11 @@ class _ChatInputState extends State<ChatInput> {
         onLongPressCancel: () {
           print('[VoiceRecorder] 长按取消');
           if (_isRecording) {
-            _audioRecorder.stop();
+            if (kIsWeb) {
+              _webAudioRecorder?.stop();
+            } else {
+              _audioRecorder.stop();
+            }
             setState(() {
               _isRecording = false;
             });
