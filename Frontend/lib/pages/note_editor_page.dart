@@ -65,6 +65,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   final FocusNode _contentFocusNode = FocusNode();
   bool _isTypingCustomTag = false;
 
+  // 引用文献相关状态
+  List<int> _selectedReferences = []; // 已选择的引用帖子ID列表
+  List<Post> _userPosts = []; // 用户的帖子列表
+  List<Post> _userFavorites = []; // 用户的收藏列表
+  bool _isLoadingReferences = false;
+
   /// 编辑模式下旧图片的 URL 列表
   final List<String> _existingImageUrls = [];
   /// 编辑模式下旧 PDF 的 URL
@@ -127,6 +133,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         _currentUserRole = 'USER';
       });
     }
+    // 异步加载用户的帖子和收藏，用于引用文献选择
+    // 不在initState中立即调用，而是在需要时调用，这样可以避免阻塞UI
   }
 
   // 将已有帖子内容灌入编辑器（编辑模式）
@@ -178,6 +186,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         year: post.year,
       );
     }
+
+    // 预填充引用文献
+    _selectedReferences = List.from(post.references);
   }
 
   // 判断 URL 是否为 PDF
@@ -450,6 +461,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           arxivAuthors: arxivAuthors,
           arxivPublishedDate: arxivPublishedDate,
           arxivCategories: arxivCategories,
+          references: _selectedReferences.isNotEmpty ? _selectedReferences : null,
         );
       } else {
         // === 新建帖子 ===
@@ -466,6 +478,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           arxivAuthors: arxivAuthors,
           arxivPublishedDate: arxivPublishedDate,
           arxivCategories: arxivCategories,
+          references: _selectedReferences.isNotEmpty ? _selectedReferences : null,
         );
       }
 
@@ -1407,6 +1420,171 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     return tags;
   }
 
+  // 加载用户的帖子和收藏（用于引用文献选择）
+  Future<void> _loadUserPostsAndFavorites() async {
+    setState(() {
+      _isLoadingReferences = true;
+    });
+
+    try {
+      // 获取当前用户信息
+      final userResp = await ApiService.getCurrentUserProfile();
+      if (userResp['statusCode'] == 200) {
+        final userId = userResp['body']['id']?.toString();
+
+        // 检查用户ID是否存在
+        if (userId == null || userId.isEmpty) {
+          print('用户ID为空，无法加载引用文献');
+          return;
+        }
+
+        // 并行加载用户帖子和收藏
+        final results = await Future.wait([
+          ApiService.getUserPosts(userId!, page: 1, pageSize: 50),
+          ApiService.getUserFavorites(userId!, page: 1, pageSize: 50),
+        ]);
+
+        final postsResp = results[0] as Map<String, dynamic>;
+        final favoritesResp = results[1] as Map<String, dynamic>;
+
+        if (postsResp['statusCode'] == 200) {
+          final postsData = postsResp['body']['posts'] as List<dynamic>? ?? [];
+          setState(() {
+            _userPosts = postsData.map((p) => Post.fromJson(p)).toList();
+          });
+        }
+
+        if (favoritesResp['statusCode'] == 200) {
+          final favoritesData = favoritesResp['body']['posts'] as List<dynamic>? ?? [];
+          setState(() {
+            _userFavorites = favoritesData.map((p) => Post.fromJson(p)).toList();
+          });
+        }
+      }
+    } catch (e) {
+      print('加载用户帖子和收藏失败: $e');
+    } finally {
+      setState(() {
+        _isLoadingReferences = false;
+      });
+    }
+  }
+
+  // 选择引用文献对话框
+  void _showReferenceSelector() async {
+    // 如果还没有加载过数据，先加载
+    if (_userPosts.isEmpty && _userFavorites.isEmpty && !_isLoadingReferences) {
+      await _loadUserPostsAndFavorites();
+    }
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('选择引用文献'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 400,
+            child: DefaultTabController(
+              length: 2,
+              child: Column(
+                children: [
+                  const TabBar(
+                    tabs: [
+                      Tab(text: '我的帖子'),
+                      Tab(text: '我的收藏'),
+                    ],
+                  ),
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        // 我的帖子标签页
+                        _buildPostList(_userPosts, setState),
+                        // 我的收藏标签页
+                        _buildPostList(_userFavorites, setState),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                this.setState(() {}); // 刷新页面显示选中的引用
+              },
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 构建帖子列表
+  Widget _buildPostList(List<Post> posts, StateSetter setState) {
+    if (_isLoadingReferences) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (posts.isEmpty) {
+      return const Center(child: Text('暂无内容'));
+    }
+
+    return ListView.builder(
+      itemCount: posts.length,
+      itemBuilder: (context, index) {
+        final post = posts[index];
+        final postId = int.tryParse(post.id) ?? 0;
+        final isSelected = _selectedReferences.contains(postId);
+
+        return ListTile(
+          leading: Checkbox(
+            value: isSelected,
+            onChanged: (bool? value) {
+              setState(() {
+                final postId = int.tryParse(post.id) ?? 0;
+                if (value == true) {
+                  _selectedReferences.add(postId);
+                } else {
+                  _selectedReferences.remove(postId);
+                }
+              });
+            },
+          ),
+          title: Text(
+            post.title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            '${post.author.name} · ${post.createdAt.year}-${post.createdAt.month.toString().padLeft(2, '0')}-${post.createdAt.day.toString().padLeft(2, '0')}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          onTap: () {
+            // 点击文字区域时切换checkbox状态
+            setState(() {
+              final postId = int.tryParse(post.id) ?? 0;
+              if (isSelected) {
+                _selectedReferences.remove(postId);
+              } else {
+                _selectedReferences.add(postId);
+              }
+            });
+          },
+        );
+      },
+    );
+  }
+
   // 构建标签建议列表
   Widget _buildTagSuggestions() {
         if (!_showTagSuggestions) {
@@ -1515,6 +1693,137 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 
+  // 引用文献输入区
+  Widget _buildReferencesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '引用文献',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            ElevatedButton.icon(
+              onPressed: _showReferenceSelector,
+              icon: const Icon(Icons.library_books, size: 18),
+              label: const Text('添加引用文献'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey[100],
+                foregroundColor: Colors.black87,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+            const SizedBox(width: 12),
+            if (_selectedReferences.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '已选择 ${_selectedReferences.length} 篇',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.green[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        if (_selectedReferences.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue[200]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '已选择的引用文献：',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.blue,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ..._selectedReferences.map((postId) {
+                  // 从用户帖子和收藏中找到对应的帖子信息
+                  final post = [..._userPosts, ..._userFavorites]
+                      .where((p) => int.tryParse(p.id) == postId)
+                      .cast<Post?>()
+                      .firstWhere((p) => p != null, orElse: () => null);
+
+                  if (post != null) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '[${_selectedReferences.indexOf(postId) + 1}] ${post.author.name}. ${post.title}. ${post.mainDiscipline}, ${post.createdAt.year}-${post.createdAt.month.toString().padLeft(2, '0')}-${post.createdAt.day.toString().padLeft(2, '0')}.',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _selectedReferences.remove(postId);
+                              });
+                            },
+                            icon: const Icon(Icons.close, size: 16),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    );
+                  } else {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '[${_selectedReferences.indexOf(postId) + 1}] 帖子ID: $postId (信息加载中...)',
+                              style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _selectedReferences.remove(postId);
+                              });
+                            },
+                            icon: const Icon(Icons.close, size: 16),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                }),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool hasPdf = _pdfFile != null || _existingPdfUrl != null;
@@ -1602,6 +1911,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
               // arXiv 文献信息区
               _buildArxivSection(),
+              const SizedBox(height: 16),
+
+              // 引用文献区
+              _buildReferencesSection(),
               const SizedBox(height: 16),
 
               // PDF 附件

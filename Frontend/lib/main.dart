@@ -14,12 +14,24 @@ import 'services/local_storage.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await LocalStorage.instance.init();
 
+  // 初始化本地存储（SharedPreferences），失败时不要让应用崩掉
+  try {
+    await LocalStorage.instance.init();
+  } catch (e, s) {
+    debugPrint('LocalStorage.init failed: $e\n$s');
+  }
+
+  // 捕获 Flutter 框架级错误（包括构建/布局阶段）
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('FlutterError.onError: ${details.exception}\n${details.stack}');
+  };
+
+  // 捕获顶层未处理错误，避免在 Web 上直接变成混淆的 Uncaught Error
   runZonedGuarded(() {
     runApp(const PaperHubApp());
   }, (error, stack) {
-    // 在 Web 上把顶层未捕获错误打到控制台，方便定位 main.dart.js 中的混淆错误
     debugPrint('=== TOP LEVEL ERROR ===');
     debugPrint(error.toString());
     debugPrint(stack.toString());
@@ -36,7 +48,7 @@ class PaperHubApp extends StatelessWidget {
       theme: ThemeData(primarySwatch: Colors.blue),
       initialRoute: '/',
       routes: {
-        '/': (ctx) => SplashOrLogin(),
+        '/': (ctx) => const SplashOrLogin(),
         '/login': (ctx) => LoginPage(),
         '/register': (ctx) => RegisterPage(),
         '/verify': (ctx) => VerifyEmailPage(),
@@ -67,13 +79,17 @@ class PaperHubApp extends StatelessWidget {
   }
 }
 
-/// 简单启动检查 token（演示用：使用内存存储）
+/// 启动页：检查本地 token 决定跳转首页还是登录页
 class SplashOrLogin extends StatefulWidget {
+  const SplashOrLogin({Key? key}) : super(key: key);
+
   @override
   _SplashOrLoginState createState() => _SplashOrLoginState();
 }
 
 class _SplashOrLoginState extends State<SplashOrLogin> {
+  bool _navigated = false;
+
   @override
   void initState() {
     super.initState();
@@ -81,17 +97,39 @@ class _SplashOrLoginState extends State<SplashOrLogin> {
   }
 
   Future<void> _checkToken() async {
-    await Future.delayed(Duration(milliseconds: 400));
-    final token = LocalStorage.instance.read('accessToken');
-    if (token != null && token.isNotEmpty) {
-      Navigator.of(context).pushReplacementNamed('/home');
-    } else {
-      Navigator.of(context).pushReplacementNamed('/login');
+    try {
+      // 简单的加载过渡
+      await Future.delayed(const Duration(milliseconds: 400));
+
+      // LocalStorage.read 当前是同步的 String?，这里直接读取即可
+      final token = LocalStorage.instance.read('accessToken');
+      debugPrint(
+          'Startup: accessToken read -> ${token == null ? "null" : "present"}');
+
+      if (!mounted) return;
+
+      if (token != null && token.isNotEmpty) {
+        _pushReplacementSafely('/home');
+      } else {
+        _pushReplacementSafely('/login');
+      }
+    } catch (e, s) {
+      // 避免任何初始化异常在 Web 上冒泡成 Uncaught Error
+      debugPrint('Error in _checkToken: $e\n$s');
+      if (!mounted) return;
+      _pushReplacementSafely('/login');
     }
+  }
+
+  void _pushReplacementSafely(String routeName) {
+    if (_navigated) return;
+    _navigated = true;
+    Navigator.of(context).pushReplacementNamed(routeName);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(body: Center(child: CircularProgressIndicator()));
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
+

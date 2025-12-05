@@ -36,6 +36,16 @@ class ChatService extends ChangeNotifier {
   bool _isLoadingMessages = false;
   bool get isLoadingMessages => _isLoadingMessages;
 
+  // 分页状态
+  int _currentPage = 0;
+  int get currentPage => _currentPage;
+  int _totalPages = 0;
+  int get totalPages => _totalPages;
+  bool _hasMoreMessages = false;
+  bool get hasMoreMessages => _hasMoreMessages;
+  bool _isLoadingMoreMessages = false;
+  bool get isLoadingMoreMessages => _isLoadingMoreMessages;
+
   // 连接状态
   bool _isConnected = false;
   bool get isConnected => _isConnected;
@@ -168,33 +178,79 @@ class ChatService extends ChangeNotifier {
   }
 
   /// 获取指定会话的消息列表
-  Future<void> loadMessages(String conversationId, {bool silent = false}) async {
-    if (!silent) {
-      _isLoadingMessages = true;
-      notifyListeners();
+  Future<void> loadMessages(String conversationId, {bool silent = false, int page = 0}) async {
+    if (page == 0) {
+      // 首次加载或刷新
+      if (!silent) {
+        _isLoadingMessages = true;
+        notifyListeners();
+      }
+    } else {
+      // 加载更多
+      if (!silent) {
+        _isLoadingMoreMessages = true;
+        notifyListeners();
+      }
     }
 
     try {
-      final result = await ApiService.getConversationMessages(conversationId);
+      final result = await ApiService.getConversationMessages(conversationId, page: page);
 
       if (result['statusCode'] == 200) {
         final Map<String, dynamic> data = result['body'];
         final List<dynamic> content = data['content'] ?? [];
-        _messages = content.map((json) => Message.fromJson(json)).toList().reversed.toList();
+
+        // 转换消息
+        final newMessages = content.map((json) => Message.fromJson(json)).toList();
+
+        // 检查是否为轮询刷新（silent模式且page=0）
+        final isPollingRefresh = silent && page == 0;
+
+        if (!isPollingRefresh) {
+          // 非轮询刷新时更新分页信息
+          _currentPage = data['number'] ?? 0; // Spring Data JPA Page的当前页码
+          _totalPages = data['totalPages'] ?? 1;
+          _hasMoreMessages = _currentPage < _totalPages - 1;
+        }
+
+        if (page == 0) {
+          if (isPollingRefresh) {
+            // 轮询刷新：合并新消息到列表末尾
+            final reversedNewMessages = newMessages.reversed.toList();
+            final existingMessageIds = Set<String>.from(_messages.map((msg) => msg.id));
+            final uniqueNewMessages = reversedNewMessages.where((msg) => !existingMessageIds.contains(msg.id)).toList();
+
+            if (uniqueNewMessages.isNotEmpty) {
+              _messages = [..._messages, ...uniqueNewMessages];
+            }
+          } else {
+            // 首次加载或手动刷新，替换整个列表（反转时间顺序）
+            _messages = newMessages.reversed.toList();
+          }
+        } else {
+          // 加载更多，添加到列表开头（历史消息）
+          // 注意：后端返回的是按时间倒序（最新的第一条），所以newMessages需要反转后添加到开头
+          final reversedNewMessages = newMessages.reversed.toList();
+          _messages = [...reversedNewMessages, ..._messages];
+        }
       } else {
         debugPrint('加载消息失败: ${result['body']['message']}');
-        if (!silent) {
+        if (!silent && page == 0) {
           _messages = [];
         }
       }
     } catch (e) {
       debugPrint('加载消息失败: $e');
-      if (!silent) {
+      if (!silent && page == 0) {
         _messages = [];
       }
     } finally {
       if (!silent) {
-        _isLoadingMessages = false;
+        if (page == 0) {
+          _isLoadingMessages = false;
+        } else {
+          _isLoadingMoreMessages = false;
+        }
       }
       notifyListeners();
     }
