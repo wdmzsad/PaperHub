@@ -1,4 +1,4 @@
-﻿// lib/screens/post_detail_screen.dart
+// lib/screens/post_detail_screen.dart
 // merge request 测试 1104: 单个帖子界面
 import 'dart:async';
 import 'package:flutter/material.dart';
