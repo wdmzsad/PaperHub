@@ -490,13 +490,22 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
       if (status >= 200 && status < 300) {
         if (mounted) {
+          Post? createdPost;
+          // 尝试从响应体解析新建的帖子，便于返回给首页直接展示
+          if (!_isEditing && body != null) {
+            final raw = body['post'] ?? body;
+            if (raw is Map<String, dynamic>) {
+              createdPost = Post.fromJson(raw);
+            }
+          }
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(_isEditing ? '笔记已更新' : '发布成功'),
             ),
           );
           // 返回 true，告诉上一个页面“需要刷新”
-          Navigator.of(context).pop(true);
+          Navigator.of(context).pop(createdPost ?? true);
         }
       } else {
         final msg = body != null && body['message'] != null

@@ -22,6 +22,7 @@
 /// - 导航返回后，通过 `then` 回调恢复首页 tab 高亮（`_currentIndex = 0`）。
 /// - 释放资源：在 `dispose` 中释放 `ScrollController`。
 ///
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../models/post_model.dart';
@@ -40,6 +41,7 @@ import '../models/notification_model.dart';
 import '../services/local_storage.dart';
 import '../services/browse_history_service.dart';
 import '../constants/discipline_constants.dart';
+import '../models/user_profile.dart';
 
 /// 首页入口组件（Stateful）：承载发现流与分区切换
 class HomeScreen extends StatefulWidget {
@@ -97,6 +99,14 @@ class _HomeScreenState extends State<HomeScreen> {
   /// 已浏览过的帖子ID集合（用于在关注流中标记未读红点）
   final Set<String> _viewedPostIds = {};
 
+  /// 当前用户刚发布的帖子（优先展示在发现页顶部，直到刷新/离开）
+  Post? _pinnedSelfPost;
+
+  /// 是否对发现流使用“热度排序”（用户画像不足或推荐分过低时启用）
+  bool _useHotRanking = false;
+
+  UserProfile? _currentUserProfile;
+
   @override
   void initState() {
     super.initState();
@@ -106,6 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _followingScrollController.addListener(_followingScrollListener);
     _preloadUnreadBadges();
     _loadViewedPostIds();
+    _evaluateUserSignals();
   }
 
   /// 加载当前用户的浏览历史，用于关注流“未读”标记
@@ -216,6 +227,9 @@ class _HomeScreenState extends State<HomeScreen> {
             .map((p) => Post.fromJson(p as Map<String, dynamic>))
             .toList();
 
+        final bool useHot = _shouldUseHotRankingOnChunk(newPosts);
+        final ordered = useHot ? _sortedByHeat(newPosts) : newPosts;
+
         // 调试：打印每个帖子的 imageAspectRatio
         print('=== 帖子 imageAspectRatio 调试信息 ===');
         for (var post in newPosts) {
@@ -233,8 +247,9 @@ class _HomeScreenState extends State<HomeScreen> {
         print('=====================================');
 
         setState(() {
+          _useHotRanking = useHot;
           _posts.clear();
-          _posts.addAll(newPosts);
+          _posts.addAll(ordered);
           _hasMore = _posts.length < total;
           _isLoading = false;
         });
@@ -316,8 +331,17 @@ class _HomeScreenState extends State<HomeScreen> {
           // 插入新帖子到列表开头，但避免重复
           for (var newPost in newPosts) {
             if (!_posts.any((p) => p.id == newPost.id)) {
-              _posts.insert(0, newPost);
+              if (_useHotRanking) {
+                _posts.add(newPost);
+              } else {
+                _posts.insert(0, newPost);
+              }
             }
+          }
+          if (_useHotRanking) {
+            _posts
+              ..clear()
+              ..addAll(_sortedByHeat([..._posts]));
           }
           _hasMore = _posts.length < total;
         });
@@ -325,6 +349,28 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       // 忽略错误
     }
+  }
+
+  /// 手动刷新推荐流：回到顶部、清空现有列表并重新请求第一页
+  Future<void> _reloadDiscoverFeed() async {
+    if (_isLoading) return;
+
+    // 回到顶部避免加载时跳动
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    }
+
+    setState(() {
+      _pinnedSelfPost = null;
+      _posts.clear();
+      _hasMore = true;
+    });
+
+    await _loadInitialPosts();
   }
 
   /// 触底后加载下一页（每次追加 6 条）
@@ -349,8 +395,15 @@ class _HomeScreenState extends State<HomeScreen> {
             .map((p) => Post.fromJson(p as Map<String, dynamic>))
             .toList();
 
+        final bool useHot = _shouldUseHotRankingOnChunk(newPosts);
+        final combined = [..._posts, ...newPosts];
+        final ordered = useHot ? _sortedByHeat(combined) : combined;
+
         setState(() {
-          _posts.addAll(newPosts);
+          _useHotRanking = useHot;
+          _posts
+            ..clear()
+            ..addAll(ordered);
           _hasMore = _posts.length < total;
           _isLoading = false;
         });
@@ -481,6 +534,9 @@ class _HomeScreenState extends State<HomeScreen> {
     ).then((result) {
       if (result == true) {
         setState(() {
+          if (_pinnedSelfPost?.id == post.id) {
+            _pinnedSelfPost = null;
+          }
           _posts.removeWhere((p) => p.id == post.id);
         });
         return;
@@ -489,6 +545,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final currentPostIndex = _posts.indexWhere((p) => p.id == post.id);
       if (currentPostIndex != -1) {
         // 重新获取单个帖子详情，同步点赞状态
+        _syncPostLikeStatus(post.id);
+      } else if (_pinnedSelfPost?.id == post.id) {
         _syncPostLikeStatus(post.id);
       }
     });
@@ -506,6 +564,11 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() {
             _posts[postIndex].likesCount = updatedPost.likesCount;
             _posts[postIndex].isLiked = updatedPost.isLiked;
+          });
+        } else if (_pinnedSelfPost?.id == postId) {
+          setState(() {
+            _pinnedSelfPost!.likesCount = updatedPost.likesCount;
+            _pinnedSelfPost!.isLiked = updatedPost.isLiked;
           });
         }
       }
@@ -553,6 +616,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 updatedLikesCount ?? _posts[postIndex].likesCount;
             _posts[postIndex].isLiked =
                 updatedIsLiked ?? !_posts[postIndex].isLiked;
+          });
+        } else if (_pinnedSelfPost?.id == post.id) {
+          setState(() {
+            _pinnedSelfPost!.likesCount =
+                updatedLikesCount ?? _pinnedSelfPost!.likesCount;
+            _pinnedSelfPost!.isLiked =
+                updatedIsLiked ?? !_pinnedSelfPost!.isLiked;
           });
         }
 
@@ -645,8 +715,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final bool selected = _selectedTab == index;
     return GestureDetector(
       onTap: () {
+        final bool wasSelected = _selectedTab == index;
         setState(() {
           _selectedTab = index;
+          // 离开发现页即清除置顶的“我刚发的”帖子
+          if (index != 1) {
+            _pinnedSelfPost = null;
+          }
         });
 
         // 懒加载关注流 / 分区内容
@@ -657,6 +732,14 @@ class _HomeScreenState extends State<HomeScreen> {
             !_zoneLoading &&
             _zoneHasMore) {
           _loadZonePosts();
+        }
+
+        // 点击“发现”文案时，触发刷新推荐流（小红书同款）
+        if (index == 1 && wasSelected) {
+          _reloadDiscoverFeed();
+        } else if (index == 1 && _posts.isEmpty && !_isLoading) {
+          // 切换回发现页且列表为空时补充首屏数据
+          _loadInitialPosts();
         }
       },
       child: Text(
@@ -674,25 +757,97 @@ class _HomeScreenState extends State<HomeScreen> {
   /// - `itemCount` 在加载中时额外 +1 用作显示底部加载指示器。
   /// - 使用 `MasonryGridView.count` 创建 2 列错落网格。
   Widget _buildWaterfallGrid() {
+    final bool hasPinned = _pinnedSelfPost != null;
+    final int baseCount = _posts.length + (hasPinned ? 1 : 0);
+    final int totalCount = baseCount + (_isLoading ? 1 : 0);
+
     return MasonryGridView.count(
       controller: _scrollController,
       crossAxisCount: 2,
       crossAxisSpacing: 8,
       mainAxisSpacing: 8,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      itemCount: _posts.length + (_isLoading ? 1 : 0),
+      itemCount: totalCount,
       itemBuilder: (context, index) {
-        if (index == _posts.length) {
+        if (index == baseCount) {
           return _buildLoadMoreIndicator();
         }
+        final Post target =
+            hasPinned ? (index == 0 ? _pinnedSelfPost! : _posts[index - 1]) : _posts[index];
         return PostCard(
-          post: _posts[index],
-          onTap: () => _onPostTap(_posts[index]),
-          onAuthorTap: () => _openUserProfile(_posts[index].author.id),
+          post: target,
+          onTap: () => _onPostTap(target),
+          onAuthorTap: () => _openUserProfile(target.author.id),
           onLikeTap: _handlePostLike,
         );
       },
     );
+  }
+
+  /// 检查用户画像信号，决定是否使用热度排序兜底
+  Future<void> _evaluateUserSignals() async {
+    try {
+      final resp = await ApiService.getCurrentUserProfile();
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>?;
+        if (body != null) {
+          final profile = UserProfile.fromJson(body);
+          final bool missingDirections = profile.researchDirections.isEmpty;
+          setState(() {
+            _currentUserProfile = profile;
+            _useHotRanking = missingDirections || _useHotRanking;
+          });
+          if (_useHotRanking && _posts.isNotEmpty) {
+            _sortDiscoverByHeat();
+          }
+          return;
+        }
+      }
+    } catch (_) {
+      // 忽略异常，尝试读取本地缓存
+    }
+
+    try {
+      final cached = LocalStorage.instance.read('currentUser');
+      if (cached != null) {
+        final decoded = jsonDecode(cached) as Map<String, dynamic>;
+        final profile = UserProfile.fromJson(decoded);
+        final bool missingDirections = profile.researchDirections.isEmpty;
+        setState(() {
+          _currentUserProfile = profile;
+          _useHotRanking = missingDirections || _useHotRanking;
+        });
+        if (_useHotRanking && _posts.isNotEmpty) {
+          _sortDiscoverByHeat();
+        }
+      }
+    } catch (_) {
+      // 忽略本地读取异常
+    }
+  }
+
+  double _computeHeat(Post p) =>
+      p.likesCount + p.commentsCount * 0.5;
+
+  List<Post> _sortedByHeat(List<Post> list) {
+    final sorted = [...list];
+    sorted.sort((a, b) => _computeHeat(b).compareTo(_computeHeat(a)));
+    return sorted;
+  }
+
+  void _sortDiscoverByHeat() {
+    final sorted = _sortedByHeat(_posts);
+    setState(() {
+      _posts
+        ..clear()
+        ..addAll(sorted);
+    });
+  }
+
+  bool _shouldUseHotRankingOnChunk(List<Post> chunk) {
+    if (chunk.isEmpty) return _useHotRanking;
+    final weakRecommendation = chunk.every((p) => p.recommendationScore < 2);
+    return _useHotRanking || weakRecommendation;
   }
 
   // 根据是否还有更多，显示“加载中”或“没有更多内容了”
@@ -892,6 +1047,9 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: (index) {
         setState(() {
           _currentIndex = index;
+          if (index != 0) {
+            _pinnedSelfPost = null; // 离开首页清除置顶的自发帖子
+          }
         });
         if (index == 1) {
           Navigator.push(
@@ -916,19 +1074,25 @@ class _HomeScreenState extends State<HomeScreen> {
                   transitionDuration: Duration.zero,
                 ),
               )
-              .then((_) {
+              .then((result) {
                 setState(() {
                   _currentIndex = 0;
                 });
-                // 发布后刷新列表（重新加载第一页）
+                if (result is Post) {
+                  setState(() {
+                    _selectedTab = 1;
+                    _pinnedSelfPost = result;
+                    _posts.removeWhere((p) => p.id == result.id);
+                  });
+                  return;
+                }
+                // 发布结果未知/失败时保持原逻辑
                 final firstPagePosts = _posts.take(6).length;
                 if (firstPagePosts < 6 || _posts.isEmpty) {
-                  // 如果当前列表为空或少于6条，重新加载
                   _posts.clear();
                   _hasMore = true;
                   _loadInitialPosts();
                 } else {
-                  // 否则只重新加载第一页来获取最新发布的帖子
                   _refreshFirstPage();
                 }
               });
