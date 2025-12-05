@@ -19,7 +19,8 @@ public class PostDtos {
         String arxivId, // arXiv ID
         List<String> arxivAuthors, // arXiv 作者列表
         String arxivPublishedDate, // arXiv 发布日期
-        List<String> arxivCategories // arXiv 分类列表
+        List<String> arxivCategories, // arXiv 分类列表
+        List<Long> references // 引用文献：被引用帖子的ID列表
     ) {}
     
     // 作者信息
@@ -47,6 +48,7 @@ public class PostDtos {
         List<String> arxivAuthors, // arXiv 作者列表
         String arxivPublishedDate, // arXiv 发布日期
         List<String> arxivCategories, // arXiv 分类列表
+        List<Long> references, // 引用文献：被引用帖子的ID列表
         String createdAt,
         double imageAspectRatio,
         double imageNaturalWidth,

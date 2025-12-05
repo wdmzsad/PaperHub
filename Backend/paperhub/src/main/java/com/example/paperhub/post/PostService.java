@@ -175,7 +175,8 @@ public class PostService {
     @Transactional
     public Post createPost(String title, String content, User author, List<String> media,
                           String mainDiscipline, String doi, String journal, Integer year, List<String> externalLinks,
-                          String arxivId, List<String> arxivAuthors, String arxivPublishedDate, List<String> arxivCategories) {
+                          String arxivId, List<String> arxivAuthors, String arxivPublishedDate, List<String> arxivCategories,
+                          List<Long> references) {
         ensureUserCanInteract(author);
         Post post = new Post();
         post.setTitle(title);
@@ -200,6 +201,10 @@ public class PostService {
         post.setArxivAuthors(arxivAuthors != null ? arxivAuthors : List.of());
         post.setArxivPublishedDate(arxivPublishedDate);
         post.setArxivCategories(arxivCategories != null ? arxivCategories : List.of());
+
+        // 引用文献
+        post.setReferences(references != null ? references : List.of());
+
         post.setLikesCount(0);
         post.setCommentsCount(0);
         post.setViewsCount(0);
@@ -226,7 +231,8 @@ public class PostService {
                            String arxivId,
                            List<String> arxivAuthors,
                            String arxivPublishedDate,
-                           List<String> arxivCategories) {
+                           List<String> arxivCategories,
+                           List<Long> references) {
 
         // 1. 找到帖子
         Post post = postRepository.findById(postId)
@@ -261,6 +267,9 @@ public class PostService {
         post.setArxivAuthors(arxivAuthors != null ? arxivAuthors : List.of());
         post.setArxivPublishedDate(arxivPublishedDate);
         post.setArxivCategories(arxivCategories != null ? arxivCategories : List.of());
+
+        // 引用文献
+        post.setReferences(references != null ? references : List.of());
 
         // 更新时间
         post.setUpdatedAt(Instant.now());
