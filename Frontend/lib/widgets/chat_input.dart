@@ -6,13 +6,17 @@
 /// - 表情和附件按钮
 /// - 发送按钮状态管理
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:record/record.dart';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:io';
 import '../services/local_storage.dart';
 import '../config/app_env.dart';
+import 'web_audio_recorder.dart' if (dart.library.io) 'web_audio_recorder_stub.dart';
 
 class ChatInput extends StatefulWidget {
   final TextEditingController controller;
@@ -39,6 +43,11 @@ class ChatInput extends StatefulWidget {
 class _ChatInputState extends State<ChatInput> {
   bool _isComposing = false;
   FocusNode _focusNode = FocusNode();
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  WebAudioRecorder? _webAudioRecorder;
+  bool _isRecording = false;
+  String? _recordingPath;
+  Uint8List? _webRecordingData;
 
   @override
   void initState() {
@@ -52,6 +61,8 @@ class _ChatInputState extends State<ChatInput> {
     widget.controller.removeListener(_onTextChanged);
     _focusNode.removeListener(_onFocusChanged);
     _focusNode.dispose();
+    _audioRecorder.dispose();
+    _webAudioRecorder?.dispose();
     super.dispose();
   }
 
@@ -236,6 +247,15 @@ class _ChatInputState extends State<ChatInput> {
                 _pickFile();
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.mic, color: Color(0xFF1976D2)),
+              title: const Text('语音文件'),
+              subtitle: const Text('上传音频文件'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickAudioFile();
+              },
+            ),
             const SizedBox(height: 16),
           ],
         ),
@@ -300,6 +320,18 @@ class _ChatInputState extends State<ChatInput> {
     if (result != null && widget.onSendMedia != null) {
       final file = result.files.single;
       await _uploadAndSendMediaBytes(file.bytes!, file.name, 'FILE');
+    }
+  }
+
+  Future<void> _pickAudioFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'webm'],
+    );
+
+    if (result != null && widget.onSendMedia != null) {
+      final file = result.files.single;
+      await _uploadAndSendMediaBytes(file.bytes!, file.name, 'VOICE');
     }
   }
 
@@ -371,6 +403,219 @@ class _ChatInputState extends State<ChatInput> {
     } catch (e) {
       print('上传文件失败: $e');
       return null;
+    }
+  }
+
+  Future<void> _startRecording() async {
+    print('[VoiceRecorder] 开始录音请求');
+
+    if (kIsWeb) {
+      print('[VoiceRecorder] Web平台使用浏览器录音');
+      try {
+        _webAudioRecorder = WebAudioRecorder();
+
+        if (!await _webAudioRecorder!.hasPermission()) {
+          print('[VoiceRecorder] 无麦克风权限');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('需要麦克风权限才能录音')),
+            );
+          }
+          return;
+        }
+
+        _webAudioRecorder!.onStop.listen((data) {
+          print('[VoiceRecorder] Web录音数据接收: ${data.length} bytes');
+          _webRecordingData = data;
+        });
+
+        await _webAudioRecorder!.start();
+        print('[VoiceRecorder] Web录音已开始');
+
+        setState(() {
+          _isRecording = true;
+        });
+      } catch (e) {
+        print('[VoiceRecorder] Web录音启动失败: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('录音失败: $e')),
+          );
+        }
+      }
+      return;
+    }
+
+    if (!await _audioRecorder.hasPermission()) {
+      print('[VoiceRecorder] 无麦克风权限');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('需要麦克风权限才能录音')),
+        );
+      }
+      return;
+    }
+
+    try {
+      final path = '${Directory.systemTemp.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      print('[VoiceRecorder] 录音路径: $path');
+
+      await _audioRecorder.start(const RecordConfig(), path: path);
+      print('[VoiceRecorder] 录音已开始');
+
+      setState(() {
+        _isRecording = true;
+        _recordingPath = path;
+      });
+    } catch (e) {
+      print('[VoiceRecorder] 录音启动失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('录音失败: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    print('[VoiceRecorder] 停止录音');
+
+    setState(() {
+      _isRecording = false;
+    });
+
+    if (kIsWeb) {
+      await _webAudioRecorder?.stop();
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      if (_webRecordingData == null || _webRecordingData!.isEmpty) {
+        print('[VoiceRecorder] Web录音数据为空');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('录音失败，请重试')),
+          );
+        }
+        return;
+      }
+
+      final bytes = _webRecordingData!;
+      final fileName = 'voice_${DateTime.now().millisecondsSinceEpoch}.webm';
+      print('[VoiceRecorder] Web录音文件大小: ${bytes.length} bytes');
+
+      if (bytes.length < 1000) {
+        print('[VoiceRecorder] 录音时间太短');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('录音时间太短')),
+          );
+        }
+        _webRecordingData = null;
+        return;
+      }
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(child: CircularProgressIndicator()),
+        );
+      }
+
+      try {
+        final url = await _uploadFileBytes(bytes, fileName);
+        print('[VoiceRecorder] 上传结果: $url');
+
+        if (mounted) Navigator.pop(context);
+
+        if (url != null && widget.onSendMedia != null) {
+          widget.onSendMedia!([url], 'VOICE', fileName, bytes.length);
+          print('[VoiceRecorder] 语音消息发送成功');
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('语音上传失败')),
+            );
+          }
+        }
+      } catch (e) {
+        print('[VoiceRecorder] 上传异常: $e');
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('语音上传失败: $e')),
+          );
+        }
+      } finally {
+        _webRecordingData = null;
+      }
+      return;
+    }
+
+    final path = await _audioRecorder.stop();
+    print('[VoiceRecorder] 录音已停止，路径: $path');
+
+    if (path != null && widget.onSendMedia != null) {
+      final file = File(path);
+      if (!await file.exists()) {
+        print('[VoiceRecorder] 录音文件不存在');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('录音文件不存在')),
+          );
+        }
+        return;
+      }
+
+      final bytes = await file.readAsBytes();
+      final fileName = path.split('/').last;
+      print('[VoiceRecorder] 录音文件大小: ${bytes.length} bytes');
+
+      if (bytes.length < 1000) {
+        print('[VoiceRecorder] 录音时间太短');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('录音时间太短')),
+          );
+        }
+        file.delete();
+        return;
+      }
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(child: CircularProgressIndicator()),
+        );
+      }
+
+      try {
+        final url = await _uploadFileBytes(bytes, fileName);
+        print('[VoiceRecorder] 上传结果: $url');
+
+        if (mounted) Navigator.pop(context);
+
+        if (url != null) {
+          widget.onSendMedia!([url], 'VOICE', fileName, bytes.length);
+          print('[VoiceRecorder] 语音消息发送成功');
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('语音上传失败')),
+            );
+          }
+        }
+      } catch (e) {
+        print('[VoiceRecorder] 上传异常: $e');
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('语音上传失败: $e')),
+          );
+        }
+      } finally {
+        file.delete();
+      }
     }
   }
 
@@ -454,37 +699,87 @@ class _ChatInputState extends State<ChatInput> {
   }
 
   Widget _buildSendButton() {
+    if (_isComposing) {
+      return Container(
+        margin: const EdgeInsets.only(left: 4, right: 8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: widget.enabled ? const Color(0xFF1976D2) : Colors.grey[300],
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: widget.enabled
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF1976D2).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: IconButton(
+            icon: Icon(
+              Icons.send,
+              color: widget.enabled ? Colors.white : Colors.grey[600],
+              size: 20,
+            ),
+            onPressed: widget.enabled ? _handleSend : null,
+            splashRadius: 20,
+          ),
+        ),
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.only(left: 4, right: 8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: _isComposing ? 40 : 32,
-        height: _isComposing ? 40 : 32,
-        decoration: BoxDecoration(
-          color: _isComposing && widget.enabled
-              ? const Color(0xFF1976D2)
-              : Colors.grey[300],
-          borderRadius: BorderRadius.circular(_isComposing ? 20 : 16),
-          boxShadow: _isComposing && widget.enabled
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF1976D2).withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: IconButton(
-          icon: Icon(
-            _isComposing ? Icons.send : Icons.mic,
-            color: _isComposing && widget.enabled
-                ? Colors.white
-                : Colors.grey[600],
-            size: _isComposing ? 20 : 16,
+      child: GestureDetector(
+        onLongPressStart: (_) {
+          print('[VoiceRecorder] 长按开始');
+          _startRecording();
+        },
+        onLongPressEnd: (_) {
+          print('[VoiceRecorder] 长按结束');
+          _stopRecording();
+        },
+        onLongPressCancel: () {
+          print('[VoiceRecorder] 长按取消');
+          if (_isRecording) {
+            if (kIsWeb) {
+              _webAudioRecorder?.stop();
+            } else {
+              _audioRecorder.stop();
+            }
+            setState(() {
+              _isRecording = false;
+            });
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: _isRecording ? 48 : 32,
+          height: _isRecording ? 48 : 32,
+          decoration: BoxDecoration(
+            color: _isRecording
+                ? Colors.red
+                : (widget.enabled ? const Color(0xFF1976D2) : Colors.grey[300]),
+            borderRadius: BorderRadius.circular(_isRecording ? 24 : 16),
+            boxShadow: _isRecording
+                ? [
+                    BoxShadow(
+                      color: Colors.red.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
           ),
-          onPressed: _isComposing && widget.enabled ? _handleSend : null,
-          splashRadius: 20,
+          child: Icon(
+            Icons.mic,
+            color: widget.enabled ? Colors.white : Colors.grey[600],
+            size: _isRecording ? 24 : 16,
+          ),
         ),
       ),
     );
