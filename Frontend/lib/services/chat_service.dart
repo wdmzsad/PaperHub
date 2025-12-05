@@ -218,7 +218,77 @@ class ChatService extends ChangeNotifier {
             // 轮询刷新：合并新消息到列表末尾
             final reversedNewMessages = newMessages.reversed.toList();
             final existingMessageIds = Set<String>.from(_messages.map((msg) => msg.id));
-            final uniqueNewMessages = reversedNewMessages.where((msg) => !existingMessageIds.contains(msg.id)).toList();
+
+            // 智能去重逻辑：区分本地临时消息替换和用户有意重复发送
+            final uniqueNewMessages = reversedNewMessages.where((newMsg) {
+              // 如果ID已存在，肯定是重复
+              if (existingMessageIds.contains(newMsg.id)) {
+                return false;
+              }
+
+              // 检查是否有需要替换的本地临时消息
+              bool shouldReplaceLocalMessage = false;
+              int replaceIndex = -1;
+
+              for (int i = 0; i < _messages.length; i++) {
+                final existingMsg = _messages[i];
+
+                // 检查发送者是否相同
+                if (existingMsg.senderId != newMsg.senderId) {
+                  continue;
+                }
+
+                // 检查内容是否相同
+                if (existingMsg.content != newMsg.content) {
+                  continue;
+                }
+
+                // 检查消息类型是否相同
+                if (existingMsg.type != newMsg.type) {
+                  continue;
+                }
+
+                // 如果是媒体消息，检查mediaUrls是否相同
+                if (existingMsg.type == MessageType.image || existingMsg.type == MessageType.video || existingMsg.type == MessageType.file) {
+                  if (existingMsg.mediaUrls.length != newMsg.mediaUrls.length) {
+                    continue;
+                  }
+                  bool mediaUrlsMatch = true;
+                  for (int j = 0; j < existingMsg.mediaUrls.length; j++) {
+                    if (existingMsg.mediaUrls[j] != newMsg.mediaUrls[j]) {
+                      mediaUrlsMatch = false;
+                      break;
+                    }
+                  }
+                  if (!mediaUrlsMatch) {
+                    continue;
+                  }
+                }
+
+                // 检查时间是否非常接近（2秒内）且现有消息是发送中状态
+                // 这是区分本地临时消息的关键逻辑
+                final timeDiff = existingMsg.createdAt.difference(newMsg.createdAt).abs();
+                if (timeDiff <= Duration(seconds: 2) && existingMsg.status == MessageStatus.sending) {
+                  // 这是本地临时消息需要被服务器消息替换
+                  shouldReplaceLocalMessage = true;
+                  replaceIndex = i;
+                  break;
+                }
+
+                // 如果时间差较大（>2秒），视为用户有意重复发送，允许显示
+                // 即使内容相同，时间间隔较大也认为是有效消息
+              }
+
+              if (shouldReplaceLocalMessage && replaceIndex != -1) {
+                // 替换本地临时消息为服务器消息
+                _messages[replaceIndex] = newMsg;
+                // 这个服务器消息已经处理了，不添加到uniqueNewMessages列表
+                return false;
+              }
+
+              // 如果没有需要替换的本地消息，这是一个新消息
+              return true;
+            }).toList();
 
             if (uniqueNewMessages.isNotEmpty) {
               _messages = [..._messages, ...uniqueNewMessages];
@@ -326,16 +396,63 @@ class ChatService extends ChangeNotifier {
       );
 
       if (result['statusCode'] == 200) {
-        // 更新消息状态为已发送
-        final updatedMessage = newMessage.copyWith(status: MessageStatus.sent);
-        final index = _messages.indexWhere((m) => m.id == newMessage.id);
-        if (index != -1) {
-          _messages[index] = updatedMessage;
-          notifyListeners();
+        // 使用服务器返回的消息数据（包含正确的ID）
+        final serverMessage = Message.fromJson(result['body']);
+
+        // 查找匹配的本地消息（先尝试ID匹配，再尝试内容匹配）
+        int foundIndex = _messages.indexWhere((m) => m.id == newMessage.id);
+
+        if (foundIndex == -1) {
+          // ID不匹配，尝试基于内容、发送者、时间和类型匹配
+          // 这种情况可能发生在轮询已经提前替换了消息
+          for (int i = 0; i < _messages.length; i++) {
+            final existingMsg = _messages[i];
+
+            // 检查发送者、内容、类型是否相同
+            if (existingMsg.senderId == newMessage.senderId &&
+                existingMsg.content == newMessage.content &&
+                existingMsg.type == newMessage.type &&
+                existingMsg.status == MessageStatus.sending) {
+
+              // 检查时间是否接近（3秒内）
+              final timeDiff = existingMsg.createdAt.difference(newMessage.createdAt).abs();
+              if (timeDiff <= Duration(seconds: 3)) {
+
+                // 如果是媒体消息，检查mediaUrls是否相同
+                if (existingMsg.type == MessageType.image || existingMsg.type == MessageType.video || existingMsg.type == MessageType.file) {
+                  if (existingMsg.mediaUrls.length != newMessage.mediaUrls.length) {
+                    continue;
+                  }
+                  bool mediaUrlsMatch = true;
+                  for (int j = 0; j < existingMsg.mediaUrls.length; j++) {
+                    if (existingMsg.mediaUrls[j] != newMessage.mediaUrls[j]) {
+                      mediaUrlsMatch = false;
+                      break;
+                    }
+                  }
+                  if (!mediaUrlsMatch) {
+                    continue;
+                  }
+                }
+
+                foundIndex = i;
+                break;
+              }
+            }
+          }
         }
 
+        if (foundIndex != -1) {
+          // 替换本地临时消息为服务器消息
+          _messages[foundIndex] = serverMessage;
+        } else {
+          // 如果没找到匹配的本地消息，添加服务器消息
+          _messages.add(serverMessage);
+        }
+        notifyListeners();
+
         // 更新会话的最后消息
-        _updateLastMessage(conversationId, updatedMessage);
+        _updateLastMessage(conversationId, serverMessage);
       } else {
         debugPrint('发送消息失败: ${result['body']['message']}');
         throw Exception(result['body']['message'] ?? '发送消息失败');
@@ -392,16 +509,63 @@ class ChatService extends ChangeNotifier {
       );
 
       if (result['statusCode'] == 200) {
-        // 更新消息状态为已发送
-        final updatedMessage = newMessage.copyWith(status: MessageStatus.sent);
-        final index = _messages.indexWhere((m) => m.id == newMessage.id);
-        if (index != -1) {
-          _messages[index] = updatedMessage;
-          notifyListeners();
+        // 使用服务器返回的消息数据（包含正确的ID）
+        final serverMessage = Message.fromJson(result['body']);
+
+        // 查找匹配的本地消息（先尝试ID匹配，再尝试内容匹配）
+        int foundIndex = _messages.indexWhere((m) => m.id == newMessage.id);
+
+        if (foundIndex == -1) {
+          // ID不匹配，尝试基于内容、发送者、时间和类型匹配
+          // 这种情况可能发生在轮询已经提前替换了消息
+          for (int i = 0; i < _messages.length; i++) {
+            final existingMsg = _messages[i];
+
+            // 检查发送者、内容、类型是否相同
+            if (existingMsg.senderId == newMessage.senderId &&
+                existingMsg.content == newMessage.content &&
+                existingMsg.type == newMessage.type &&
+                existingMsg.status == MessageStatus.sending) {
+
+              // 检查时间是否接近（3秒内）
+              final timeDiff = existingMsg.createdAt.difference(newMessage.createdAt).abs();
+              if (timeDiff <= Duration(seconds: 3)) {
+
+                // 对于媒体消息，必须检查mediaUrls是否相同
+                if (existingMsg.type == MessageType.image || existingMsg.type == MessageType.video || existingMsg.type == MessageType.file) {
+                  if (existingMsg.mediaUrls.length != newMessage.mediaUrls.length) {
+                    continue;
+                  }
+                  bool mediaUrlsMatch = true;
+                  for (int j = 0; j < existingMsg.mediaUrls.length; j++) {
+                    if (existingMsg.mediaUrls[j] != newMessage.mediaUrls[j]) {
+                      mediaUrlsMatch = false;
+                      break;
+                    }
+                  }
+                  if (!mediaUrlsMatch) {
+                    continue;
+                  }
+                }
+
+                foundIndex = i;
+                break;
+              }
+            }
+          }
         }
 
+        if (foundIndex != -1) {
+          // 替换本地临时消息为服务器消息
+          _messages[foundIndex] = serverMessage;
+        } else {
+          // 如果没找到匹配的本地消息，添加服务器消息
+          _messages.add(serverMessage);
+        }
+        notifyListeners();
+
         // 更新会话的最后消息
-        _updateLastMessage(conversationId, updatedMessage);
+        _updateLastMessage(conversationId, serverMessage);
       } else {
         debugPrint('发送媒体消息失败: ${result['body']['message']}');
         throw Exception(result['body']['message'] ?? '发送消息失败');
