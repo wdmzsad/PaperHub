@@ -258,13 +258,18 @@ class _VideoBackgroundState extends State<VideoBackground> {
       );
     }
 
-    // 调试信息
+    // 调试信息与尺寸获取
     final isControllerInitialized = _controller != null && _controller!.value.isInitialized;
     // 优先使用控制器当前尺寸，如果为 0 则使用缓存尺寸
     final currentSize = _controller?.value.size ?? Size.zero;
     final videoSize = currentSize.width > 0 && currentSize.height > 0 
         ? currentSize 
         : _cachedVideoSize;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final bool hasVideoSize = videoSize.width > 0 && videoSize.height > 0;
+    final bool showHalfCenter = hasVideoSize && screenWidth < (videoSize.width * 0.5);
+    final boxFit = showHalfCenter ? BoxFit.cover : BoxFit.cover;
+    const fallbackBgColor = Color(0xFF090C26);
     
     // 只在开发模式下打印调试信息，避免控制台刷屏
     if (kDebugMode) {
@@ -299,14 +304,35 @@ class _VideoBackgroundState extends State<VideoBackground> {
           else if (_controller != null && videoSize.width > 0 && videoSize.height > 0)
             // Web 平台：即使控制器状态显示未初始化，只要有控制器和缓存尺寸就显示
             Positioned.fill(
-              child: FittedBox(
-                fit: BoxFit.cover,
-                child: SizedBox(
-                  width: videoSize.width,
-                  height: videoSize.height,
-                  child: VideoPlayer(_controller!),
-                ),
-              ),
+              child: showHalfCenter
+                  // 窄屏：仅展示视频中间二分之一（水平裁剪），高度全显示；其余区域用深色填充
+                  ? Container(
+                      color: fallbackBgColor,
+                      alignment: Alignment.center,
+                      child: FittedBox(
+                        fit: BoxFit.cover,
+                        child: SizedBox(
+                          width: videoSize.width,
+                          height: videoSize.height,
+                          child: ClipRect(
+                            child: Align(
+                              alignment: Alignment.center,
+                              widthFactor: 0.5, // 只保留中间 1/2 宽度
+                              child: VideoPlayer(_controller!),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  // 常规：全幅铺满
+                  : FittedBox(
+                      fit: boxFit,
+                      child: SizedBox(
+                        width: videoSize.width,
+                        height: videoSize.height,
+                        child: VideoPlayer(_controller!),
+                      ),
+                    ),
             )
           else if (_controller != null)
             // 如果控制器存在但没有尺寸，尝试直接显示（Web 平台可能需要）
