@@ -44,7 +44,6 @@ class _RegisterPageState extends State<RegisterPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: VideoBackground(
-        videoPath: 'assets/Title_07.mp4',
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
