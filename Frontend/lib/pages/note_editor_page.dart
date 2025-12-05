@@ -12,8 +12,10 @@ import 'package:image_picker/image_picker.dart';
 import '../config/app_env.dart';
 import '../services/api_service.dart';
 import '../services/arxiv_service.dart';
+import '../services/local_storage.dart';
 import '../constants/discipline_constants.dart';
 import '../models/post_model.dart';
+import '../models/user_profile.dart';
 
 class NoteEditorPage extends StatefulWidget {
   /// 如果传入 initialPost，则进入“编辑模式”，否则是“新建笔记”
@@ -53,6 +55,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   // 分区与推荐细分类标签
   String? _selectedDiscipline; // 必选：学科分区
+  bool _showDisciplineDropdown = false; // 控制下拉菜单显示
+  String? _currentUserRole; // 当前用户角色
 
   // #符号触发标签选择相关状态
   bool _showTagSuggestions = false;
@@ -60,6 +64,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   List<String> _filteredTagSuggestions = [];
   final FocusNode _contentFocusNode = FocusNode();
   bool _isTypingCustomTag = false;
+
+  // 引用文献相关状态
+  List<int> _selectedReferences = []; // 已选择的引用帖子ID列表
+  List<Post> _userPosts = []; // 用户的帖子列表
+  List<Post> _userFavorites = []; // 用户的收藏列表
+  bool _isLoadingReferences = false;
 
   /// 编辑模式下旧图片的 URL 列表
   final List<String> _existingImageUrls = [];
@@ -75,6 +85,56 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     if (_isEditing && widget.initialPost != null) {
       _applyExistingPost(widget.initialPost!);
     }
+    // 获取当前用户角色
+    _loadCurrentUserRole();
+  }
+
+  // 加载当前用户角色
+  Future<void> _loadCurrentUserRole() async {
+    try {
+      // 尝试从API获取当前用户信息
+      final response = await ApiService.getCurrentUserProfile();
+      final status = response['statusCode'] as int? ?? 500;
+
+      if (status >= 200 && status < 300) {
+        final body = response['body'] as Map<String, dynamic>?;
+        if (body != null) {
+          final userProfile = UserProfile.fromJson(body);
+          setState(() {
+            _currentUserRole = userProfile.role.toUpperCase();
+          });
+          return;
+        }
+      }
+
+      // 如果API调用失败，尝试从本地存储获取
+      final userJson = LocalStorage.instance.read('currentUser');
+      if (userJson != null) {
+        try {
+          final userData = jsonDecode(userJson) as Map<String, dynamic>;
+          final userProfile = UserProfile.fromJson(userData);
+          setState(() {
+            _currentUserRole = userProfile.role.toUpperCase();
+          });
+          return;
+        } catch (e) {
+          print('解析本地用户数据失败: $e');
+        }
+      }
+
+      // 如果都失败，设置为普通用户
+      setState(() {
+        _currentUserRole = 'USER';
+      });
+    } catch (e) {
+      print('获取用户角色失败: $e');
+      // 失败时设置为普通用户
+      setState(() {
+        _currentUserRole = 'USER';
+      });
+    }
+    // 异步加载用户的帖子和收藏，用于引用文献选择
+    // 不在initState中立即调用，而是在需要时调用，这样可以避免阻塞UI
   }
 
   // 将已有帖子内容灌入编辑器（编辑模式）
@@ -126,6 +186,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         year: post.year,
       );
     }
+
+    // 预填充引用文献
+    _selectedReferences = List.from(post.references);
   }
 
   // 判断 URL 是否为 PDF
@@ -398,6 +461,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           arxivAuthors: arxivAuthors,
           arxivPublishedDate: arxivPublishedDate,
           arxivCategories: arxivCategories,
+          references: _selectedReferences.isNotEmpty ? _selectedReferences : null,
         );
       } else {
         // === 新建帖子 ===
@@ -414,6 +478,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           arxivAuthors: arxivAuthors,
           arxivPublishedDate: arxivPublishedDate,
           arxivCategories: arxivCategories,
+          references: _selectedReferences.isNotEmpty ? _selectedReferences : null,
         );
       }
 
@@ -896,15 +961,18 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 
-  // 一级标签选择（放在外部链接之上）
+  // 一级标签选择（放在外部链接之上）- 下拉隐藏式选择器
   Widget _buildDisciplineSelector() {
+    final filteredDisciplines = _getFilteredDisciplines();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 标题行
         Row(
           children: [
             const Text(
-              '选择学科分区',
+              '选择分区',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -927,85 +995,222 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               ),
             ),
             const Spacer(),
-            if (_selectedDiscipline != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.1) ?? const Color(0xFF1976D2).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.3) ?? const Color(0xFF1976D2).withOpacity(0.3),
-                    width: 1,
+
+            // 显示已选分区和下拉按钮
+            Row(
+              children: [
+                if (_selectedDiscipline != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.1) ?? const Color(0xFF1976D2).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.3) ?? const Color(0xFF1976D2).withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      _selectedDiscipline!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: kDisciplineColors[_selectedDiscipline] ?? const Color(0xFF1976D2),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                // 下拉按钮
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _showDisciplineDropdown = !_showDisciplineDropdown;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Icon(
+                      _showDisciplineDropdown ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                      size: 20,
+                      color: Colors.grey.shade700,
+                    ),
                   ),
                 ),
-                child: Text(
-                  _selectedDiscipline!,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: kDisciplineColors[_selectedDiscipline] ?? const Color(0xFF1976D2),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+              ],
+            ),
           ],
         ),
         const SizedBox(height: 8),
 
-        // 一级标签水平滚动选择
-        SizedBox(
-          height: 36,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: kMainDisciplines.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 6),
-            itemBuilder: (context, index) {
-              final d = kMainDisciplines[index];
-              final bool selected = _selectedDiscipline == d;
-              final color = kDisciplineColors[d] ?? const Color(0xFF1976D2);
-
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    if (_selectedDiscipline == d) {
-                      _selectedDiscipline = null;
-                    } else {
-                      _selectedDiscipline = d;
-                    }
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: selected ? color.withOpacity(0.15) : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: selected ? color : Colors.grey.shade300,
-                      width: selected ? 1.5 : 1,
-                    ),
-                    boxShadow: selected
-                        ? [
-                            BoxShadow(
-                              color: color.withOpacity(0.2),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Text(
-                    d,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: selected ? color : Colors.black87,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                  ),
+        // 下拉菜单区域 - 椭圆形文字泡矩阵排布
+        if (_showDisciplineDropdown)
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
                 ),
-              );
-            },
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 标题和关闭按钮
+                Row(
+                  children: [
+                    const Text(
+                      '选择分区',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _showDisciplineDropdown = false;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          Icons.close,
+                          size: 16,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // 椭圆形文字泡矩阵
+                Wrap(
+                  spacing: 10, // 水平间距
+                  runSpacing: 10, // 垂直间距
+                  children: filteredDisciplines.map((discipline) {
+                    final bool selected = _selectedDiscipline == discipline;
+                    final color = kDisciplineColors[discipline] ?? const Color(0xFF1976D2);
+
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedDiscipline = discipline;
+                          _showDisciplineDropdown = false; // 选择后收起下拉菜单
+                        });
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: selected ? color.withOpacity(0.12) : Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(20), // 椭圆形
+                          border: Border.all(
+                            color: selected ? color : Colors.grey.shade300,
+                            width: selected ? 1.5 : 1,
+                          ),
+                          boxShadow: selected
+                              ? [
+                                  BoxShadow(
+                                    color: color.withOpacity(0.25),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ]
+                              : [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // 颜色指示点
+                            Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: color.withOpacity(0.4),
+                                    blurRadius: 3,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              discipline,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: selected ? color : Colors.black87,
+                                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                              ),
+                            ),
+                            if (selected)
+                              Container(
+                                margin: const EdgeInsets.only(left: 6),
+                                child: Icon(
+                                  Icons.check_circle,
+                                  size: 14,
+                                  color: color,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+
+                // 如果没有选择任何分区，显示提示
+                if (_selectedDiscipline == null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 14, color: Colors.orange.shade700),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '请点击上方的椭圆形标签选择一个分区',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
+
+        const SizedBox(height: 8),
         const Text(
           '选择学科分区后，在正文中输入#可添加相关细分类标签',
           style: TextStyle(fontSize: 12, color: Colors.grey),
@@ -1025,6 +1230,17 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         set.addAll(list);
       }
       return set.toList();
+    }
+  }
+
+  // 获取过滤后的分区列表（根据用户角色隐藏"公告区"）
+  List<String> _getFilteredDisciplines() {
+    // 如果用户角色未加载或不是管理员，隐藏"公告区"
+    if (_currentUserRole == 'ADMIN') {
+      return kMainDisciplines; // 管理员可以看到所有分区
+    } else {
+      // 普通用户或角色未加载时隐藏"公告区"
+      return kMainDisciplines.where((discipline) => discipline != '公告区').toList();
     }
   }
 
@@ -1204,6 +1420,171 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     return tags;
   }
 
+  // 加载用户的帖子和收藏（用于引用文献选择）
+  Future<void> _loadUserPostsAndFavorites() async {
+    setState(() {
+      _isLoadingReferences = true;
+    });
+
+    try {
+      // 获取当前用户信息
+      final userResp = await ApiService.getCurrentUserProfile();
+      if (userResp['statusCode'] == 200) {
+        final userId = userResp['body']['id']?.toString();
+
+        // 检查用户ID是否存在
+        if (userId == null || userId.isEmpty) {
+          print('用户ID为空，无法加载引用文献');
+          return;
+        }
+
+        // 并行加载用户帖子和收藏
+        final results = await Future.wait([
+          ApiService.getUserPosts(userId!, page: 1, pageSize: 50),
+          ApiService.getUserFavorites(userId!, page: 1, pageSize: 50),
+        ]);
+
+        final postsResp = results[0] as Map<String, dynamic>;
+        final favoritesResp = results[1] as Map<String, dynamic>;
+
+        if (postsResp['statusCode'] == 200) {
+          final postsData = postsResp['body']['posts'] as List<dynamic>? ?? [];
+          setState(() {
+            _userPosts = postsData.map((p) => Post.fromJson(p)).toList();
+          });
+        }
+
+        if (favoritesResp['statusCode'] == 200) {
+          final favoritesData = favoritesResp['body']['posts'] as List<dynamic>? ?? [];
+          setState(() {
+            _userFavorites = favoritesData.map((p) => Post.fromJson(p)).toList();
+          });
+        }
+      }
+    } catch (e) {
+      print('加载用户帖子和收藏失败: $e');
+    } finally {
+      setState(() {
+        _isLoadingReferences = false;
+      });
+    }
+  }
+
+  // 选择引用文献对话框
+  void _showReferenceSelector() async {
+    // 如果还没有加载过数据，先加载
+    if (_userPosts.isEmpty && _userFavorites.isEmpty && !_isLoadingReferences) {
+      await _loadUserPostsAndFavorites();
+    }
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('选择引用文献'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 400,
+            child: DefaultTabController(
+              length: 2,
+              child: Column(
+                children: [
+                  const TabBar(
+                    tabs: [
+                      Tab(text: '我的帖子'),
+                      Tab(text: '我的收藏'),
+                    ],
+                  ),
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        // 我的帖子标签页
+                        _buildPostList(_userPosts, setState),
+                        // 我的收藏标签页
+                        _buildPostList(_userFavorites, setState),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                this.setState(() {}); // 刷新页面显示选中的引用
+              },
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 构建帖子列表
+  Widget _buildPostList(List<Post> posts, StateSetter setState) {
+    if (_isLoadingReferences) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (posts.isEmpty) {
+      return const Center(child: Text('暂无内容'));
+    }
+
+    return ListView.builder(
+      itemCount: posts.length,
+      itemBuilder: (context, index) {
+        final post = posts[index];
+        final postId = int.tryParse(post.id) ?? 0;
+        final isSelected = _selectedReferences.contains(postId);
+
+        return ListTile(
+          leading: Checkbox(
+            value: isSelected,
+            onChanged: (bool? value) {
+              setState(() {
+                final postId = int.tryParse(post.id) ?? 0;
+                if (value == true) {
+                  _selectedReferences.add(postId);
+                } else {
+                  _selectedReferences.remove(postId);
+                }
+              });
+            },
+          ),
+          title: Text(
+            post.title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            '${post.author.name} · ${post.createdAt.year}-${post.createdAt.month.toString().padLeft(2, '0')}-${post.createdAt.day.toString().padLeft(2, '0')}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          onTap: () {
+            // 点击文字区域时切换checkbox状态
+            setState(() {
+              final postId = int.tryParse(post.id) ?? 0;
+              if (isSelected) {
+                _selectedReferences.remove(postId);
+              } else {
+                _selectedReferences.add(postId);
+              }
+            });
+          },
+        );
+      },
+    );
+  }
+
   // 构建标签建议列表
   Widget _buildTagSuggestions() {
         if (!_showTagSuggestions) {
@@ -1312,6 +1693,137 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 
+  // 引用文献输入区
+  Widget _buildReferencesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '引用文献',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            ElevatedButton.icon(
+              onPressed: _showReferenceSelector,
+              icon: const Icon(Icons.library_books, size: 18),
+              label: const Text('添加引用文献'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey[100],
+                foregroundColor: Colors.black87,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+            const SizedBox(width: 12),
+            if (_selectedReferences.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '已选择 ${_selectedReferences.length} 篇',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.green[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        if (_selectedReferences.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue[200]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '已选择的引用文献：',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.blue,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ..._selectedReferences.map((postId) {
+                  // 从用户帖子和收藏中找到对应的帖子信息
+                  final post = [..._userPosts, ..._userFavorites]
+                      .where((p) => int.tryParse(p.id) == postId)
+                      .cast<Post?>()
+                      .firstWhere((p) => p != null, orElse: () => null);
+
+                  if (post != null) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '[${_selectedReferences.indexOf(postId) + 1}] ${post.author.name}. ${post.title}. ${post.mainDiscipline}, ${post.createdAt.year}-${post.createdAt.month.toString().padLeft(2, '0')}-${post.createdAt.day.toString().padLeft(2, '0')}.',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _selectedReferences.remove(postId);
+                              });
+                            },
+                            icon: const Icon(Icons.close, size: 16),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    );
+                  } else {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '[${_selectedReferences.indexOf(postId) + 1}] 帖子ID: $postId (信息加载中...)',
+                              style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () {
+                              setState(() {
+                                _selectedReferences.remove(postId);
+                              });
+                            },
+                            icon: const Icon(Icons.close, size: 16),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                }),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool hasPdf = _pdfFile != null || _existingPdfUrl != null;
@@ -1399,6 +1911,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
               // arXiv 文献信息区
               _buildArxivSection(),
+              const SizedBox(height: 16),
+
+              // 引用文献区
+              _buildReferencesSection(),
               const SizedBox(height: 16),
 
               // PDF 附件

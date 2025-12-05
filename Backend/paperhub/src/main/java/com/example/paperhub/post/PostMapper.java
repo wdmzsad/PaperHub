@@ -112,6 +112,7 @@ public class PostMapper {
                 post.getArxivAuthors() != null ? post.getArxivAuthors() : List.of(),
                 post.getArxivPublishedDate(),
                 post.getArxivCategories() != null ? post.getArxivCategories() : List.of(),
+                post.getReferences() != null ? post.getReferences() : List.of(), // 引用文献
                 post.getCreatedAt() != null ? post.getCreatedAt().toString() : null,
                 aspectRatio,
                 naturalWidth,

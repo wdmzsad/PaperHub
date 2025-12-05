@@ -1382,6 +1382,7 @@ class ApiService {
     List<String>? arxivAuthors,
     String? arxivPublishedDate,
     List<String>? arxivCategories,
+    List<int>? references,
   }) async {
     return await _makeRequest(
       () => http.post(
@@ -1400,6 +1401,7 @@ class ApiService {
           if (arxivAuthors != null && arxivAuthors.isNotEmpty) 'arxivAuthors': arxivAuthors,
           if (arxivPublishedDate != null) 'arxivPublishedDate': arxivPublishedDate,
           if (arxivCategories != null && arxivCategories.isNotEmpty) 'arxivCategories': arxivCategories,
+          if (references != null && references.isNotEmpty) 'references': references,
         }),
       ),
       '/posts',
@@ -1422,6 +1424,7 @@ class ApiService {
     List<String>? arxivAuthors,
     String? arxivPublishedDate,
     List<String>? arxivCategories,
+    List<int>? references,
   }) async {
     return await _makeRequest(
       () => http.put(
@@ -1444,6 +1447,7 @@ class ApiService {
             'arxivPublishedDate': arxivPublishedDate,
           if (arxivCategories != null && arxivCategories.isNotEmpty)
             'arxivCategories': arxivCategories,
+          if (references != null && references.isNotEmpty) 'references': references,
         }),
       ),
       '/posts/$postId',
@@ -1496,7 +1500,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getConversationMessages(
     String conversationId, {
     int page = 0,
-    int pageSize = 20,
+    int pageSize = 100,
   }) async {
     final uri = Uri.parse('$baseUrl/api/conversations/$conversationId/messages').replace(
       queryParameters: {
