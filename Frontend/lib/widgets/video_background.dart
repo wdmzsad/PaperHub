@@ -10,12 +10,10 @@ import 'package:video_player/video_player.dart';
 /// - 失败自动显示渐变背景
 class VideoBackground extends StatefulWidget {
   final Widget child;
-  final String videoPath;
 
   const VideoBackground({
     Key? key,
     required this.child,
-    required this.videoPath,
   }) : super(key: key);
 
   @override
@@ -29,22 +27,35 @@ class _VideoBackgroundState extends State<VideoBackground> {
   bool _videoLoadFailed = false;
 
   @override
-  void initState() {
-    super.initState();
-    _initializeVideo();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 在 didChangeDependencies 中初始化，以便访问 MediaQuery
+    if (!_isInitialized) {
+      _initializeVideo();
+    }
+  }
+
+  /// 根据屏幕方向选择视频路径
+  String _getVideoPath() {
+    // 根据屏幕方向自动选择
+    final size = MediaQuery.of(context).size;
+    final isLandscape = size.width > size.height;
+    return isLandscape ? 'assets/pc.mp4' : 'assets/mobile.mp4';
   }
 
   Future<void> _initializeVideo() async {
     try {
+      // 根据屏幕方向选择视频路径
+      final videoPath = _getVideoPath();
       if (kIsWeb) {
-        final videoFileName = widget.videoPath.split('/').last;
+        final videoFileName = videoPath.split('/').last;
         final possiblePaths = [
           '/assets/$videoFileName',
           '/assets/assets/$videoFileName',
           '/$videoFileName',
-          widget.videoPath.startsWith('assets/')
-              ? '/${widget.videoPath}'
-              : widget.videoPath,
+          videoPath.startsWith('assets/')
+              ? '/$videoPath'
+              : videoPath,
         ];
 
         for (final path in possiblePaths) {
@@ -68,7 +79,7 @@ class _VideoBackgroundState extends State<VideoBackground> {
 
         await _controller!.setVolume(0); // Web 必须静音
       } else {
-        _controller = VideoPlayerController.asset(widget.videoPath);
+        _controller = VideoPlayerController.asset(videoPath);
         await _controller!.initialize();
       }
 

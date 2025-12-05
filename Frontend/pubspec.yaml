@@ -109,4 +109,5 @@ flutter:
   # see https://flutter.dev/to/font-from-package
   assets:
       - assets/images/
-      - assets/Title_07.mp4
+      - assets/pc.mp4
+      - assets/mobile.mp4
