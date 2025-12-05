@@ -1,5 +1,4 @@
 ﻿// lib/screens/post_detail_screen.dart
-// merge request 测试 1104: 单个帖子界面
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
@@ -19,113 +18,12 @@ import '../config/app_env.dart';
 import 'profile_screen.dart';
 import '../constants/discipline_constants.dart';
 import 'zone_screen.dart';
+import 'search_results_screen.dart';
 import '../services/chat_service.dart';
 import '../widgets/report_post_dialog.dart';
 import '../models/message_model.dart';
 import 'chat_screen.dart';
 import '../pages/note_editor_page.dart';
-
-/*
-================================================================================
- 后端对接说明（已整理为注释，放在 `post_detail_screen.dart` 文件末尾）
- 目的：记录前端与后端 REST / WebSocket 的契约示例、字段说明与调试建议，便于与后端联调。
-================================================================================
-
-1) 认证
- - 前端会通过 LocalStorage.instance.read('auth_token') 读取 token，并在
-   ApiService._buildHeaders() 中以 `Authorization: Bearer <token>` 方式发送给后端。
- - 请后端对该 Header 进行校验，未授权返回 401/403 并在 body.message 提供可读提示。
-
-2) REST 接口（建议）
- - 获取评论（分页）
-   GET /posts/{postId}/comments?page=1&pageSize=20&sort=time
-   Response 200:
-   {
-     "comments": [ {comment}, ... ],  // 顶层评论（每项可包含 replies 列表）
-     "total": 123,
-     "page": 1,
-     "pageSize": 20
-   }
-
- - 发布评论（顶层或回复）
-   POST /posts/{postId}/comments
-   Body: { "content": "...", "parentId": "c_123"?, "replyToId": "u_456"? }
-   Response 201/200:
-   { "comment": { ...new comment object... } }
-
- - 更新评论
-   PUT /posts/{postId}/comments/{commentId}
-   Body: { "content": "new content" }
-   Response: { "comment": { ... } }
-
- - 删除评论
-   DELETE /posts/{postId}/comments/{commentId}
-   Response: 204 或 { "message": "deleted" }
-
- - 点赞 / 取消点赞评论
-   POST /posts/{postId}/comments/{commentId}/like
-   DELETE /posts/{postId}/comments/{commentId}/like
-   Response: { "likesCount": 10, "isLiked": true }
-
-3) comment 对象（建议字段）
- {
-   "id": "c_123",
-   "author": {"id":"u1","name":"Alice","avatar":"...","affiliation":"..."},
-   "content": "...",
-   "parentId": null,        // 顶层评论为 null
-   "replyTo": { ... }?,     // 被回复的用户（可选）
-   "likesCount": 5,
-   "isLiked": false,        // 当前用户是否已点赞（若后端能计算）
-   "replies": [ ... ],      // 可选：子回复列表
-   "createdAt": "2025-11-06T08:00:00Z"
- }
-
-4) WebSocket 事件（建议格式）
- - 连接： ws://<host>/ws/posts/{postId} 或统一 topic 方案
- - 事件 JSON：必须包含 `type` 字段
-   1) 帖子点赞更新
-      {"type":"like_update","likesCount":123,"isLiked":true}
-   2) 评论点赞更新
-      {"type":"comment_like_update","commentId":"c_123","likesCount":5,"isLiked":true}
-   3) 新评论
-      {"type":"comment_created","comment":{...comment object...}}
-   4) 评论更新
-      {"type":"comment_updated","comment":{...}}
-   5) 评论删除
-      {"type":"comment_deleted","commentId":"c_123"}
-
- - 本文件中已实现对上述事件的处理：
-   _initWebSocket() 里解析 type 并调用 _handleCommentCreated / _handleCommentUpdated / _handleCommentDeleted
-   注意：前端实现已兼容 comment 在 'comment'、'payload' 或 'data' 字段中的情况，但建议统一使用 'comment'
-
-5) 前端行为与容错策略
- - 乐观更新：点赞、发送评论时前端会做乐观更新以提升响应感，若后端返回错误会回滚并通过 SnackBar 提示用户。
- - 防重：提交评论使用 _isSubmittingComment 防止重复提交；点赞使用 _commentLikeInFlight 防止并发请求。
- - 时间解析：后端请使用 ISO8601（UTC）字符串，前端使用 DateTime.parse 解析。
- - 子回复分页：若回复很多，建议后端提供 /comments/{commentId}/replies 分页接口；否则可在 GET /posts/{postId}/comments 返回 replies 字段（限数量）。
-
-6) 推荐的对接与调试步骤（给后端同学）
- - 确认接口路径与字段（上述示例），后端在 Postman 中演示以下流程：
-   1) GET 评论分页
-   2) POST 新评论（顶层 & 回复）并返回 comment
-   3) POST/DELETE 点赞并返回 likesCount/isLiked
-   4) 在另一个客户端通过 WS 推送 comment_created/comment_like_update，观察前端是否实时更新
- - 前端准备：启动应用（flutter run），打开帖子详情页并观察控制台/SnackBar 的错误提示；若 token 验证失败，请在 LocalStorage 中填入有效 token。
-
-7) 切换 Mock -> 真正后端（简要步骤）
- - 将 ApiService.baseUrl 指向真实后端地址
- - 确认后端返回结构（尤其 comment 字段/时间格式/likesCount/isLiked）并调整 Comment.fromJson（位于 lib/models/post_model.dart）
- - 删除或移动 mock_api_service.dart（若不再需要）
-
-8) 常见问题与建议
- - 若后端不返回 isLiked，可考虑前端在获取当前用户点赞记录后合并；或后端提供单独的用户点赞接口。
- - 高频事件（如点赞）可能需要后端做节流/合并，减少 WS 消息量。
- - 对于权限错误（401/403），前端应引导用户重新登录或清理缓存的 token。
-
-================================================================================
- 备注：如需我把这份注释提取为独立文档 `BACKEND_INTEGRATION.md` 或根据后端给出的真实样例调整解析代码，我可以继续修改。
-================================================================================
-*/
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -260,6 +158,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   static const int _pageSize = 20;
   // 防止重复请求
   bool _postLikeInFlight = false;
+
+  // 引用文献缓存，避免重复加载
+  final Map<int, Map<String, dynamic>> _referencePostCache = {};
   final Set<String> _commentLikeInFlight = {}; // commentId 集合
   bool _isSubmittingComment = false;
   final TextEditingController _commentController = TextEditingController();
@@ -1343,7 +1244,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     setState(() {
       _currentReplyTo = comment;
       _currentReplyParentId = parentId ?? comment.id;
-      _commentController.text = '@${comment.author.name} ';
+      _commentController.text = '';
+      //_commentController.text = '@${comment.author.name} ';
     });
     _commentFocusNode.requestFocus();
   }
@@ -2389,16 +2291,17 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          Text(
-            //内容
-            widget.post.content,
-            style: const TextStyle(fontSize: 14, height: 1.6),
+          ContentWithClickableTags(
+            content: widget.post.content,
+            subTags: widget.post.subTags,
+            onTagTap: _onTagTap,
           ),
           const SizedBox(height: 12),
-          _buildSecondaryTagsLine(),
-          const SizedBox(height: 10),
           // arXiv 文献信息（如果有）
           if (_hasArxivMetadata()) _buildArxivMetadataSection(),
+          const SizedBox(height: 10),
+          // 引用文献（如果有）
+          if (widget.post.references.isNotEmpty) _buildReferencesSection(),
           const SizedBox(height: 10),
           if (_pdfMedia.isNotEmpty) _buildPdfSection(),
           if (widget.post.attachments.isNotEmpty)
@@ -2532,6 +2435,164 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     );
   }
 
+  Widget _buildReferencesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '引用文献',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        ...widget.post.references.asMap().entries.map((entry) {
+          final index = entry.key + 1;
+          final postId = entry.value;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: FutureBuilder<Map<String, dynamic>>(
+              future: _fetchReferencePost(postId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '[$index] 加载中...',
+                          style: const TextStyle(fontSize: 12, color: Colors.blue),
+                        ),
+                      ],
+                    ),
+                  );
+                } else if (snapshot.hasError || !snapshot.hasData) {
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Text(
+                      '[$index] 引用内容已不可见',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  );
+                } else {
+                  final refPost = snapshot.data!;
+                  final title = refPost['title'] ?? '未知标题';
+                  final authorName = refPost['author']?['name'] ?? '未知作者';
+                  final discipline = refPost['mainDiscipline'] ?? '';
+                  final createdAt = refPost['createdAt'];
+                  String dateStr = '';
+                  if (createdAt != null) {
+                    try {
+                      final date = DateTime.parse(createdAt);
+                      dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                    } catch (e) {
+                      dateStr = '';
+                    }
+                  }
+
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue[200]!),
+                    ),
+                    child: InkWell(
+                      onTap: () => _navigateToReferencePost(postId),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.library_books,
+                            size: 16,
+                            color: Colors.blue,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '[$index] $authorName. $title. $discipline${dateStr.isNotEmpty ? ', $dateStr' : ''}.',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Future<Map<String, dynamic>> _fetchReferencePost(int postId) async {
+    // 先检查缓存
+    if (_referencePostCache.containsKey(postId)) {
+      return _referencePostCache[postId]!;
+    }
+
+    try {
+      final resp = await ApiService.getPost(postId.toString());
+      if (resp['statusCode'] == 200) {
+        final postData = resp['body'];
+        // 缓存数据
+        _referencePostCache[postId] = postData;
+        return postData;
+      } else {
+        throw Exception('无法获取引用帖子');
+      }
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  void _navigateToReferencePost(int postId) async {
+    try {
+      final resp = await ApiService.getPost(postId.toString());
+      if (resp['statusCode'] == 200) {
+        final refPostData = resp['body'];
+        final refPost = Post.fromJson(refPostData);
+
+        // 导航到引用帖子详情页
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PostDetailScreen(
+              post: refPost,
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('引用内容已不可见')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('无法访问引用内容')),
+      );
+    }
+  }
+
   Widget _buildPdfSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2616,10 +2677,20 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     );
   }
 
+  /// 处理标签点击事件
+  void _onTagTap(String tag) {
+    // 跳转到搜索页面，搜索该标签相关的帖子
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SearchResultsScreen(query: '#$tag'),
+      ),
+    );
+  }
+
   /// 帖子正文上方的分区标签区域
   Widget _buildDisciplineTagArea() {
-    final mainDiscipline = findMainDisciplineFromTags(widget.post.tags);
-    if (mainDiscipline == null) {
+    final mainDiscipline = widget.post.mainDiscipline;
+    if (mainDiscipline.isEmpty) {
       return const SizedBox.shrink();
     }
     final color = kDisciplineColors[mainDiscipline] ?? Colors.blue;
@@ -2664,27 +2735,6 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     );
   }
 
-  /// 二级分区 / 细分类标签行（以 #xxx 形式展示在正文和评论之间）
-  Widget _buildSecondaryTagsLine() {
-    if (widget.post.tags.isEmpty) return const SizedBox.shrink();
-
-    final main = findMainDisciplineFromTags(widget.post.tags);
-    final secondary = widget.post.tags
-        .where((t) => !kMainDisciplines.contains(t) && t.trim().isNotEmpty)
-        .toList();
-    if (secondary.isEmpty) return const SizedBox.shrink();
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 4,
-      children: secondary.map((t) {
-        return Text(
-          '#$t',
-          style: const TextStyle(fontSize: 12, color: Colors.blue),
-        );
-      }).toList(),
-    );
-  }
 
   void _openPdfPreview(String url, String title) {
     final uri = Uri.tryParse(url);
@@ -3928,6 +3978,127 @@ class _ShareUserSelectionSheetState extends State<_ShareUserSelectionSheet> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 可点击标签组件
+class ClickableTagWidget extends StatelessWidget {
+  final String tag;
+  final VoidCallback onTap;
+
+  const ClickableTagWidget({
+    super.key,
+    required this.tag,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
+        ),
+        child: Text(
+          '#$tag',
+          style: const TextStyle(
+            color: Colors.blue,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 渲染带可点击标签的正文
+class ContentWithClickableTags extends StatelessWidget {
+  final String content;
+  final List<String> subTags;
+  final Function(String) onTagTap;
+
+  const ContentWithClickableTags({
+    super.key,
+    required this.content,
+    required this.subTags,
+    required this.onTagTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // 如果内容为空，返回空容器
+    if (content.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // 使用正则表达式分割文本和标签
+    final regex = RegExp(r'(#([^\s#]+))');
+    final matches = regex.allMatches(content);
+
+    if (matches.isEmpty) {
+      // 没有标签，直接返回文本
+      return Text(
+        content,
+        style: const TextStyle(fontSize: 14, height: 1.6),
+      );
+    }
+
+    // 构建富文本
+    final textSpans = <TextSpan>[];
+    int lastEnd = 0;
+
+    for (final match in matches) {
+      // 添加匹配前的普通文本
+      if (match.start > lastEnd) {
+        textSpans.add(TextSpan(
+          text: content.substring(lastEnd, match.start),
+          style: const TextStyle(fontSize: 14, height: 1.6),
+        ));
+      }
+
+      // 添加可点击的标签
+      final tag = match.group(2)!; // 获取#后面的标签内容
+      textSpans.add(TextSpan(
+        text: match.group(1), // 完整的#标签文本
+        style: const TextStyle(
+          fontSize: 14,
+          height: 1.6,
+          color: Colors.blue,
+          fontWeight: FontWeight.w500,
+        ),
+        recognizer: TapGestureRecognizer()
+          ..onTap = () {
+            onTagTap(tag);
+          },
+      ));
+
+      lastEnd = match.end;
+    }
+
+    // 添加剩余的文本
+    if (lastEnd < content.length) {
+      textSpans.add(TextSpan(
+        text: content.substring(lastEnd),
+        style: const TextStyle(fontSize: 14, height: 1.6),
+      ));
+    }
+
+    return RichText(
+      text: TextSpan(
+        children: textSpans,
+        style: const TextStyle(
+          fontSize: 14,
+          height: 1.6,
+          color: Colors.black,
+        ),
       ),
     );
   }

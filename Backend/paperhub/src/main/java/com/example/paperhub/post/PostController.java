@@ -34,6 +34,7 @@ public class PostController {
     private final WebSocketService webSocketService;
     private final FavoriteService favoriteService;
     private final PostMapper postMapper;
+    private final RecommendationService recommendationService;
 
     @Autowired
     private ObsClient obsClient;
@@ -45,12 +46,14 @@ public class PostController {
                           LikeService likeService,
                           WebSocketService webSocketService,
                           FavoriteService favoriteService,
-                          PostMapper postMapper) {
+                          PostMapper postMapper,
+                          RecommendationService recommendationService) {
         this.postService = postService;
         this.likeService = likeService;
         this.webSocketService = webSocketService;
         this.favoriteService = favoriteService;
         this.postMapper = postMapper;
+        this.recommendationService = recommendationService;
     }
 
     /**
@@ -187,7 +190,7 @@ public class PostController {
                 req.content(),
                 user,
                 req.media() != null ? req.media() : new ArrayList<>(),
-                req.tags() != null ? req.tags() : new ArrayList<>(),
+                req.mainDiscipline(),
                 req.doi(),
                 req.journal(),
                 req.year(),
@@ -195,7 +198,8 @@ public class PostController {
                 req.arxivId(),
                 req.arxivAuthors() != null ? req.arxivAuthors() : new ArrayList<>(),
                 req.arxivPublishedDate(),
-                req.arxivCategories() != null ? req.arxivCategories() : new ArrayList<>()
+                req.arxivCategories() != null ? req.arxivCategories() : new ArrayList<>(),
+                req.references() != null ? req.references() : new ArrayList<>()
             );
             
             PostDtos.PostResp resp = postMapper.toPostResp(post, user.getId());
@@ -209,6 +213,47 @@ public class PostController {
             error.put("message", "创建帖子失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
             return ResponseEntity.status(500).body(error);
         }
+    }
+
+    /**
+     * 获取首页推荐帖子列表。
+     * - 登录用户：按推荐算法（研究方向 + 收藏 + 浏览历史 + 自己发帖 + 时间 + 热度）排序
+     * - 未登录用户：退化为普通时间排序（等价于 /posts）
+     *
+     * 首页在以下场景可以调用本接口刷新推荐结果：
+     * 1）从其他页面切换回首页；2）重新登录成功后；3）下拉刷新首页时。
+     */
+    @GetMapping("/recommendations")
+    public ResponseEntity<PostDtos.PostListResp> getRecommendations(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @AuthenticationPrincipal User user) {
+
+        if (user == null) {
+            // 未登录用户直接使用普通时间排序作为兜底
+            Page<Post> postPage = postService.getPosts(page, pageSize);
+            List<PostDtos.PostResp> posts = postPage.getContent().stream()
+                    .map(post -> postMapper.toPostResp(post, null))
+                    .toList();
+            return ResponseEntity.ok(new PostDtos.PostListResp(
+                    posts,
+                    postPage.getTotalElements(),
+                    page,
+                    pageSize
+            ));
+        }
+
+        Page<Post> postPage = recommendationService.getRecommendations(user.getId(), page, pageSize);
+        List<PostDtos.PostResp> posts = postPage.getContent().stream()
+                .map(post -> postMapper.toPostResp(post, user.getId()))
+                .toList();
+
+        return ResponseEntity.ok(new PostDtos.PostListResp(
+                posts,
+                postPage.getTotalElements(),
+                page,
+                pageSize
+        ));
     }
 
     /**
@@ -247,7 +292,7 @@ public class PostController {
                     req.title(),
                     req.content(),
                     req.media() != null ? req.media() : new ArrayList<>(),
-                    req.tags() != null ? req.tags() : new ArrayList<>(),
+                    req.mainDiscipline(),
                     req.doi(),
                     req.journal(),
                     req.year(),
@@ -255,7 +300,8 @@ public class PostController {
                     req.arxivId(),
                     req.arxivAuthors() != null ? req.arxivAuthors() : new ArrayList<>(),
                     req.arxivPublishedDate(),
-                    req.arxivCategories() != null ? req.arxivCategories() : new ArrayList<>()
+                    req.arxivCategories() != null ? req.arxivCategories() : new ArrayList<>(),
+                    req.references() != null ? req.references() : new ArrayList<>()
             );
 
             // 4. 映射成响应对象（保持和详情页一致）

@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(flutter --version:*)",
-      "Bash(flutter pub get:*)"
+      "Bash(mvn compile:*)",
+      "Bash(dart analyze:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

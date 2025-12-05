@@ -32,7 +32,11 @@ public class Post {
     @CollectionTable(name = "post_tags", joinColumns = @JoinColumn(name = "post_id"))
     @Column(name = "tag")
     private List<String> tags = new ArrayList<>();
-    
+
+    // 主分区（一级标签）
+    @Column(name = "main_discipline")
+    private String mainDiscipline;
+
     //外部链接列表
     @ElementCollection
     @CollectionTable(name = "post_external_links", joinColumns = @JoinColumn(name = "post_id"))
@@ -70,6 +74,12 @@ public class Post {
     @CollectionTable(name = "post_arxiv_categories", joinColumns = @JoinColumn(name = "post_id"))
     @Column(name = "category")
     private List<String> arxivCategories = new ArrayList<>();
+
+    // 引用文献：存储被引用帖子的ID列表
+    @ElementCollection
+    @CollectionTable(name = "post_references", joinColumns = @JoinColumn(name = "post_id"))
+    @Column(name = "reference_post_id")
+    private List<Long> references = new ArrayList<>();
 
     // 统计信息
     @Column(name = "likes_count", nullable = false)
@@ -140,6 +150,14 @@ public class Post {
 
     public void setTags(List<String> tags) {
         this.tags = tags;
+    }
+
+    public String getMainDiscipline() {
+        return mainDiscipline;
+    }
+
+    public void setMainDiscipline(String mainDiscipline) {
+        this.mainDiscipline = mainDiscipline;
     }
 
     public User getAuthor() {
@@ -253,6 +271,14 @@ public class Post {
 
     public void setArxivCategories(List<String> arxivCategories) {
         this.arxivCategories = arxivCategories != null ? arxivCategories : new ArrayList<>();
+    }
+
+    public List<Long> getReferences() {
+        return references;
+    }
+
+    public void setReferences(List<Long> references) {
+        this.references = references != null ? references : new ArrayList<>();
     }
 
     // 举报系统相关字段的 Getter 和 Setter

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../services/mock_api_service.dart';
 import '../services/api_service.dart';
+import '../widgets/video_background.dart';
 
 class ResetPasswordPage extends StatefulWidget {
   @override
@@ -47,70 +47,216 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('重置密码')),
-      body: Center(
-        child: Padding(
-          padding: EdgeInsets.all(20),
-          child: Card(
-            elevation: 6,
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Form(
-                key: _formKey,
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text('输入邮件里的重置验证码与新密码。'),
-                  SizedBox(height: 12),
-                  TextFormField(
-                    initialValue: email,
-                    decoration: InputDecoration(labelText: '邮箱'),
-                    onChanged: (v) => email = v,
-                  ),
-                  SizedBox(height: 12),
-                  TextFormField(
-                    decoration: InputDecoration(labelText: '重置验证码'),
-                    onChanged: (v) => code = v,
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return '请输入验证码';
-                      return null;
-                    },
-                  ),
-                  SizedBox(height: 12),
-                  TextFormField(
-                    decoration: InputDecoration(
-                      labelText: '新密码 (至少8位，含字母和数字)',
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+      backgroundColor: Colors.transparent,
+      body: VideoBackground(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.28), // 下移卡片
+                  // 半透明卡片，居中靠下
+                  Container(
+                    constraints: BoxConstraints(maxWidth: 720),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.92),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Color(0xFFE6F0FF), // 极浅冷蓝边线
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 20,
+                          offset: Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              '重置密码',
+                              style: TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F172A),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            SizedBox(height: 24),
+                            Text(
+                              '输入邮件里的重置验证码与新密码。',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.black54,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            SizedBox(height: 24),
+                            TextFormField(
+                              initialValue: email,
+                              decoration: InputDecoration(
+                                labelText: '邮箱',
+                                filled: true,
+                                fillColor: Color(0xFFF7FBFF).withOpacity(0.6),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Color(0xFF2563EB), width: 2),
+                                ),
+                              ),
+                              keyboardType: TextInputType.emailAddress,
+                              onChanged: (v) => email = v,
+                            ),
+                            SizedBox(height: 16),
+                            TextFormField(
+                              decoration: InputDecoration(
+                                labelText: '重置验证码',
+                                filled: true,
+                                fillColor: Color(0xFFF7FBFF).withOpacity(0.6),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Color(0xFF2563EB), width: 2),
+                                ),
+                              ),
+                              onChanged: (v) => code = v,
+                              validator: (v) {
+                                if (v == null || v.isEmpty) return '请输入验证码';
+                                return null;
+                              },
+                            ),
+                            SizedBox(height: 16),
+                            TextFormField(
+                              decoration: InputDecoration(
+                                labelText: '新密码 (至少8位，含字母和数字)',
+                                filled: true,
+                                fillColor: Color(0xFFF7FBFF).withOpacity(0.6),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Color(0xFF2563EB), width: 2),
+                                ),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                    color: Color(0xFF2563EB), // 主蓝
+                                  ),
+                                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                ),
+                              ),
+                              obscureText: _obscurePassword,
+                              onChanged: (v) => newPassword = v,
+                              validator: (v) {
+                                if (v == null || v.isEmpty) return '请输入新密码';
+                                if (!_validPassword(v)) return '密码至少8位并包含字母和数字';
+                                return null;
+                              },
+                            ),
+                            SizedBox(height: 16),
+                            TextFormField(
+                              decoration: InputDecoration(
+                                labelText: '确认新密码',
+                                filled: true,
+                                fillColor: Color(0xFFF7FBFF).withOpacity(0.6),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Color(0xFF2563EB), width: 2),
+                                ),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscureConfirm ? Icons.visibility_off : Icons.visibility,
+                                    color: Color(0xFF2563EB), // 主蓝
+                                  ),
+                                  onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                                ),
+                              ),
+                              obscureText: _obscureConfirm,
+                              onChanged: (v) => confirm = v,
+                              validator: (v) {
+                                if (v == null || v.isEmpty) return '请确认密码';
+                                if (v != newPassword) return '两次密码不一致';
+                                return null;
+                              },
+                            ),
+                            SizedBox(height: 24),
+                            loading
+                                ? Center(
+                                    child: CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                                    ),
+                                  )
+                                : ElevatedButton(
+                                    onPressed: _reset,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Color(0xFF2563EB), // 主蓝
+                                      foregroundColor: Colors.white, // 白字
+                                      padding: EdgeInsets.symmetric(vertical: 16),
+                                      elevation: 6, // 阴影
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12), // 稍大圆角
+                                      ),
+                                    ).copyWith(
+                                      backgroundColor: MaterialStateProperty.resolveWith<Color>(
+                                        (Set<MaterialState> states) {
+                                          if (states.contains(MaterialState.pressed)) {
+                                            return Color(0xFF1D4ED8); // 按下时变为 #1D4ED8
+                                          }
+                                          return Color(0xFF2563EB); // 默认主蓝
+                                        },
+                                      ),
+                                    ),
+                                    child: Text('更新密码', style: TextStyle(fontSize: 16)),
+                                  ),
+                            SizedBox(height: 12),
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
+                              child: Text('返回登录', style: TextStyle(color: Color(0xFF2563EB))),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    obscureText: _obscurePassword,
-                    onChanged: (v) => newPassword = v,
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return '请输入新密码';
-                      if (!_validPassword(v)) return '密码至少8位并包含字母和数字';
-                      return null;
-                    },
                   ),
-                  SizedBox(height: 12),
-                  TextFormField(
-                    decoration: InputDecoration(
-                      labelText: '确认新密码',
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                      ),
-                    ),
-                    obscureText: _obscureConfirm,
-                    onChanged: (v) => confirm = v,
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return '请确认密码';
-                      if (v != newPassword) return '两次密码不一致';
-                      return null;
-                    },
-                  ),
-                  SizedBox(height: 12),
-                  loading ? CircularProgressIndicator() : ElevatedButton(onPressed: _reset, child: Text('更新密码')),
-                ]),
+                ],
               ),
             ),
           ),

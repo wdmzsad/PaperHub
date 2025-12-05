@@ -185,7 +185,8 @@ class Post {
   final List<String> media; // 图片 url 列表（可为空）
   final List<Attachment> attachments; // PDF 等附件
   final List<String> externalLinks; // 外部链接列表
-  final List<String> tags;
+  final String mainDiscipline; // 主分区（一级标签）
+  final List<String> subTags; // 二级标签列表
   final Author author;
 
   // 统计与状态（通常由后端返回）
@@ -206,6 +207,8 @@ class Post {
   final String? arxivPublishedDate; // 发布日期（格式：YYYY-MM-DD）
   final List<String> arxivCategories; // arXiv 分类
 
+  final List<int> references; // 引用文献：被引用帖子的ID列表
+
   // 图片展示相关（保持原来字段以兼容瀑布流计算）
   final double imageAspectRatio;
   final double imageNaturalWidth;
@@ -221,7 +224,8 @@ class Post {
     required this.content,
     required this.media,
     required this.attachments,
-    required this.tags,
+    required this.mainDiscipline,
+    required this.subTags,
     required this.author,
     required this.externalLinks,
     this.comments = const [],
@@ -237,6 +241,7 @@ class Post {
     this.arxivAuthors = const [],
     this.arxivPublishedDate,
     this.arxivCategories = const [],
+    this.references = const [],
     required this.imageAspectRatio,
     required this.imageNaturalWidth,
     required this.imageNaturalHeight,
@@ -265,7 +270,8 @@ class Post {
       content: json['content'] as String? ?? '',
       media: (json['media'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       attachments: [], // 后端暂时不支持附件，需要后续添加
-      tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      mainDiscipline: json['mainDiscipline'] as String? ?? '',
+      subTags: (json['subTags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
 
       externalLinks: (json['externalLinks'] as List<dynamic>?)
               ?.map((e) => e.toString())
@@ -294,6 +300,9 @@ class Post {
       arxivPublishedDate: json['arxivPublishedDate'] as String?,
       arxivCategories: (json['arxivCategories'] as List<dynamic>?)
               ?.map((e) => e.toString())
+              .toList() ?? const [],
+      references: (json['references'] as List<dynamic>?)
+              ?.map((e) => (e as num).toInt())
               .toList() ?? const [],
       imageAspectRatio: (json['imageAspectRatio'] as num?)?.toDouble() ?? 1.5,
       imageNaturalWidth: (json['imageNaturalWidth'] as num?)?.toDouble() ?? 800.0,

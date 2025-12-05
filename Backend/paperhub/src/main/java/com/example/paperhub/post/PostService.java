@@ -20,9 +20,30 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 @Service
 public class PostService {
+    // 主分区列表（与前端保持一致）
+    private static final List<String> MAIN_DISCIPLINES = Arrays.asList(
+        "理学",
+        "工学",
+        "信息科学（CS）",
+        "生命科学",
+        "医学与健康",
+        "经管",
+        "社会科学",
+        "人文与艺术",
+        "教育学",
+        "跨学科",
+        "科研方法与工具",
+        "学术生活",
+        "公告区"
+    );
+
     private final PostRepository postRepository;
     private final FollowFeedRepository followFeedRepository;
     private final UserRepository userRepository;
@@ -49,6 +70,31 @@ public class PostService {
         this.commentRepository = commentRepository;
         this.commentLikeRepository = commentLikeRepository;
         this.reportPostRepository = reportPostRepository;
+    }
+
+    /**
+     * 从正文内容中提取二级标签（#标签）
+     * @param content 帖子正文内容
+     * @return 提取到的二级标签列表
+     */
+    private List<String> extractSubTagsFromContent(String content) {
+        List<String> subTags = new ArrayList<>();
+        if (content == null || content.isEmpty()) {
+            return subTags;
+        }
+
+        // 正则表达式匹配 #标签，排除#后面的空格和换行
+        Pattern pattern = Pattern.compile("#([^\\s#]+)");
+        Matcher matcher = pattern.matcher(content);
+
+        while (matcher.find()) {
+            String tag = matcher.group(1);
+            if (tag != null && !tag.trim().isEmpty()) {
+                subTags.add(tag.trim());
+            }
+        }
+
+        return subTags;
     }
 
     public Optional<Post> findById(Long id) {
@@ -78,7 +124,15 @@ public class PostService {
     public Page<Post> getPosts(int page, int pageSize, String tag) {
         Pageable pageable = PageRequest.of(page - 1, pageSize);
         if (tag != null && !tag.trim().isEmpty()) {
-            return postRepository.findByTagOrderByCreatedAtDesc(tag.trim(), pageable);
+            String trimmedTag = tag.trim();
+
+            // 如果标签是主分区，按mainDiscipline过滤
+            if (MAIN_DISCIPLINES.contains(trimmedTag)) {
+                return postRepository.findByMainDisciplineOrderByCreatedAtDesc(trimmedTag, pageable);
+            } else {
+                // 否则按旧的tags字段过滤（用于二级标签搜索）
+                return postRepository.findByTagOrderByCreatedAtDesc(trimmedTag, pageable);
+            }
         } else {
             return postRepository.findAllByOrderByCreatedAtDesc(pageable);
         }
@@ -119,16 +173,24 @@ public class PostService {
      * 创建帖子
      */
     @Transactional
-    public Post createPost(String title, String content, User author, List<String> media, 
-                          List<String> tags, String doi, String journal, Integer year, List<String> externalLinks,
-                          String arxivId, List<String> arxivAuthors, String arxivPublishedDate, List<String> arxivCategories) {
+    public Post createPost(String title, String content, User author, List<String> media,
+                          String mainDiscipline, String doi, String journal, Integer year, List<String> externalLinks,
+                          String arxivId, List<String> arxivAuthors, String arxivPublishedDate, List<String> arxivCategories,
+                          List<Long> references) {
         ensureUserCanInteract(author);
         Post post = new Post();
         post.setTitle(title);
         post.setContent(content != null ? content : "");
         post.setAuthor(author);
         post.setMedia(media != null ? media : List.of());
-        post.setTags(tags != null ? tags : List.of());
+
+        // 设置主分区
+        post.setMainDiscipline(mainDiscipline);
+
+        // 从正文中提取二级标签
+        List<String> subTags = extractSubTagsFromContent(content);
+        post.setTags(subTags);
+
         post.setDoi(doi);
         post.setJournal(journal);
         post.setYear(year);
@@ -139,6 +201,10 @@ public class PostService {
         post.setArxivAuthors(arxivAuthors != null ? arxivAuthors : List.of());
         post.setArxivPublishedDate(arxivPublishedDate);
         post.setArxivCategories(arxivCategories != null ? arxivCategories : List.of());
+
+        // 引用文献
+        post.setReferences(references != null ? references : List.of());
+
         post.setLikesCount(0);
         post.setCommentsCount(0);
         post.setViewsCount(0);
@@ -157,7 +223,7 @@ public class PostService {
                            String title,
                            String content,
                            List<String> media,
-                           List<String> tags,
+                           String mainDiscipline,
                            String doi,
                            String journal,
                            Integer year,
@@ -165,7 +231,8 @@ public class PostService {
                            String arxivId,
                            List<String> arxivAuthors,
                            String arxivPublishedDate,
-                           List<String> arxivCategories) {
+                           List<String> arxivCategories,
+                           List<Long> references) {
 
         // 1. 找到帖子
         Post post = postRepository.findById(postId)
@@ -180,7 +247,14 @@ public class PostService {
         post.setTitle(title);
         post.setContent(content != null ? content : "");
         post.setMedia(media != null ? media : List.of());
-        post.setTags(tags != null ? tags : List.of());
+
+        // 更新主分区
+        post.setMainDiscipline(mainDiscipline);
+
+        // 从正文中提取二级标签
+        List<String> subTags = extractSubTagsFromContent(content);
+        post.setTags(subTags);
+
         post.setDoi(doi);
         post.setJournal(journal);
         post.setYear(year);
@@ -193,6 +267,9 @@ public class PostService {
         post.setArxivAuthors(arxivAuthors != null ? arxivAuthors : List.of());
         post.setArxivPublishedDate(arxivPublishedDate);
         post.setArxivCategories(arxivCategories != null ? arxivCategories : List.of());
+
+        // 引用文献
+        post.setReferences(references != null ? references : List.of());
 
         // 更新时间
         post.setUpdatedAt(Instant.now());

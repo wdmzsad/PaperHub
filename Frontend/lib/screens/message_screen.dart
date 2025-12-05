@@ -1350,7 +1350,11 @@ class _MessageScreenState extends State<MessageScreen> {
       // 首页
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) => child,
+          transitionDuration: Duration.zero,
+        ),
       ).then((_) {
         // 当从首页返回时，恢复消息页面高亮
         setState(() {
@@ -1361,7 +1365,11 @@ class _MessageScreenState extends State<MessageScreen> {
       // 发布
       Navigator.of(context)
           .push(
-            MaterialPageRoute(builder: (context) => const NoteEditorPage()),
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => const NoteEditorPage(),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) => child,
+              transitionDuration: Duration.zero,
+            ),
           )
           .then((_) {
             setState(() {
@@ -1372,7 +1380,11 @@ class _MessageScreenState extends State<MessageScreen> {
       // 我的
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => const ProfilePage(isMainPage: true)),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => const ProfilePage(isMainPage: true),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) => child,
+          transitionDuration: Duration.zero,
+        ),
       ).then((_) {
         // 当从个人页面返回时，恢复消息页面高亮
         setState(() {
