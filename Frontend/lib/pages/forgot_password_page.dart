@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:email_validator/email_validator.dart';
 import '../services/api_service.dart';
-import '../widgets/video_background.dart';
+import '../widgets/animated_title_background.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   @override
@@ -30,7 +30,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: VideoBackground(
+      body: AnimatedTitleBackground(
+        enableAnimation: false,
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -38,7 +39,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.4), // 下移卡片
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.24), // 下移卡片
                   // 半透明卡片，居中靠下
                   Container(
                     constraints: BoxConstraints(maxWidth: 720),
@@ -88,7 +89,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                               decoration: InputDecoration(
                                 labelText: '邮箱',
                                 filled: true,
-                                fillColor: Color(0xFFF7FBFF).withOpacity(0.6),
+                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
                                   borderSide: BorderSide(color: Color(0xFFCBD5E1)),
@@ -99,7 +100,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF2563EB), width: 2),
+                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
                                 ),
                               ),
                               keyboardType: TextInputType.emailAddress,
@@ -114,13 +115,13 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                             loading
                                 ? Center(
                                     child: CircularProgressIndicator(
-                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF628DCE)),
                                     ),
                                   )
                                 : ElevatedButton(
                                     onPressed: _requestReset,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Color(0xFF2563EB), // 主蓝
+                                      backgroundColor: Color(0xFF628DCE), // 主蓝
                                       foregroundColor: Colors.white, // 白字
                                       padding: EdgeInsets.symmetric(vertical: 16),
                                       elevation: 6, // 阴影
@@ -131,9 +132,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                                       backgroundColor: MaterialStateProperty.resolveWith<Color>(
                                         (Set<MaterialState> states) {
                                           if (states.contains(MaterialState.pressed)) {
-                                            return Color(0xFF1D4ED8); // 按下时变为 #1D4ED8
+                                            return Color(0xFF4374C3); // 按下时变为 #1D4ED8
                                           }
-                                          return Color(0xFF2563EB); // 默认主蓝
+                                          return Color(0xFF628DCE); // 默认主蓝
                                         },
                                       ),
                                     ),
@@ -142,7 +143,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                             SizedBox(height: 16),
                             TextButton(
                               onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
-                              child: Text('返回登录', style: TextStyle(color: Color(0xFF2563EB))),
+                              child: Text('返回登录', style: TextStyle(color: Color(0xFF628DCE))),
                             ),
                           ],
                         ),

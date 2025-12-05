@@ -115,3 +115,23 @@ flutter:
       - assets/images/
       - assets/pc.mp4
       - assets/mobile.mp4
+  fonts:
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/ttf/JetBrainsMono-Regular.ttf
+        - asset: assets/fonts/ttf/JetBrainsMono-Bold.ttf
+          weight: 700
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/static/Inter_28pt-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/static/Inter_28pt-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/static/Inter_28pt-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/static/Inter_28pt-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/static/Inter_28pt-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/static/Inter_28pt-Black.ttf
+          weight: 900

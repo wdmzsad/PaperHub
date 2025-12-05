@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:email_validator/email_validator.dart';
 import '../services/api_service.dart';
-import '../widgets/video_background.dart';
+import '../widgets/animated_title_background.dart';
 
 class RegisterPage extends StatefulWidget {
   @override
@@ -43,7 +43,8 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: VideoBackground(
+      body: AnimatedTitleBackground(
+        enableAnimation: false,
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -51,7 +52,7 @@ class _RegisterPageState extends State<RegisterPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.4), // 下移卡片
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.24), // 下移卡片
                   // 半透明注册卡片，居中靠下
                   Container(
                     constraints: BoxConstraints(maxWidth: 720),
@@ -92,7 +93,7 @@ class _RegisterPageState extends State<RegisterPage> {
                               decoration: InputDecoration(
                                 labelText: '邮箱',
                                 filled: true,
-                                fillColor: Color(0xFFF7FBFF).withOpacity(0.6),
+                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
                                   borderSide: BorderSide(color: Color(0xFFCBD5E1)),
@@ -103,7 +104,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF2563EB), width: 2),
+                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
                                 ),
                               ),
                               keyboardType: TextInputType.emailAddress,
@@ -119,7 +120,7 @@ class _RegisterPageState extends State<RegisterPage> {
                               decoration: InputDecoration(
                                 labelText: '密码 (至少8位，包含字母和数字)',
                                 filled: true,
-                                fillColor: Color(0xFFF7FBFF).withOpacity(0.6),
+                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
                                   borderSide: BorderSide(color: Color(0xFFCBD5E1)),
@@ -130,12 +131,12 @@ class _RegisterPageState extends State<RegisterPage> {
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF2563EB), width: 2),
+                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
                                 ),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                                    color: Color(0xFF2563EB), // 主蓝
+                                    color: Color(0xFF628DCE), // 主蓝
                                   ),
                                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                 ),
@@ -153,7 +154,7 @@ class _RegisterPageState extends State<RegisterPage> {
                               decoration: InputDecoration(
                                 labelText: '确认密码',
                                 filled: true,
-                                fillColor: Color(0xFFF7FBFF).withOpacity(0.6),
+                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
                                   borderSide: BorderSide(color: Color(0xFFCBD5E1)),
@@ -164,12 +165,12 @@ class _RegisterPageState extends State<RegisterPage> {
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF2563EB), width: 2),
+                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
                                 ),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscureConfirm ? Icons.visibility_off : Icons.visibility,
-                                    color: Color(0xFF2563EB), // 主蓝
+                                    color: Color(0xFF628DCE), // 主蓝
                                   ),
                                   onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                                 ),
@@ -186,13 +187,13 @@ class _RegisterPageState extends State<RegisterPage> {
                             loading
                                 ? Center(
                                     child: CircularProgressIndicator(
-                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF628DCE)),
                                     ),
                                   )
                                 : ElevatedButton(
                                     onPressed: _submit,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Color(0xFF2563EB), // 主蓝
+                                      backgroundColor: Color(0xFF628DCE), // 主蓝
                                       foregroundColor: Colors.white, // 白字
                                       padding: EdgeInsets.symmetric(vertical: 16),
                                       elevation: 6, // 阴影
@@ -203,9 +204,9 @@ class _RegisterPageState extends State<RegisterPage> {
                                       backgroundColor: MaterialStateProperty.resolveWith<Color>(
                                         (Set<MaterialState> states) {
                                           if (states.contains(MaterialState.pressed)) {
-                                            return Color(0xFF1D4ED8); // 按下时变为 #1D4ED8
+                                            return Color(0xFF4374C3); // 按下时变为 #1D4ED8
                                           }
-                                          return Color(0xFF2563EB); // 默认主蓝
+                                          return Color(0xFF628DCE); // 默认主蓝
                                         },
                                       ),
                                     ),
@@ -214,7 +215,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             SizedBox(height: 12),
                             TextButton(
                               onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
-                              child: Text('已有账号？去登录', style: TextStyle(color: Color(0xFF2563EB))),
+                              child: Text('已有账号？去登录', style: TextStyle(color: Color(0xFF628DCE))),
                             ),
                           ],
                         ),
