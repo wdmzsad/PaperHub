@@ -1325,24 +1325,40 @@ class _ProfilePageState extends State<ProfilePage>
         if (index == 0) {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) => child,
+              transitionDuration: Duration.zero,
+            ),
           ).then((_) => setState(() => _currentIndex = 3));
         } else if (index == 1) {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const MessageScreen()),
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => const MessageScreen(),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) => child,
+              transitionDuration: Duration.zero,
+            ),
           ).then((_) => setState(() => _currentIndex = 3));
         } else if (index == 2) {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const NoteEditorPage()),
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => const NoteEditorPage(),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) => child,
+              transitionDuration: Duration.zero,
+            ),
           ).then((_) => setState(() => _currentIndex = 0));
         } else if (index == 3) {
           if (!_isViewingSelf) {
             // 从其他页面进入自己的主页，显示为主页面
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const ProfilePage(isMainPage: true)),
+              PageRouteBuilder(
+                pageBuilder: (context, animation, secondaryAnimation) => const ProfilePage(isMainPage: true),
+                transitionsBuilder: (context, animation, secondaryAnimation, child) => child,
+                transitionDuration: Duration.zero,
+              ),
             ).then((_) => setState(() => _currentIndex = 3));
           }
           // 如果已经是自己的主页，不做任何操作

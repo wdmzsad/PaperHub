@@ -1,5 +1,4 @@
-// lib/screens/post_detail_screen.dart
-// merge request 测试 1104: 单个帖子界面
+﻿// lib/screens/post_detail_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
@@ -25,108 +24,6 @@ import '../widgets/report_post_dialog.dart';
 import '../models/message_model.dart';
 import 'chat_screen.dart';
 import '../pages/note_editor_page.dart';
-
-/*
-================================================================================
- 后端对接说明（已整理为注释，放在 `post_detail_screen.dart` 文件末尾）
- 目的：记录前端与后端 REST / WebSocket 的契约示例、字段说明与调试建议，便于与后端联调。
-================================================================================
-
-1) 认证
- - 前端会通过 LocalStorage.instance.read('auth_token') 读取 token，并在
-   ApiService._buildHeaders() 中以 `Authorization: Bearer <token>` 方式发送给后端。
- - 请后端对该 Header 进行校验，未授权返回 401/403 并在 body.message 提供可读提示。
-
-2) REST 接口（建议）
- - 获取评论（分页）
-   GET /posts/{postId}/comments?page=1&pageSize=20&sort=time
-   Response 200:
-   {
-     "comments": [ {comment}, ... ],  // 顶层评论（每项可包含 replies 列表）
-     "total": 123,
-     "page": 1,
-     "pageSize": 20
-   }
-
- - 发布评论（顶层或回复）
-   POST /posts/{postId}/comments
-   Body: { "content": "...", "parentId": "c_123"?, "replyToId": "u_456"? }
-   Response 201/200:
-   { "comment": { ...new comment object... } }
-
- - 更新评论
-   PUT /posts/{postId}/comments/{commentId}
-   Body: { "content": "new content" }
-   Response: { "comment": { ... } }
-
- - 删除评论
-   DELETE /posts/{postId}/comments/{commentId}
-   Response: 204 或 { "message": "deleted" }
-
- - 点赞 / 取消点赞评论
-   POST /posts/{postId}/comments/{commentId}/like
-   DELETE /posts/{postId}/comments/{commentId}/like
-   Response: { "likesCount": 10, "isLiked": true }
-
-3) comment 对象（建议字段）
- {
-   "id": "c_123",
-   "author": {"id":"u1","name":"Alice","avatar":"...","affiliation":"..."},
-   "content": "...",
-   "parentId": null,        // 顶层评论为 null
-   "replyTo": { ... }?,     // 被回复的用户（可选）
-   "likesCount": 5,
-   "isLiked": false,        // 当前用户是否已点赞（若后端能计算）
-   "replies": [ ... ],      // 可选：子回复列表
-   "createdAt": "2025-11-06T08:00:00Z"
- }
-
-4) WebSocket 事件（建议格式）
- - 连接： ws://<host>/ws/posts/{postId} 或统一 topic 方案
- - 事件 JSON：必须包含 `type` 字段
-   1) 帖子点赞更新
-      {"type":"like_update","likesCount":123,"isLiked":true}
-   2) 评论点赞更新
-      {"type":"comment_like_update","commentId":"c_123","likesCount":5,"isLiked":true}
-   3) 新评论
-      {"type":"comment_created","comment":{...comment object...}}
-   4) 评论更新
-      {"type":"comment_updated","comment":{...}}
-   5) 评论删除
-      {"type":"comment_deleted","commentId":"c_123"}
-
- - 本文件中已实现对上述事件的处理：
-   _initWebSocket() 里解析 type 并调用 _handleCommentCreated / _handleCommentUpdated / _handleCommentDeleted
-   注意：前端实现已兼容 comment 在 'comment'、'payload' 或 'data' 字段中的情况，但建议统一使用 'comment'
-
-5) 前端行为与容错策略
- - 乐观更新：点赞、发送评论时前端会做乐观更新以提升响应感，若后端返回错误会回滚并通过 SnackBar 提示用户。
- - 防重：提交评论使用 _isSubmittingComment 防止重复提交；点赞使用 _commentLikeInFlight 防止并发请求。
- - 时间解析：后端请使用 ISO8601（UTC）字符串，前端使用 DateTime.parse 解析。
- - 子回复分页：若回复很多，建议后端提供 /comments/{commentId}/replies 分页接口；否则可在 GET /posts/{postId}/comments 返回 replies 字段（限数量）。
-
-6) 推荐的对接与调试步骤（给后端同学）
- - 确认接口路径与字段（上述示例），后端在 Postman 中演示以下流程：
-   1) GET 评论分页
-   2) POST 新评论（顶层 & 回复）并返回 comment
-   3) POST/DELETE 点赞并返回 likesCount/isLiked
-   4) 在另一个客户端通过 WS 推送 comment_created/comment_like_update，观察前端是否实时更新
- - 前端准备：启动应用（flutter run），打开帖子详情页并观察控制台/SnackBar 的错误提示；若 token 验证失败，请在 LocalStorage 中填入有效 token。
-
-7) 切换 Mock -> 真正后端（简要步骤）
- - 将 ApiService.baseUrl 指向真实后端地址
- - 确认后端返回结构（尤其 comment 字段/时间格式/likesCount/isLiked）并调整 Comment.fromJson（位于 lib/models/post_model.dart）
- - 删除或移动 mock_api_service.dart（若不再需要）
-
-8) 常见问题与建议
- - 若后端不返回 isLiked，可考虑前端在获取当前用户点赞记录后合并；或后端提供单独的用户点赞接口。
- - 高频事件（如点赞）可能需要后端做节流/合并，减少 WS 消息量。
- - 对于权限错误（401/403），前端应引导用户重新登录或清理缓存的 token。
-
-================================================================================
- 备注：如需我把这份注释提取为独立文档 `BACKEND_INTEGRATION.md` 或根据后端给出的真实样例调整解析代码，我可以继续修改。
-================================================================================
-*/
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -1347,7 +1244,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     setState(() {
       _currentReplyTo = comment;
       _currentReplyParentId = parentId ?? comment.id;
-      _commentController.text = '@${comment.author.name} ';
+      _commentController.text = '';
+      //_commentController.text = '@${comment.author.name} ';
     });
     _commentFocusNode.requestFocus();
   }
