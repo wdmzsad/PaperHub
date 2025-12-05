@@ -24,6 +24,7 @@ class _VideoBackgroundState extends State<VideoBackground> {
   bool _isVideoFinished = false;
   bool _isInitialized = false;
   bool _needsUserInteraction = false; // 是否需要用户交互才能播放
+  bool _videoLoadFailed = false; // 视频加载是否失败
   Size _cachedVideoSize = Size.zero; // 缓存视频尺寸，防止 Web 平台状态重置
 
   @override
@@ -37,10 +38,11 @@ class _VideoBackgroundState extends State<VideoBackground> {
       // Web 平台：尝试多个可能的路径
       final videoFileName = widget.videoPath.split('/').last; // 提取文件名，如 "Title_07.mp4"
       final possiblePaths = [
-        '/assets/$videoFileName',           // Flutter 构建后的标准路径
-        '/$videoFileName',                  // 如果文件在 web 根目录
-        widget.videoPath.startsWith('assets/') 
-            ? '/${widget.videoPath}'        // 完整路径
+        '/assets/$videoFileName',                 // Flutter 构建后的标准路径
+        '/assets/assets/$videoFileName',          // 某些部署下会复制到 assets/assets
+        '/$videoFileName',                        // 如果文件在 web 根目录
+        widget.videoPath.startsWith('assets/')
+            ? '/${widget.videoPath}'              // 完整路径
             : widget.videoPath,
       ];
       
@@ -80,7 +82,15 @@ class _VideoBackgroundState extends State<VideoBackground> {
       
       if (_controller == null) {
         print('所有路径都失败，最后一个错误: $lastError');
-        throw lastError ?? Exception('无法加载视频文件');
+        print('视频加载失败，将使用渐变背景作为后备方案');
+        // 视频加载失败，使用渐变背景作为后备方案
+        if (mounted) {
+          setState(() {
+            _videoLoadFailed = true;
+            _isInitialized = true; // 标记为已初始化，显示后备背景
+          });
+        }
+        return; // 不抛出异常，优雅降级
       }
     } else {
       // 移动端平台：使用 asset
@@ -269,8 +279,25 @@ class _VideoBackgroundState extends State<VideoBackground> {
         fit: StackFit.expand,
         children: [
           // 视频背景（播放中或最后一帧）
-          // Web 平台：即使控制器状态显示未初始化，只要有控制器和缓存尺寸就显示
-          if (_controller != null && videoSize.width > 0 && videoSize.height > 0)
+          if (_videoLoadFailed)
+            // 视频加载失败，显示优雅的渐变背景
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF1E3A8A), // 深蓝色
+                      Color(0xFF3B82F6), // 蓝色
+                      Color(0xFF60A5FA), // 浅蓝色
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else if (_controller != null && videoSize.width > 0 && videoSize.height > 0)
+            // Web 平台：即使控制器状态显示未初始化，只要有控制器和缓存尺寸就显示
             Positioned.fill(
               child: FittedBox(
                 fit: BoxFit.cover,
@@ -287,8 +314,20 @@ class _VideoBackgroundState extends State<VideoBackground> {
               child: VideoPlayer(_controller!),
             )
           else
-            // 如果控制器不存在，显示黑色背景
-            Container(color: Colors.black),
+            // 如果控制器不存在，显示渐变背景
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF1E3A8A), // 深蓝色
+                    Color(0xFF3B82F6), // 蓝色
+                    Color(0xFF60A5FA), // 浅蓝色
+                  ],
+                ),
+              ),
+            ),
 
           // 如果需要用户交互，显示提示（可选）
           if (_needsUserInteraction && kIsWeb)
