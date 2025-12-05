@@ -107,6 +107,6 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
-assets:
-    - assets/images/
-    - assets/Title_07.mp4
+  assets:
+      - assets/images/
+      - assets/Title_07.mp4
