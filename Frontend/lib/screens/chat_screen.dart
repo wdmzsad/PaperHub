@@ -13,6 +13,7 @@
 /// - 流畅的动画效果
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
 import '../services/chat_service.dart';
@@ -48,6 +49,11 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _initialLoadComplete = false;
   int _previousMessageCount = 0;
   String? _currentUserId;
+  bool _userHasScrolled = false; // 用户是否已经主动滚动
+
+  // 滚动到底部重试相关
+  int _scrollToBottomRetryCount = 0;
+  double _previousMaxExtent = 0;
 
   // 轮询配置
   Timer? _pollingTimer;
@@ -80,7 +86,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {});
 
       if (shouldScroll) {
-        _scrollToBottom();
+        _scrollToBottom(force: true);
       }
       _previousMessageCount = currentCount;
     }
@@ -96,11 +102,13 @@ class _ChatScreenState extends State<ChatScreen> {
     if (widget.conversation != null) {
       _chatService.setCurrentConversation(widget.conversation!);
       await _chatService.loadMessages(widget.conversation!.id, page: 0);
+      // 预加载所有媒体内容
+      await _preloadMedia();
       setState(() {
         _initialLoadComplete = true;
         _previousMessageCount = _chatService.messages.length;
       });
-      _scrollToBottom();
+      _scrollToBottom(force: false);
       _startPolling();
       return;
     }
@@ -134,11 +142,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
           _chatService.setCurrentConversation(conversation);
           await _chatService.loadMessages(conversation.id, page: 0);
+          // 预加载所有媒体内容
+          await _preloadMedia();
           setState(() {
             _initialLoadComplete = true;
             _previousMessageCount = _chatService.messages.length;
           });
-          _scrollToBottom();
+          _scrollToBottom(force: false);
           _startPolling();
         } else {
           final fallbackConversation = Conversation(
@@ -156,11 +166,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
           _chatService.setCurrentConversation(fallbackConversation);
           await _chatService.loadMessages(fallbackConversation.id, page: 0);
+          // 预加载所有媒体内容
+          await _preloadMedia();
           setState(() {
             _initialLoadComplete = true;
             _previousMessageCount = _chatService.messages.length;
           });
-          _scrollToBottom();
+          _scrollToBottom(force: false);
           _startPolling();
         }
       } catch (e) {
@@ -179,11 +191,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
         _chatService.setCurrentConversation(fallbackConversation);
         await _chatService.loadMessages(fallbackConversation.id, page: 0);
+        // 预加载所有媒体内容
+        await _preloadMedia();
         setState(() {
           _initialLoadComplete = true;
           _previousMessageCount = _chatService.messages.length;
         });
-        _scrollToBottom();
+        _scrollToBottom(force: false);
         _startPolling();
       }
     }
@@ -227,6 +241,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _scrollListener() {
+    // 检测用户主动滚动
+    if (_scrollController.hasClients && _scrollController.position.userScrollDirection != ScrollDirection.idle) {
+      _userHasScrolled = true;
+    }
+
     // 当用户滚动到底部时，标记消息为已读
     final conversation = widget.conversation ?? _loadedConversation;
     if (conversation != null && _scrollController.offset >= _scrollController.position.maxScrollExtent - 100) {
@@ -266,7 +285,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _textController.clear();
     _previousMessageCount = _chatService.messages.length;
-    _scrollToBottom();
+    _scrollToBottom(force: true);
   }
 
   void _onSendMedia(List<String> mediaUrls, String messageType, String fileName, int fileSize) {
@@ -291,11 +310,47 @@ class _ChatScreenState extends State<ChatScreen> {
     );
 
     _previousMessageCount = _chatService.messages.length;
-    _scrollToBottom();
+    _scrollToBottom(force: true);
   }
 
-  void _scrollToBottom() {
+  Future<void> _preloadMedia() async {
+    final messages = _chatService.messages;
+    final List<Future<void>> preloadFutures = [];
+
+    for (final message in messages) {
+      // 预加载图片消息的媒体
+      if (message.type == MessageType.image && message.mediaUrls.isNotEmpty) {
+        for (final url in message.mediaUrls) {
+          try {
+            final imageProvider = NetworkImage(url);
+            final future = precacheImage(imageProvider, context);
+            preloadFutures.add(future);
+          } catch (e) {
+            // 忽略单个图片预加载失败
+            debugPrint('预加载图片失败: $e');
+          }
+        }
+      }
+      // 注意：视频和文件消息通常不需要预加载
+      // 分享消息的图片会在MessageBubble中异步加载
+    }
+
+    if (preloadFutures.isNotEmpty) {
+      // 等待所有图片预加载完成，但设置超时避免无限等待
+      await Future.wait(preloadFutures.map((future) => future.timeout(const Duration(seconds: 5), onTimeout: () {
+        debugPrint('图片预加载超时');
+        return;
+      })));
+    }
+  }
+
+  void _scrollToBottom({bool force = false}) {
     if (!mounted) return;
+
+    // 如果不是强制滚动且用户已经主动滚动过，则不自动滚动
+    if (!force && _userHasScrolled) {
+      return;
+    }
 
     // 等待下一帧确保列表渲染完成
     WidgetsBinding.instance.addPostFrameCallback((_) {
