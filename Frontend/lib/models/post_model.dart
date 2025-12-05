@@ -193,6 +193,7 @@ class Post {
   int likesCount;
   int commentsCount;
   int viewsCount;
+  double recommendationScore;
   bool isLiked;
   bool isSaved;
 
@@ -232,6 +233,7 @@ class Post {
     this.likesCount = 0,
     this.commentsCount = 0,
     this.viewsCount = 0,
+    this.recommendationScore = 0,
     this.isLiked = false,
     this.isSaved = false,
     this.doi,
@@ -288,6 +290,11 @@ class Post {
       likesCount: (json['likesCount'] as num?)?.toInt() ?? 0,
       commentsCount: (json['commentsCount'] as num?)?.toInt() ?? 0,
       viewsCount: (json['viewsCount'] as num?)?.toInt() ?? 0,
+      recommendationScore:
+          (json['score'] as num?)?.toDouble() ??
+              (json['rankScore'] as num?)?.toDouble() ??
+              (json['recommendationScore'] as num?)?.toDouble() ??
+              0,
       isLiked: json['isLiked'] as bool? ?? false,
       isSaved: json['isSaved'] as bool? ?? false,
       doi: json['doi'] as String?,
