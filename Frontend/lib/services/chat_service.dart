@@ -249,7 +249,7 @@ class ChatService extends ChangeNotifier {
                 }
 
                 // 如果是媒体消息，检查mediaUrls是否相同
-                if (existingMsg.type == MessageType.image || existingMsg.type == MessageType.video || existingMsg.type == MessageType.file) {
+                if (existingMsg.type == MessageType.image || existingMsg.type == MessageType.video || existingMsg.type == MessageType.file || existingMsg.type == MessageType.voice) {
                   if (existingMsg.mediaUrls.length != newMsg.mediaUrls.length) {
                     continue;
                   }
@@ -419,7 +419,7 @@ class ChatService extends ChangeNotifier {
               if (timeDiff <= Duration(seconds: 3)) {
 
                 // 如果是媒体消息，检查mediaUrls是否相同
-                if (existingMsg.type == MessageType.image || existingMsg.type == MessageType.video || existingMsg.type == MessageType.file) {
+                if (existingMsg.type == MessageType.image || existingMsg.type == MessageType.video || existingMsg.type == MessageType.file || existingMsg.type == MessageType.voice) {
                   if (existingMsg.mediaUrls.length != newMessage.mediaUrls.length) {
                     continue;
                   }
@@ -532,7 +532,7 @@ class ChatService extends ChangeNotifier {
               if (timeDiff <= Duration(seconds: 3)) {
 
                 // 对于媒体消息，必须检查mediaUrls是否相同
-                if (existingMsg.type == MessageType.image || existingMsg.type == MessageType.video || existingMsg.type == MessageType.file) {
+                if (existingMsg.type == MessageType.image || existingMsg.type == MessageType.video || existingMsg.type == MessageType.file || existingMsg.type == MessageType.voice) {
                   if (existingMsg.mediaUrls.length != newMessage.mediaUrls.length) {
                     continue;
                   }

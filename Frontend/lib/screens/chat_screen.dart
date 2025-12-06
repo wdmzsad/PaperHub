@@ -320,7 +320,9 @@ class _ChatScreenState extends State<ChatScreen> {
     final List<Future<void>> preloadFutures = [];
 
     for (final message in messages) {
-      // 预加载图片消息的媒体
+      // 只预加载图片消息的媒体
+      // 语音消息不需要预加载，音频会在用户点击播放时按需加载
+      // 视频和文件消息通常也不需要预加载
       if (message.type == MessageType.image && message.mediaUrls.isNotEmpty) {
         for (final url in message.mediaUrls) {
           try {
@@ -333,7 +335,6 @@ class _ChatScreenState extends State<ChatScreen> {
           }
         }
       }
-      // 注意：视频和文件消息通常不需要预加载
       // 分享消息的图片会在MessageBubble中异步加载
     }
 
@@ -355,12 +356,45 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     // 等待下一帧确保列表渲染完成
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || !_scrollController.hasClients) return;
 
-      final maxExtent = _scrollController.position.maxScrollExtent;
-      if (maxExtent > 0) {
-        _scrollController.jumpTo(maxExtent);
+      // 检查是否有语音消息，如果有则使用更长的等待
+      final hasVoiceMessages = _chatService.messages.any((msg) => msg.type == MessageType.voice);
+      final int maxRetries = hasVoiceMessages ? 5 : 3;
+
+      double previousMaxExtent = 0;
+      int stableFrameCount = 0;
+
+      for (int retry = 0; retry < maxRetries; retry++) {
+        // 每次重试增加延迟时间
+        await Future.delayed(Duration(milliseconds: hasVoiceMessages ? 150 * (retry + 1) : 100 * (retry + 1)));
+
+        if (!mounted || !_scrollController.hasClients) return;
+
+        final maxExtent = _scrollController.position.maxScrollExtent;
+        if (maxExtent > 0) {
+          _scrollController.jumpTo(maxExtent);
+        }
+
+        // 检查内容高度是否稳定（连续两帧高度变化小于1像素）
+        if (_scrollController.hasClients) {
+          final currentMaxExtent = _scrollController.position.maxScrollExtent;
+          if ((currentMaxExtent - previousMaxExtent).abs() < 1.0) {
+            stableFrameCount++;
+          } else {
+            stableFrameCount = 0;
+          }
+          previousMaxExtent = currentMaxExtent;
+
+          // 检查是否已经滚动到底部（允许10像素的误差）
+          final position = _scrollController.position;
+          final isAtBottom = position.maxScrollExtent - position.pixels <= 10;
+          if (isAtBottom && stableFrameCount >= 2) {
+            // 已经滚动到底部且内容高度稳定，停止重试
+            break;
+          }
+        }
       }
     });
   }
