@@ -42,6 +42,8 @@ import '../services/local_storage.dart';
 import '../services/browse_history_service.dart';
 import '../constants/discipline_constants.dart';
 import '../models/user_profile.dart';
+import '../constants/app_colors.dart';
+import '../utils/font_utils.dart';
 
 /// 首页入口组件（Stateful）：承载发现流与分区切换
 class HomeScreen extends StatefulWidget {
@@ -641,7 +643,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppColors.backgroundLight,
       body: SafeArea(
         child: Column(
           children: [
@@ -670,7 +672,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.background,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -682,6 +684,30 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // Logo和PaperHub文字
+          Row(
+            children: [
+              Image.asset(
+                'assets/images/logo.png',
+                height: 32,
+                width: 32,
+                errorBuilder: (context, error, stackTrace) {
+                  return const SizedBox(width: 32, height: 32);
+                },
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'PaperHub',
+                style: FontUtils.textStyle(
+                  text: 'PaperHub',
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+
           // 中间按钮组
           Expanded(
             child: Row(
@@ -700,9 +726,9 @@ class _HomeScreenState extends State<HomeScreen> {
           InkWell(
             onTap: _onSearchTap,
             borderRadius: BorderRadius.circular(20),
-            child: const Padding(
-              padding: EdgeInsets.all(6.0),
-              child: Icon(Icons.search, color: Colors.grey, size: 22),
+            child: Padding(
+              padding: const EdgeInsets.all(6.0),
+              child: Icon(Icons.search, color: AppColors.textSecondary, size: 22),
             ),
           ),
         ],
@@ -744,10 +770,11 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       child: Text(
         label,
-        style: TextStyle(
+        style: FontUtils.textStyle(
+          text: label,
           fontSize: 16,
-          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-          color: selected ? Colors.black : Colors.grey[600],
+          fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
+          color: selected ? AppColors.primary : AppColors.textSecondary,
         ),
       ),
     );

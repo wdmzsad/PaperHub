@@ -17,7 +17,11 @@ class BackgroundService {
     'assets/images/bg6.png',
     'assets/images/bg7.png',
     'assets/images/bg8.png',
-    'assets/images/bg9.png',   
+    'assets/images/bg9.png', 
+    'assets/images/bg10.png',
+    'assets/images/bg11.png',
+    'assets/images/bg12.png',
+    'assets/images/bg13.png',   
   ];
 
   String? _currentBackground;

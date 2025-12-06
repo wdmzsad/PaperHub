@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:email_validator/email_validator.dart';
 import '../services/api_service.dart';
 import '../widgets/animated_title_background.dart';
+import '../constants/app_colors.dart';
+import '../utils/font_utils.dart';
 
 class RegisterPage extends StatefulWidget {
   @override
@@ -81,10 +83,11 @@ class _RegisterPageState extends State<RegisterPage> {
                           children: [
                             Text(
                               '注册',
-                              style: TextStyle(
+                              style: FontUtils.textStyle(
+                                text: '注册',
                                 fontSize: 26,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF0F172A),
+                                color: AppColors.textPrimary,
                               ),
                               textAlign: TextAlign.center,
                             ),
@@ -92,21 +95,23 @@ class _RegisterPageState extends State<RegisterPage> {
                             TextFormField(
                               decoration: InputDecoration(
                                 labelText: '邮箱',
+                                labelStyle: FontUtils.textStyle(text: '邮箱'),
                                 filled: true,
-                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
+                                fillColor: AppColors.primaryLighter.withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
+                                  borderSide: const BorderSide(color: AppColors.borderFocused, width: 2),
                                 ),
                               ),
+                              style: FontUtils.textStyle(text: email),
                               keyboardType: TextInputType.emailAddress,
                               validator: (v) {
                                 if (v == null || v.trim().isEmpty) return '请输入邮箱';
@@ -119,29 +124,31 @@ class _RegisterPageState extends State<RegisterPage> {
                             TextFormField(
                               decoration: InputDecoration(
                                 labelText: '密码 (至少8位，包含字母和数字)',
+                                labelStyle: FontUtils.textStyle(text: '密码 (至少8位，包含字母和数字)'),
                                 filled: true,
-                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
+                                fillColor: AppColors.primaryLighter.withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
+                                  borderSide: const BorderSide(color: AppColors.borderFocused, width: 2),
                                 ),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                                    color: Color(0xFF628DCE), // 主蓝
+                                    color: AppColors.primary, // 主蓝
                                   ),
                                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                 ),
                               ),
                               obscureText: _obscurePassword,
+                              style: FontUtils.textStyle(text: password),
                               onChanged: (v) => password = v,
                               validator: (v) {
                                 if (v == null || v.isEmpty) return '请输入密码';
@@ -153,29 +160,31 @@ class _RegisterPageState extends State<RegisterPage> {
                             TextFormField(
                               decoration: InputDecoration(
                                 labelText: '确认密码',
+                                labelStyle: FontUtils.textStyle(text: '确认密码'),
                                 filled: true,
-                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
+                                fillColor: AppColors.primaryLighter.withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
+                                  borderSide: const BorderSide(color: AppColors.borderFocused, width: 2),
                                 ),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscureConfirm ? Icons.visibility_off : Icons.visibility,
-                                    color: Color(0xFF628DCE), // 主蓝
+                                    color: AppColors.primary, // 主蓝
                                   ),
                                   onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                                 ),
                               ),
                               obscureText: _obscureConfirm,
+                              style: FontUtils.textStyle(text: confirm),
                               onChanged: (v) => confirm = v,
                               validator: (v) {
                                 if (v == null || v.isEmpty) return '请确认密码';
@@ -187,13 +196,13 @@ class _RegisterPageState extends State<RegisterPage> {
                             loading
                                 ? Center(
                                     child: CircularProgressIndicator(
-                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF628DCE)),
+                                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
                                     ),
                                   )
                                 : ElevatedButton(
                                     onPressed: _submit,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Color(0xFF628DCE), // 主蓝
+                                      backgroundColor: AppColors.primary, // 主蓝
                                       foregroundColor: Colors.white, // 白字
                                       padding: EdgeInsets.symmetric(vertical: 16),
                                       elevation: 6, // 阴影
@@ -204,18 +213,24 @@ class _RegisterPageState extends State<RegisterPage> {
                                       backgroundColor: MaterialStateProperty.resolveWith<Color>(
                                         (Set<MaterialState> states) {
                                           if (states.contains(MaterialState.pressed)) {
-                                            return Color(0xFF4374C3); // 按下时变为 #1D4ED8
+                                            return AppColors.primaryPressed; // 按下时变为 #1D4ED8
                                           }
-                                          return Color(0xFF628DCE); // 默认主蓝
+                                          return AppColors.primary; // 默认主蓝
                                         },
                                       ),
                                     ),
-                                    child: Text('注册', style: TextStyle(fontSize: 16)),
+                                    child: Text(
+                                      '注册',
+                                      style: FontUtils.textStyle(text: '注册', fontSize: 16),
+                                    ),
                                   ),
                             SizedBox(height: 12),
                             TextButton(
                               onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
-                              child: Text('已有账号？去登录', style: TextStyle(color: Color(0xFF628DCE))),
+                              child: Text(
+                                '已有账号？去登录',
+                                style: FontUtils.textStyle(text: '已有账号？去登录', color: AppColors.primary),
+                              ),
                             ),
                           ],
                         ),

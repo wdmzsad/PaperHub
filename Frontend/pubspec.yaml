@@ -135,3 +135,23 @@ flutter:
           weight: 800
         - asset: assets/fonts/static/Inter_28pt-Black.ttf
           weight: 900
+    - family: NotoSansSC
+      fonts:
+        - asset: assets/fonts/Noto_Sans_SC/static/NotoSansSC-Thin.ttf
+          weight: 100
+        - asset: assets/fonts/Noto_Sans_SC/static/NotoSansSC-ExtraLight.ttf
+          weight: 200
+        - asset: assets/fonts/Noto_Sans_SC/static/NotoSansSC-Light.ttf
+          weight: 300
+        - asset: assets/fonts/Noto_Sans_SC/static/NotoSansSC-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Noto_Sans_SC/static/NotoSansSC-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Noto_Sans_SC/static/NotoSansSC-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Noto_Sans_SC/static/NotoSansSC-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Noto_Sans_SC/static/NotoSansSC-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/Noto_Sans_SC/static/NotoSansSC-Black.ttf
+          weight: 900

@@ -11,6 +11,8 @@ import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/chat_screen.dart';
 import 'services/local_storage.dart';
+import 'constants/app_colors.dart';
+import 'utils/font_utils.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,7 +47,26 @@ class PaperHubApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'PaperHub (Mock Demo)',
-      theme: ThemeData(primarySwatch: Colors.blue),
+      theme: ThemeData(
+        primaryColor: AppColors.primary,
+        scaffoldBackgroundColor: AppColors.backgroundLight,
+        fontFamily: 'NotoSansSC', // 默认使用中文字体，英文会自动回退到Inter
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(fontFamily: 'NotoSansSC'),
+          bodyMedium: TextStyle(fontFamily: 'NotoSansSC'),
+          bodySmall: TextStyle(fontFamily: 'NotoSansSC'),
+          titleLarge: TextStyle(fontFamily: 'NotoSansSC'),
+          titleMedium: TextStyle(fontFamily: 'NotoSansSC'),
+          titleSmall: TextStyle(fontFamily: 'NotoSansSC'),
+        ),
+        colorScheme: ColorScheme.light(
+          primary: AppColors.primary,
+          secondary: AppColors.primaryLight,
+          surface: AppColors.background,
+          onPrimary: AppColors.textOnPrimary,
+          onSurface: AppColors.textPrimary,
+        ),
+      ),
       initialRoute: '/',
       routes: {
         '/': (ctx) => const SplashOrLogin(),
