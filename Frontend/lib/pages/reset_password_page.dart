@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../widgets/animated_title_background.dart';
+import '../constants/app_colors.dart';
+import '../utils/font_utils.dart';
 
 class ResetPasswordPage extends StatefulWidget {
   @override
@@ -86,19 +88,21 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                           children: [
                             Text(
                               '重置密码',
-                              style: TextStyle(
+                              style: FontUtils.textStyle(
+                                text: '重置密码',
                                 fontSize: 26,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF0F172A),
+                                color: AppColors.textPrimary,
                               ),
                               textAlign: TextAlign.center,
                             ),
                             SizedBox(height: 24),
                             Text(
                               '输入邮件里的重置验证码与新密码。',
-                              style: TextStyle(
+                              style: FontUtils.textStyle(
+                                text: '输入邮件里的重置验证码与新密码。',
                                 fontSize: 14,
-                                color: Colors.black54,
+                                color: AppColors.textSecondary,
                               ),
                               textAlign: TextAlign.center,
                             ),
@@ -107,19 +111,20 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                               initialValue: email,
                               decoration: InputDecoration(
                                 labelText: '邮箱',
+                                labelStyle: FontUtils.textStyle(text: '邮箱'),
                                 filled: true,
-                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
+                                fillColor: AppColors.primaryLighter.withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
+                                  borderSide: const BorderSide(color: AppColors.borderFocused, width: 2),
                                 ),
                               ),
                               keyboardType: TextInputType.emailAddress,
@@ -129,19 +134,20 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                             TextFormField(
                               decoration: InputDecoration(
                                 labelText: '重置验证码',
+                                labelStyle: FontUtils.textStyle(text: '重置验证码'),
                                 filled: true,
-                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
+                                fillColor: AppColors.primaryLighter.withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
+                                  borderSide: const BorderSide(color: AppColors.borderFocused, width: 2),
                                 ),
                               ),
                               onChanged: (v) => code = v,
@@ -154,24 +160,25 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                             TextFormField(
                               decoration: InputDecoration(
                                 labelText: '新密码 (至少8位，含字母和数字)',
+                                labelStyle: FontUtils.textStyle(text: '新密码 (至少8位，含字母和数字)'),
                                 filled: true,
-                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
+                                fillColor: AppColors.primaryLighter.withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
+                                  borderSide: const BorderSide(color: AppColors.borderFocused, width: 2),
                                 ),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                                    color: Color(0xFF628DCE), // 主蓝
+                                    color: AppColors.primary, // 主蓝
                                   ),
                                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                 ),
@@ -188,24 +195,25 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                             TextFormField(
                               decoration: InputDecoration(
                                 labelText: '确认新密码',
+                                labelStyle: FontUtils.textStyle(text: '确认新密码'),
                                 filled: true,
-                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
+                                fillColor: AppColors.primaryLighter.withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
+                                  borderSide: const BorderSide(color: AppColors.borderFocused, width: 2),
                                 ),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscureConfirm ? Icons.visibility_off : Icons.visibility,
-                                    color: Color(0xFF628DCE), // 主蓝
+                                    color: AppColors.primary, // 主蓝
                                   ),
                                   onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                                 ),
@@ -222,13 +230,13 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                             loading
                                 ? Center(
                                     child: CircularProgressIndicator(
-                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF628DCE)),
+                                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
                                     ),
                                   )
                                 : ElevatedButton(
                                     onPressed: _reset,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Color(0xFF628DCE), // 主蓝
+                                      backgroundColor: AppColors.primary, // 主蓝
                                       foregroundColor: Colors.white, // 白字
                                       padding: EdgeInsets.symmetric(vertical: 16),
                                       elevation: 6, // 阴影
@@ -239,18 +247,24 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                                       backgroundColor: MaterialStateProperty.resolveWith<Color>(
                                         (Set<MaterialState> states) {
                                           if (states.contains(MaterialState.pressed)) {
-                                            return Color(0xFF4374C3); // 按下时变为 #1D4ED8
+                                            return AppColors.primaryPressed; // 按下时变为 #1D4ED8
                                           }
-                                          return Color(0xFF628DCE); // 默认主蓝
+                                          return AppColors.primary; // 默认主蓝
                                         },
                                       ),
                                     ),
-                                    child: Text('更新密码', style: TextStyle(fontSize: 16)),
+                                    child: Text(
+                                      '更新密码',
+                                      style: FontUtils.textStyle(text: '更新密码', fontSize: 16),
+                                    ),
                                   ),
                             SizedBox(height: 12),
                             TextButton(
                               onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
-                              child: Text('返回登录', style: TextStyle(color: Color(0xFF628DCE))),
+                              child: Text(
+                                '返回登录',
+                                style: FontUtils.textStyle(text: '返回登录', color: AppColors.primary),
+                              ),
                             ),
                           ],
                         ),

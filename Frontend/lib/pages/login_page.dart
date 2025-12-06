@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/local_storage.dart';
 import '../widgets/animated_title_background.dart';
+import '../constants/app_colors.dart';
+import '../utils/font_utils.dart';
 
 class LoginPage extends StatefulWidget {
   @override
@@ -82,19 +84,13 @@ class _LoginPageState extends State<LoginPage> {
                   Container(
                     constraints: BoxConstraints(maxWidth: 720),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.92),
+                      color: AppColors.cardBackground.withOpacity(0.92),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: Color(0xFFE6F0FF), // 极浅冷蓝边线
+                        color: AppColors.blueLight1,
                         width: 1,
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 20,
-                          offset: Offset(0, 10),
-                        ),
-                      ],
+                      boxShadow: [AppColors.cardShadow],
                     ),
                     child: Padding(
                       padding: EdgeInsets.all(24),
@@ -106,10 +102,11 @@ class _LoginPageState extends State<LoginPage> {
                           children: [
                             Text(
                               '登录',
-                              style: TextStyle(
+                              style: FontUtils.textStyle(
+                                text: '登录',
                                 fontSize: 26,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF0F172A),
+                                color: AppColors.textPrimary,
                               ),
                               textAlign: TextAlign.center,
                             ),
@@ -117,21 +114,23 @@ class _LoginPageState extends State<LoginPage> {
                             TextFormField(
                               decoration: InputDecoration(
                                 labelText: '邮箱',
+                                labelStyle: FontUtils.textStyle(text: '邮箱'),
                                 filled: true,
-                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
+                                fillColor: AppColors.primaryLighter.withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: const BorderSide(color: AppColors.border),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: const BorderSide(color: AppColors.border),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
+                                  borderSide: const BorderSide(color: AppColors.borderFocused, width: 2),
                                 ),
                               ),
+                              style: FontUtils.textStyle(text: email),
                               keyboardType: TextInputType.emailAddress,
                               validator: (v) {
                                 if (v == null || v.trim().isEmpty) return '请输入邮箱';
@@ -145,28 +144,30 @@ class _LoginPageState extends State<LoginPage> {
                             TextFormField(
                               decoration: InputDecoration(
                                 labelText: '密码',
+                                labelStyle: FontUtils.textStyle(text: '密码'),
                                 filled: true,
-                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
+                                fillColor: AppColors.primaryLighter.withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: const BorderSide(color: AppColors.border),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: const BorderSide(color: AppColors.border),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
+                                  borderSide: const BorderSide(color: AppColors.borderFocused, width: 2),
                                 ),
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                                    color: Color(0xFF628DCE), // 主蓝
+                                    color: AppColors.primary,
                                   ),
                                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                 ),
                               ),
+                              style: FontUtils.textStyle(text: password),
                               obscureText: _obscurePassword,
                               validator: (v) {
                                 if (v == null || v.isEmpty) return '请输入密码';
@@ -178,30 +179,33 @@ class _LoginPageState extends State<LoginPage> {
                             loading
                                 ? Center(
                                     child: CircularProgressIndicator(
-                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF628DCE)),
+                                      valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
                                     ),
                                   )
                                 : ElevatedButton(
                                     onPressed: _login,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Color(0xFF628DCE), // 主蓝
-                                      foregroundColor: Colors.white, // 白字
-                                      padding: EdgeInsets.symmetric(vertical: 16),
-                                      elevation: 6, // 阴影
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: AppColors.textOnPrimary,
+                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      elevation: 6,
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12), // 稍大圆角
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                     ).copyWith(
                                       backgroundColor: MaterialStateProperty.resolveWith<Color>(
                                         (Set<MaterialState> states) {
                                           if (states.contains(MaterialState.pressed)) {
-                                            return Color(0xFF4374C3); // 按下时变为 #1D4ED8
+                                            return AppColors.primaryPressed;
                                           }
-                                          return Color(0xFF628DCE); // 默认主蓝
+                                          return AppColors.primary;
                                         },
                                       ),
                                     ),
-                                    child: Text('登录', style: TextStyle(fontSize: 16)),
+                                    child: Text(
+                                      '登录',
+                                      style: FontUtils.textStyle(text: '登录', fontSize: 16),
+                                    ),
                                   ),
                             SizedBox(height: 16),
                             Row(
@@ -210,12 +214,18 @@ class _LoginPageState extends State<LoginPage> {
                                 TextButton(
                                   onPressed: () =>
                                       Navigator.of(context).pushNamed('/register'),
-                                  child: Text('注册', style: TextStyle(color: Color(0xFF628DCE))),
+                                  child: Text(
+                                    '注册',
+                                    style: FontUtils.textStyle(text: '注册', color: AppColors.primary),
+                                  ),
                                 ),
                                 TextButton(
                                   onPressed: () =>
                                       Navigator.of(context).pushNamed('/forgot'),
-                                  child: Text('忘记密码？', style: TextStyle(color: Color(0xFF628DCE))),
+                                  child: Text(
+                                    '忘记密码？',
+                                    style: FontUtils.textStyle(text: '忘记密码？', color: AppColors.primary),
+                                  ),
                                 ),
                               ],
                             ),

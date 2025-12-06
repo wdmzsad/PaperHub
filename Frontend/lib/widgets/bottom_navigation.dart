@@ -17,6 +17,8 @@
 import 'package:flutter/material.dart';
 
 import '../services/unread_service.dart';
+import '../constants/app_colors.dart';
+import '../utils/font_utils.dart';
 
 /// 简单、可复用的底部导航无状态组件
 class BottomNavigation extends StatelessWidget {
@@ -66,10 +68,12 @@ class BottomNavigation extends StatelessWidget {
               currentIndex: currentIndex,
               onTap: onTap,
               type: BottomNavigationBarType.fixed,
-              selectedItemColor: const Color(0xFF1976D2),
-              unselectedItemColor: Colors.grey,
+              selectedItemColor: AppColors.primary,
+              unselectedItemColor: AppColors.textSecondary,
               selectedFontSize: 12,
               unselectedFontSize: 12,
+              selectedLabelStyle: FontUtils.textStyle(text: '', fontSize: 12),
+              unselectedLabelStyle: FontUtils.textStyle(text: '', fontSize: 12),
               items: [
                 const BottomNavigationBarItem(
                   icon: Icon(Icons.home_outlined),

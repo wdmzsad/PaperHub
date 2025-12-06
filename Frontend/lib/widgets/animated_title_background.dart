@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/background_service.dart';
+import '../utils/font_utils.dart';
 
 /// 高级标题动画组件：
 /// - 背景随机选择bg1-4.png

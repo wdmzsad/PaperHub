@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:email_validator/email_validator.dart';
 import '../services/api_service.dart';
 import '../widgets/animated_title_background.dart';
+import '../constants/app_colors.dart';
+import '../utils/font_utils.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   @override
@@ -68,19 +70,21 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                           children: [
                             Text(
                               '找回密码',
-                              style: TextStyle(
+                              style: FontUtils.textStyle(
+                                text: '找回密码',
                                 fontSize: 26,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF0F172A),
+                                color: AppColors.textPrimary,
                               ),
                               textAlign: TextAlign.center,
                             ),
                             SizedBox(height: 24),
                             Text(
                               '请输入注册邮箱，我们会发送重置验证码。',
-                              style: TextStyle(
+                              style: FontUtils.textStyle(
+                                text: '请输入注册邮箱，我们会发送重置验证码。',
                                 fontSize: 14,
-                                color: Colors.black54,
+                                color: AppColors.textSecondary,
                               ),
                               textAlign: TextAlign.center,
                             ),
@@ -88,19 +92,20 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                             TextFormField(
                               decoration: InputDecoration(
                                 labelText: '邮箱',
+                                labelStyle: FontUtils.textStyle(text: '邮箱'),
                                 filled: true,
-                                fillColor: Color(0xFFD4E5F7).withOpacity(0.6),
+                                fillColor: AppColors.primaryLighter.withOpacity(0.6),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFFCBD5E1)),
+                                  borderSide: BorderSide(color: AppColors.border),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: Color(0xFF628DCE), width: 2),
+                                  borderSide: const BorderSide(color: AppColors.borderFocused, width: 2),
                                 ),
                               ),
                               keyboardType: TextInputType.emailAddress,
@@ -115,13 +120,13 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                             loading
                                 ? Center(
                                     child: CircularProgressIndicator(
-                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF628DCE)),
+                                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
                                     ),
                                   )
                                 : ElevatedButton(
                                     onPressed: _requestReset,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: Color(0xFF628DCE), // 主蓝
+                                      backgroundColor: AppColors.primary, // 主蓝
                                       foregroundColor: Colors.white, // 白字
                                       padding: EdgeInsets.symmetric(vertical: 16),
                                       elevation: 6, // 阴影
@@ -132,18 +137,24 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                                       backgroundColor: MaterialStateProperty.resolveWith<Color>(
                                         (Set<MaterialState> states) {
                                           if (states.contains(MaterialState.pressed)) {
-                                            return Color(0xFF4374C3); // 按下时变为 #1D4ED8
+                                            return AppColors.primaryPressed; // 按下时变为 #1D4ED8
                                           }
-                                          return Color(0xFF628DCE); // 默认主蓝
+                                          return AppColors.primary; // 默认主蓝
                                         },
                                       ),
                                     ),
-                                    child: Text('发送重置邮件', style: TextStyle(fontSize: 16)),
+                                    child: Text(
+                                      '发送重置邮件',
+                                      style: FontUtils.textStyle(text: '发送重置邮件', fontSize: 16),
+                                    ),
                                   ),
                             SizedBox(height: 16),
                             TextButton(
                               onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
-                              child: Text('返回登录', style: TextStyle(color: Color(0xFF628DCE))),
+                              child: Text(
+                                '返回登录',
+                                style: FontUtils.textStyle(text: '返回登录', color: AppColors.primary),
+                              ),
                             ),
                           ],
                         ),
