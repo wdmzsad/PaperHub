@@ -5,6 +5,7 @@ import '../constants/discipline_constants.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
 import '../widgets/post_card.dart';
+import 'post_detail_screen.dart';
 
 /// 分区瀑布流页面
 /// - 顶部 AppBar 显示当前分区名称，带返回按钮
@@ -215,9 +216,12 @@ class _ZoneScreenState extends State<ZoneScreen> {
                               return PostCard(
                                 post: post,
                                 onTap: () {
-                                  // 区分页面内部跳转逻辑交给 PostCard / 外部路由
-                                  Navigator.of(context).pushNamed(
-                                    '/post/${post.id}',
+                                  // 使用与其他界面一致的方式导航到帖子详情页
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => PostDetailScreen(post: post),
+                                    ),
                                   );
                                 },
                                 onAuthorTap: () {
