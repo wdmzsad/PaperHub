@@ -314,6 +314,71 @@ class ApiService {
     );
   }
 
+  /// 获取当前登录用户的搜索历史（最新在前）
+  /// GET /search-history?limit=20
+  static Future<Map<String, dynamic>> getSearchHistory({int limit = 20}) async {
+    return await _makeRequest(
+      () => http.get(
+        Uri.parse('$baseUrl/search-history?limit=$limit'),
+        headers: _buildHeaders(),
+      ),
+      '/search-history',
+    );
+  }
+
+  /// 记录一条搜索历史
+  /// POST /search-history  body: { keyword, searchType }
+  static Future<Map<String, dynamic>> addSearchHistory({
+    required String keyword,
+    required String searchType,
+  }) async {
+    final body = {'keyword': keyword, 'searchType': searchType};
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/search-history'),
+        headers: _buildHeaders(),
+        body: jsonEncode(body),
+      ),
+      '/search-history',
+    );
+  }
+
+  /// 删除一条搜索历史
+  /// DELETE /search-history/{id}
+  static Future<Map<String, dynamic>> deleteSearchHistory(String id) async {
+    return await _makeRequest(
+      () => http.delete(
+        Uri.parse('$baseUrl/search-history/$id'),
+        headers: _buildHeaders(),
+      ),
+      '/search-history/$id',
+    );
+  }
+
+  /// 清空当前用户的搜索历史
+  /// DELETE /search-history
+  static Future<Map<String, dynamic>> clearSearchHistory() async {
+    return await _makeRequest(
+      () => http.delete(
+        Uri.parse('$baseUrl/search-history'),
+        headers: _buildHeaders(),
+      ),
+      '/search-history',
+    );
+  }
+
+  /// 获取用户最近搜索的关键词（用于推荐算法）
+  /// GET /search-history/recent-keywords?limit=50
+  static Future<Map<String, dynamic>> getRecentSearchKeywords({int limit = 50}) async {
+    return await _makeRequest(
+      () => http.get(
+        Uri.parse('$baseUrl/search-history/recent-keywords?limit=$limit'),
+        headers: _buildHeaders(),
+      ),
+      '/search-history/recent-keywords',
+    );
+  }
+
   static Future<Map<String, dynamic>> updateProfile({
     required String displayName,
     String? bio,

@@ -132,20 +132,36 @@ class _SearchScreenState extends State<SearchScreen> {
   /// 点击历史记录项：
   /// - 将其 keyword 与 searchType 回填到输入框与当前搜索类型
   /// - 主动请求输入框获取焦点，便于用户直接编辑/提交
+  /// - 保存到搜索历史（作为一次新的搜索）
   /// - 直接跳转到搜索结果页面
   void _onHistoryItemTap(SearchHistoryItem item) {
+    final trimmedKeyword = item.keyword.trim();
+    if (trimmedKeyword.isEmpty) return; // 如果关键词为空，不处理
+
     setState(() {
-      _searchController.text = item.keyword;
+      _searchController.text = trimmedKeyword;
       _selectedSearchType = item.searchType;
     });
     _searchFocusNode.requestFocus();
+
+    // 添加到搜索历史（作为一次新的搜索，服务层会处理去重和计数更新）
+    final newHistory = SearchHistoryItem(
+      id: SearchHistoryService.generateId(),
+      keyword: trimmedKeyword,
+      searchType: item.searchType,
+      timestamp: DateTime.now(),
+    );
+
+    SearchHistoryService.addSearchHistory(newHistory).then((_) {
+      _loadSearchHistory(); // 重新加载历史记录
+    });
 
     // 直接跳转到搜索结果页面
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => SearchResultsScreen(
-          query: item.keyword,
+          query: trimmedKeyword,
           searchType: item.searchType,
         ),
       ),
@@ -154,20 +170,36 @@ class _SearchScreenState extends State<SearchScreen> {
 
   /// 点击热搜项：
   /// - 回填标题到输入框，并同步对应的搜索类型
+  /// - 保存到搜索历史
   /// - 直接跳转到搜索结果页面
   void _onHotSearchTap(HotSearchItem item) {
+    final trimmedKeyword = item.title.trim();
+    if (trimmedKeyword.isEmpty) return; // 如果关键词为空，不处理
+
     setState(() {
-      _searchController.text = item.title;
+      _searchController.text = trimmedKeyword;
       _selectedSearchType = item.searchType;
     });
     _searchFocusNode.requestFocus();
+
+    // 添加到搜索历史（与搜索提交保持一致）
+    final newHistory = SearchHistoryItem(
+      id: SearchHistoryService.generateId(),
+      keyword: trimmedKeyword,
+      searchType: item.searchType,
+      timestamp: DateTime.now(),
+    );
+
+    SearchHistoryService.addSearchHistory(newHistory).then((_) {
+      _loadSearchHistory(); // 重新加载历史记录
+    });
 
     // 直接跳转到搜索结果页面
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => SearchResultsScreen(
-          query: item.title,
+          query: trimmedKeyword,
           searchType: item.searchType,
         ),
       ),
