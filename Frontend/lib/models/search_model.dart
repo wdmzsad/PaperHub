@@ -119,6 +119,46 @@ class SearchHistoryItem {
       timestamp: DateTime.fromMillisecondsSinceEpoch(map['timestamp']),
     );
   }
+
+  /// 从云端API数据创建对象
+  ///
+  /// 云端API返回的数据结构包含：
+  /// - 'id': 数字ID (需要转换为String)
+  /// - 'keyword': 字符串
+  /// - 'searchType': 字符串 ('keyword' | 'tag' | 'author')
+  /// - 'searchCount': 数字 (搜索次数)
+  /// - 'createdAt': ISO字符串
+  /// - 'updatedAt': ISO字符串
+  /// 使用 updatedAt 作为时间戳
+  static SearchHistoryItem fromCloudData(Map<String, dynamic> map) {
+    // 处理ID，可能是数字或字符串
+    final id = map['id']?.toString() ?? '';
+
+    // 处理时间戳，优先使用 updatedAt，其次 createdAt，最后当前时间
+    DateTime timestamp;
+    try {
+      final updatedAtStr = map['updatedAt']?.toString();
+      if (updatedAtStr != null && updatedAtStr.isNotEmpty) {
+        timestamp = DateTime.parse(updatedAtStr);
+      } else {
+        final createdAtStr = map['createdAt']?.toString();
+        if (createdAtStr != null && createdAtStr.isNotEmpty) {
+          timestamp = DateTime.parse(createdAtStr);
+        } else {
+          timestamp = DateTime.now();
+        }
+      }
+    } catch (e) {
+      timestamp = DateTime.now();
+    }
+
+    return SearchHistoryItem(
+      id: id,
+      keyword: map['keyword']?.toString() ?? '',
+      searchType: map['searchType']?.toString() ?? 'keyword',
+      timestamp: timestamp,
+    );
+  }
 }
 
 /// 模拟的热搜数据列表
