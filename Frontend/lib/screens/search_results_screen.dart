@@ -164,10 +164,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
           _userPage++;
         });
 
-        // 2. 为这些用户加载帖子
-        if (_users.isNotEmpty) {
-          await _loadPostsForUsers();
-        }
       } else {
         _showErrorSnackBar('用户搜索失败: ${userResponse['body']['message']}');
       }
@@ -180,47 +176,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
     }
   }
 
-  /// 为搜索到的用户加载帖子
-  Future<void> _loadPostsForUsers() async {
-    // 只为前5个用户加载帖子，避免请求过多
-    final usersToLoad = _users.take(5).toList();
-
-    final List<Future<List<Post>>> postFutures = usersToLoad.map((user) async {
-      try {
-        final response = await ApiService.getUserPosts(
-          user.id,
-          page: 1,
-          pageSize: 5, // 每个用户最多加载5条帖子
-        );
-
-        if (response['statusCode'] == 200) {
-          final data = response['body'];
-          final List<dynamic> postList = data['posts'] ?? [];
-          return postList.map((postData) => Post.fromJson(postData)).toList();
-        }
-        return <Post>[];
-      } catch (e) {
-        return <Post>[];
-      }
-    }).toList();
-
-    final List<List<Post>> userPostsList = await Future.wait(postFutures);
-
-    // 合并所有帖子并按创建时间倒序排序
-    final List<Post> allPosts = [];
-    for (var posts in userPostsList) {
-      allPosts.addAll(posts);
-    }
-
-    // 按创建时间排序（假设Post模型有createdAt字段）
-    allPosts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-    setState(() {
-      _posts.clear();
-      _posts.addAll(allPosts);
-      _hasMore = false; // 作者搜索不支持帖子分页
-    });
-  }
 
   /// 打开用户主页
   void _openUserProfile(String userId) {
@@ -380,28 +335,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
               ),
             ),
 
-          // 加载更多用户指示器
-          if (_isLoadingUsers)
-            const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-
-          // 加载更多用户按钮
-          if (_hasMoreUsers && !_isLoadingUsers && _showAllUsers)
-            Container(
-              alignment: Alignment.center,
-              margin: const EdgeInsets.only(top: 8),
-              child: TextButton(
-                onPressed: () {
-                  _loadPosts(loadMore: true);
-                },
-                child: const Text(
-                  '加载更多用户',
-                  style: TextStyle(color: Colors.blue),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -513,6 +446,92 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
     }
   }
 
+  /// 构建作者搜索的页面主体（只显示用户列表）
+  Widget _buildAuthorSearchBody() {
+    return Column(
+      children: [
+        // 用户搜索结果区域
+        Expanded(
+          child: _users.isEmpty && !_isLoadingUsers
+              ? _buildEmptyState()
+              : RefreshIndicator(
+                  onRefresh: () => _loadAuthorSearch(loadMore: false),
+                  child: ListView(
+                    children: [
+                      _buildUserSection(),
+                      // 加载更多指示器
+                      if (_isLoadingUsers)
+                        const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                      // 加载更多按钮
+                      if (_hasMoreUsers && !_isLoadingUsers)
+                        Container(
+                          alignment: Alignment.center,
+                          margin: const EdgeInsets.all(16.0),
+                          child: TextButton(
+                            onPressed: () => _loadAuthorSearch(loadMore: true),
+                            child: const Text(
+                              '加载更多用户',
+                              style: TextStyle(color: Colors.blue),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  /// 构建帖子搜索的页面主体（显示排序器和帖子网格）
+  Widget _buildPostSearchBody() {
+    return Column(
+      children: [
+        // 排序选择器
+        _buildSortSelector(),
+        // 帖子列表
+        Expanded(
+          child: _posts.isEmpty && !_isLoading
+              ? _buildEmptyState()
+              : RefreshIndicator(
+                  onRefresh: () => _loadPosts(loadMore: false),
+                  child: MasonryGridView.count(
+                    controller: _scrollController,
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 3,
+                    mainAxisSpacing: 3,
+                    padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+                    itemCount: _posts.length + (_isLoading ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index < _posts.length) {
+                        final post = _posts[index];
+                        return PostCard(
+                          post: post,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => PostDetailScreen(post: post),
+                              ),
+                            );
+                          },
+                          onAuthorTap: () => _openUserProfile(post.author.id),
+                          onLikeTap: (post) => _handlePostLike(post),
+                        );
+                      } else {
+                        return _buildLoadMoreIndicator();
+                      }
+                    },
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -524,52 +543,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
         ),
         elevation: 0,
       ),
-      body: Column(
-        children: [
-          // 排序选择器（仅在非作者搜索时显示）
-          if (widget.searchType != 'author') _buildSortSelector(),
-
-          // 用户搜索结果区域（仅在作者搜索时显示）
-          if (widget.searchType == 'author') _buildUserSection(),
-
-          // 帖子列表
-          Expanded(
-            child: _posts.isEmpty && !_isLoading
-                ? _buildEmptyState()
-                : RefreshIndicator(
-                    onRefresh: () => _loadPosts(loadMore: false),
-                    child: MasonryGridView.count(
-                      controller: _scrollController,
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 3,
-                      mainAxisSpacing: 3,
-                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
-                      itemCount: _posts.length + (_isLoading ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index < _posts.length) {
-                          final post = _posts[index];
-                          return PostCard(
-                            post: post,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => PostDetailScreen(post: post),
-                                ),
-                              );
-                            },
-                            onAuthorTap: () => _openUserProfile(post.author.id),
-                            onLikeTap: (post) => _handlePostLike(post),
-                          );
-                        } else {
-                          return _buildLoadMoreIndicator();
-                        }
-                      },
-                    ),
-                  ),
-          ),
-        ],
-      ),
+      body: widget.searchType == 'author'
+          ? _buildAuthorSearchBody()
+          : _buildPostSearchBody(),
     );
   }
 }

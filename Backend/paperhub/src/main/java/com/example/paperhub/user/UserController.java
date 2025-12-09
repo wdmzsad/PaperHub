@@ -17,6 +17,7 @@ import jakarta.validation.Valid;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -429,6 +430,12 @@ public class UserController {
                         }
                         return name != null && name.toLowerCase().contains(q.toLowerCase());
                     })
+                    // 按名称匹配度和作者热度排序
+                    .sorted((user1, user2) -> {
+                        double score1 = calculateUserSortScore(user1, q, currentUser);
+                        double score2 = calculateUserSortScore(user2, q, currentUser);
+                        return Double.compare(score2, score1);
+                    })
                     .toList();
             return ResponseEntity.ok(new UserDtos.UserListResp(
                     users.stream().map(u -> userService.toProfile(u, currentUser)).toList(),
@@ -439,17 +446,96 @@ public class UserController {
         } else {
             // 搜索所有用户
             List<User> allUsers = userRepository.findByNameContainingIgnoreCase(q);
+
+            // 对搜索结果按名称匹配度和作者热度排序
+            List<User> sortedUsers = allUsers.stream()
+                    .sorted((user1, user2) -> {
+                        // 计算用户1的排序分数
+                        double score1 = calculateUserSortScore(user1, q, currentUser);
+                        double score2 = calculateUserSortScore(user2, q, currentUser);
+                        // 降序排序（分数高的在前）
+                        return Double.compare(score2, score1);
+                    })
+                    .collect(Collectors.toList());
+
             // 分页处理
             int start = page * pageSize;
-            int end = Math.min(start + pageSize, allUsers.size());
-            users = start < allUsers.size() ? allUsers.subList(start, end) : List.of();
+            int end = Math.min(start + pageSize, sortedUsers.size());
+            users = start < sortedUsers.size() ? sortedUsers.subList(start, end) : List.of();
             return ResponseEntity.ok(new UserDtos.UserListResp(
                     users.stream().map(u -> userService.toProfile(u, currentUser)).toList(),
-                    allUsers.size(),
+                    sortedUsers.size(),
                     page,
                     pageSize
             ));
         }
+    }
+
+    /**
+     * 计算用户排序分数
+     * 分数 = 名称匹配度评分 * 0.7 + 热度评分 * 0.3
+     *
+     * @param user 用户
+     * @param query 搜索关键词
+     * @param currentUser 当前登录用户（用于获取统计信息）
+     * @return 排序分数（越高越靠前）
+     */
+    private double calculateUserSortScore(User user, String query, User currentUser) {
+        // 1. 计算名称匹配度评分
+        double nameMatchScore = calculateNameMatchScore(user, query);
+
+        // 2. 计算作者热度评分
+        double heatScore = calculateUserHeatScore(user);
+
+        // 3. 综合评分（名称匹配度权重0.7，热度权重0.3）
+        return nameMatchScore * 0.7 + heatScore * 0.3;
+    }
+
+    /**
+     * 计算名称匹配度评分
+     */
+    private double calculateNameMatchScore(User user, String query) {
+        String userName = user.getName() != null ? user.getName().toLowerCase() : "";
+        String queryLower = query.toLowerCase();
+
+        if (userName.equals(queryLower)) {
+            return 100.0; // 完全匹配
+        } else if (userName.startsWith(queryLower)) {
+            return 80.0; // 前缀匹配
+        } else if (userName.contains(queryLower)) {
+            return 60.0; // 包含匹配
+        } else {
+            return 0.0; // 不匹配（理论上不会发生，因为findByNameContainingIgnoreCase已过滤）
+        }
+    }
+
+    /**
+     * 计算作者热度评分
+     * 热度公式：粉丝数 * 1.0 + 收到的点赞数 * 2.0 + 帖子数 * 0.5 + 收到的收藏数 * 1.5
+     * 然后归一化到0-100分（使用对数缩放避免极端值影响）
+     */
+    private double calculateUserHeatScore(User user) {
+        // 获取用户统计信息
+        UserDtos.ProfileResp profile = userService.toProfile(user);
+
+        long followersCount = profile.followersCount();
+        long likesReceived = profile.likesCount();
+        long postsCount = profile.postsCount();
+        long favoritesReceived = profile.favoritesReceivedCount();
+
+        // 计算原始热度值
+        double rawHeat = followersCount * 1.0 +
+                        likesReceived * 2.0 +
+                        postsCount * 0.5 +
+                        favoritesReceived * 1.5;
+
+        // 使用对数缩放归一化到0-100分
+        // 公式：100 * log10(1 + rawHeat) / log10(1 + maxHeat)
+        // 假设最大热度为10000（可根据实际情况调整）
+        final double MAX_HEAT = 10000.0;
+        double normalizedScore = 100.0 * Math.log10(1 + rawHeat) / Math.log10(1 + MAX_HEAT);
+
+        return Math.min(normalizedScore, 100.0);
     }
 }
 
