@@ -20,6 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/search_model.dart';
 import '../services/search_history_service.dart';
+import '../services/api_service.dart';
 import 'search_results_screen.dart';
 
 /// 搜索页面（Stateful）
@@ -44,6 +45,12 @@ class _SearchScreenState extends State<SearchScreen> {
   List<SearchHistoryItem> _searchHistory = [];
   /// 历史加载中的占位状态
   bool _isLoading = true;
+  /// 热搜榜单列表
+  List<HotSearchItem> _hotSearches = [];
+  /// 热搜加载中的占位状态
+  bool _isLoadingHotSearches = true;
+  /// 热搜加载错误信息
+  String? _hotSearchesError;
 
   // 搜索方式选项
   /// key 为内部值，value 为展示文案；用于渲染选择器与提示语映射。
@@ -68,6 +75,8 @@ class _SearchScreenState extends State<SearchScreen> {
     super.initState();
     // 进入页面后加载本地搜索历史。
     _loadSearchHistory();
+    // 加载热搜榜单
+    _loadHotSearches();
   }
 
   /// 加载本地搜索历史
@@ -85,6 +94,56 @@ class _SearchScreenState extends State<SearchScreen> {
       _searchHistory = history;
       _isLoading = false;
     });
+  }
+
+  /// 加载热搜榜单
+  /// - 设置 `_isLoadingHotSearches` 为 true 以展示加载占位
+  /// - 调用 `ApiService.getHotSearches()` 获取热搜
+  /// - 成功后更新热搜列表，失败时显示错误信息
+  Future<void> _loadHotSearches() async {
+    setState(() {
+      _isLoadingHotSearches = true;
+      _hotSearchesError = null; // 清除之前的错误
+    });
+
+    try {
+      final response = await ApiService.getHotSearches(limit: 20);
+      if (response['statusCode'] == 200) {
+        final data = response['body'];
+        final List<dynamic> items = data['items'] ?? [];
+
+        // 转换为 HotSearchItem 列表
+        List<HotSearchItem> hotSearches = items.map((item) {
+          return HotSearchItem(
+            rank: item['rank'] as int,
+            title: item['keyword'] as String,
+            tag: item['tag'] as String?,
+            heat: (item['heat'] as num).toDouble(),
+            searchType: item['searchType'] as String,
+          );
+        }).toList();
+
+        setState(() {
+          _hotSearches = hotSearches;
+          _isLoadingHotSearches = false;
+        });
+      } else {
+        // API请求失败，显示错误信息
+        final errorMessage = response['body']?['message'] ?? '加载热搜失败';
+        setState(() {
+          _hotSearches = [];
+          _isLoadingHotSearches = false;
+          _hotSearchesError = errorMessage;
+        });
+      }
+    } catch (e) {
+      // 网络错误或其他异常
+      setState(() {
+        _hotSearches = [];
+        _isLoadingHotSearches = false;
+        _hotSearchesError = '网络连接失败，请检查网络后重试';
+      });
+    }
   }
 
   /// 修改搜索方式（单选）
@@ -169,24 +228,24 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   /// 点击热搜项：
-  /// - 回填标题到输入框，并同步对应的搜索类型
-  /// - 保存到搜索历史
-  /// - 直接跳转到搜索结果页面
+  /// - 回填标题到输入框（不改变当前搜索类型）
+  /// - 保存到搜索历史（使用当前搜索类型）
+  /// - 直接跳转到搜索结果页面（使用当前搜索类型）
   void _onHotSearchTap(HotSearchItem item) {
     final trimmedKeyword = item.title.trim();
     if (trimmedKeyword.isEmpty) return; // 如果关键词为空，不处理
 
     setState(() {
       _searchController.text = trimmedKeyword;
-      _selectedSearchType = item.searchType;
+      // 不设置_selectedSearchType，保持用户当前选择的搜索类型
     });
     _searchFocusNode.requestFocus();
 
-    // 添加到搜索历史（与搜索提交保持一致）
+    // 添加到搜索历史（使用当前搜索类型，而不是热搜条目记录的搜索类型）
     final newHistory = SearchHistoryItem(
       id: SearchHistoryService.generateId(),
       keyword: trimmedKeyword,
-      searchType: item.searchType,
+      searchType: _selectedSearchType, // 使用当前搜索类型
       timestamp: DateTime.now(),
     );
 
@@ -194,13 +253,13 @@ class _SearchScreenState extends State<SearchScreen> {
       _loadSearchHistory(); // 重新加载历史记录
     });
 
-    // 直接跳转到搜索结果页面
+    // 直接跳转到搜索结果页面（使用当前搜索类型）
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => SearchResultsScreen(
           query: trimmedKeyword,
-          searchType: item.searchType,
+          searchType: _selectedSearchType, // 使用当前搜索类型
         ),
       ),
     );
@@ -458,7 +517,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   /// 热搜榜区域（Sliver）：
-  /// - 使用静态 `mockHotSearches` 数据作为占位
+  /// - 从后端API获取实时热搜数据，失败时显示错误信息并提供重试
   /// - 每项展示：排名、标题、标签徽标（新/热）、热度文案
   Widget _buildHotSearchSection() {
     return SliverToBoxAdapter(
@@ -472,18 +531,43 @@ class _SearchScreenState extends State<SearchScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 标题栏
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                '热搜榜',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    '热搜榜',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  // 刷新按钮（非加载状态时显示）
+                  if (!_isLoadingHotSearches && _hotSearchesError == null)
+                    IconButton(
+                      icon: const Icon(Icons.refresh, size: 20),
+                      onPressed: _loadHotSearches,
+                      tooltip: '刷新热搜榜',
+                    ),
+                ],
               ),
             ),
 
+            // 加载状态
+            if (_isLoadingHotSearches)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            // 错误状态
+            else if (_hotSearchesError != null)
+              _buildErrorState(_hotSearchesError!)
+            // 空状态（无错误但数据为空）
+            else if (_hotSearches.isEmpty)
+              _buildEmptyState('暂无热搜数据')
             // 热搜列表
-            ...mockHotSearches
-                .map((item) => _buildHotSearchItem(item))
-                .toList(),
+            else
+              ..._hotSearches
+                  .map((item) => _buildHotSearchItem(item))
+                  .toList(),
           ],
         ),
       ),
@@ -565,6 +649,35 @@ class _SearchScreenState extends State<SearchScreen> {
           Text(
             message,
             style: TextStyle(color: Colors.grey[500], fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 错误状态占位
+  Widget _buildErrorState(String errorMessage) {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        children: [
+          Icon(Icons.error_outline, size: 48, color: Colors.orange[400]),
+          const SizedBox(height: 16),
+          Text(
+            errorMessage,
+            style: TextStyle(color: Colors.grey[600], fontSize: 14),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _loadHotSearches,
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('重新加载'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue[50],
+              foregroundColor: Colors.blue[700],
+              elevation: 0,
+            ),
           ),
         ],
       ),
