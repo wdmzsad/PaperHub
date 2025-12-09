@@ -91,6 +91,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   Future<void> _loadKeywordSearch({bool loadMore = false}) async {
     final response = await ApiService.searchPosts(
       query: widget.query,
+      type: widget.searchType, // 'keyword' 或 'tag'
       sort: _currentSort,
       page: loadMore ? _currentPage + 1 : 1,
       pageSize: _pageSize,

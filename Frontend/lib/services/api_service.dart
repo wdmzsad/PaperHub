@@ -569,9 +569,10 @@ class ApiService {
   }
 
   /// 搜索帖子
-  /// GET /posts/search?q=keyword&sort=hot|new&page=1&pageSize=20
+  /// GET /posts/search?q=keyword&type=keyword|tag&sort=hot|new&page=1&pageSize=20
   static Future<Map<String, dynamic>> searchPosts({
     required String query,
+    String type = 'keyword', // 'keyword' 或 'tag'
     String sort = 'hot', // 'hot' 或 'new'
     int page = 1,
     int pageSize = 20,
@@ -579,6 +580,7 @@ class ApiService {
     final uri = Uri.parse('$baseUrl/posts/search').replace(
       queryParameters: {
         'q': query,
+        'type': type,
         'sort': sort,
         'page': page.toString(),
         'pageSize': pageSize.toString(),
