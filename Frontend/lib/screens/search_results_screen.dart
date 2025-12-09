@@ -235,6 +235,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
 
     setState(() {
       _currentSort = sort;
+      _posts.clear(); // 立即清空旧结果
+      _hasMore = true; // 重置加载更多状态
+      _currentPage = 1; // 重置页码
     });
 
     _loadPosts(loadMore: false);
@@ -421,6 +424,27 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
     );
   }
 
+  /// 构建加载状态（切换排序或首次加载时显示）
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          ),
+          SizedBox(height: 16),
+          Text(
+            '正在加载...',
+            style: TextStyle(fontSize: 14, color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 构建加载更多指示器
   Widget _buildLoadMoreIndicator() {
     if (_isLoading) {
@@ -494,39 +518,41 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
         _buildSortSelector(),
         // 帖子列表
         Expanded(
-          child: _posts.isEmpty && !_isLoading
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: () => _loadPosts(loadMore: false),
-                  child: MasonryGridView.count(
-                    controller: _scrollController,
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 3,
-                    mainAxisSpacing: 3,
-                    padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
-                    itemCount: _posts.length + (_isLoading ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index < _posts.length) {
-                        final post = _posts[index];
-                        return PostCard(
-                          post: post,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => PostDetailScreen(post: post),
-                              ),
+          child: _isLoading && _posts.isEmpty
+              ? _buildLoadingState()
+              : _posts.isEmpty && !_isLoading
+                  ? _buildEmptyState()
+                  : RefreshIndicator(
+                      onRefresh: () => _loadPosts(loadMore: false),
+                      child: MasonryGridView.count(
+                        controller: _scrollController,
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 3,
+                        mainAxisSpacing: 3,
+                        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+                        itemCount: _posts.length + (_isLoading ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index < _posts.length) {
+                            final post = _posts[index];
+                            return PostCard(
+                              post: post,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => PostDetailScreen(post: post),
+                                  ),
+                                );
+                              },
+                              onAuthorTap: () => _openUserProfile(post.author.id),
+                              onLikeTap: (post) => _handlePostLike(post),
                             );
-                          },
-                          onAuthorTap: () => _openUserProfile(post.author.id),
-                          onLikeTap: (post) => _handlePostLike(post),
-                        );
-                      } else {
-                        return _buildLoadMoreIndicator();
-                      }
-                    },
-                  ),
-                ),
+                          } else {
+                            return _buildLoadMoreIndicator();
+                          }
+                        },
+                      ),
+                    ),
         ),
       ],
     );
