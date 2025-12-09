@@ -304,7 +304,7 @@ class _PostCardState extends State<PostCard> {
         return Stack(
           children: [
             Card(
-              margin: const EdgeInsets.all(8),
+              margin: const EdgeInsets.all(3),
               elevation: 2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
