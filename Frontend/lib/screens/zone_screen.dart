@@ -191,11 +191,11 @@ class _ZoneScreenState extends State<ZoneScreen> {
                         : MasonryGridView.count(
                             controller: _scrollController,
                             crossAxisCount: 2,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
+                            crossAxisSpacing: 3,
+                            mainAxisSpacing: 3,
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 8,
+                              horizontal: 3,
+                              vertical: 3,
                             ),
                             itemCount: _posts.length + (_hasMore ? 1 : 0),
                             itemBuilder: (context, index) {

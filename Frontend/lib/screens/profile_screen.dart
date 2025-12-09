@@ -229,10 +229,10 @@ class _ProfilePageState extends State<ProfilePage>
                 Expanded(
                   child: MasonryGridView.count(
                     crossAxisCount: 2,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 3,
+                    mainAxisSpacing: 3,
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
                     itemCount: posts.length,
                     itemBuilder: (ctx, index) {
                       final post = posts[index];
@@ -1270,9 +1270,9 @@ class _ProfilePageState extends State<ProfilePage>
       onRefresh: () => loader(refresh: true),
       child: MasonryGridView.count(
         crossAxisCount: 2,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        crossAxisSpacing: 3,
+        mainAxisSpacing: 3,
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
         itemCount: posts.length + (hasMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == posts.length) {
