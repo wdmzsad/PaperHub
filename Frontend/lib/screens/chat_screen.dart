@@ -22,7 +22,6 @@ import '../services/local_storage.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
 import 'profile_screen.dart';
-import '../utils/dialog_utils.dart';
 
 class ChatScreen extends StatefulWidget {
   final Conversation? conversation;
@@ -522,12 +521,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
       ),
-      actions: [
-        IconButton(
-          icon: Icon(Icons.more_vert, color: scheme.onSurface),
-          onPressed: _showMoreOptions,
-        ),
-      ],
     );
   }
 
@@ -738,98 +731,8 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _showMoreOptions() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('聊天信息'),
-              onTap: () {
-                Navigator.pop(context);
-                _showChatInfo();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.search),
-              title: const Text('搜索聊天记录'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: 实现搜索功能
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.red),
-              title: const Text('清空聊天记录', style: TextStyle(color: Colors.red)),
-              onTap: () {
-                Navigator.pop(context);
-                _confirmClearChat();
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
 
-  void _showChatInfo() {
-    final conversation = widget.conversation ?? _loadedConversation;
-    if (conversation == null) return;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(conversation.displayName),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('成员数: ${conversation.participants.length}'),
-            const SizedBox(height: 8),
-            Text('创建时间: ${_formatDateHeader(conversation.updatedAt)}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirmClearChat() {
-    final conversation = widget.conversation ?? _loadedConversation;
-    if (conversation == null) return;
-
-    DialogUtils.showClearConfirmDialog(
-      context: context,
-      itemName: '聊天记录',
-      targetName: conversation.displayName,
-    ).then((confirmed) {
-      if (confirmed == true) {
-        // TODO: 实现清空聊天记录功能
-      }
-    });
-  }
 
   bool _isSameDay(DateTime date1, DateTime date2) {
     return date1.year == date2.year &&
