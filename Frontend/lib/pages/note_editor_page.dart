@@ -708,6 +708,18 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         // 2) 再画“新选图片”（本地 XFile）
         final int newIndex = index - existingCount;
         if (newIndex < newCount) {
+          final XFile xfile = _images[newIndex];
+
+          // ⭐ 根据平台选择不同的预览方式
+          ImageProvider previewImage;
+          if (kIsWeb) {
+            // Web：image_picker 返回的 path 是一个 blob: 开头的本地 URL，用 NetworkImage 即可
+            previewImage = NetworkImage(xfile.path);
+          } else {
+            // 移动端 / 桌面：正常使用 FileImage
+            previewImage = FileImage(File(xfile.path));
+          }
+
           return Stack(
             children: [
               Container(
@@ -715,7 +727,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   color: Colors.grey[200],
                   borderRadius: BorderRadius.circular(8),
                   image: DecorationImage(
-                    image: FileImage(File(_images[newIndex].path)),
+                    image: previewImage,   // ← 用上面选择好的 ImageProvider
                     fit: BoxFit.cover,
                   ),
                 ),
