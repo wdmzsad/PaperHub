@@ -22,6 +22,7 @@ import '../services/local_storage.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
 import 'profile_screen.dart';
+import '../utils/dialog_utils.dart';
 
 class ChatScreen extends StatefulWidget {
   final Conversation? conversation;
@@ -819,26 +820,15 @@ class _ChatScreenState extends State<ChatScreen> {
     final conversation = widget.conversation ?? _loadedConversation;
     if (conversation == null) return;
 
-    showDialog(
+    DialogUtils.showClearConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('清空聊天记录'),
-        content: Text('确定要清空与 ${conversation.displayName} 的聊天记录吗？此操作不可恢复。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // TODO: 实现清空聊天记录功能
-            },
-            child: const Text('确定', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
+      itemName: '聊天记录',
+      targetName: conversation.displayName,
+    ).then((confirmed) {
+      if (confirmed == true) {
+        // TODO: 实现清空聊天记录功能
+      }
+    });
   }
 
   bool _isSameDay(DateTime date1, DateTime date2) {

@@ -231,7 +231,7 @@ class DialogUtils {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8.0),
-                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5), // 聚焦时主色细边框
+                        borderSide: BorderSide(color: AppColors.primary, width: 1.5), // 聚焦时主色细边框
                       ),
                     ),
                     validator: validator,

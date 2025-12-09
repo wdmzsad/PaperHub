@@ -24,6 +24,7 @@ import 'home_screen.dart';
 import 'profile_screen.dart';
 import 'post_detail_screen.dart';
 import '../pages/note_editor_page.dart';
+import '../utils/dialog_utils.dart';
 
 // 赞和收藏页面
 class LikesAndFavoritesScreen extends StatefulWidget {
@@ -1595,31 +1596,17 @@ class _MessageScreenState extends State<MessageScreen> {
 
   void _showSearch() {
     // 显示搜索对话框
-    showDialog(
+    DialogUtils.showInputDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('搜索聊天记录'),
-        content: TextField(
-          controller: _searchController,
-          decoration: const InputDecoration(
-            hintText: '输入关键词搜索...',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // 搜索逻辑已经在 _onSearchChanged 中处理
-            },
-            child: const Text('搜索'),
-          ),
-        ],
-      ),
-    );
+      title: '搜索聊天记录',
+      hintText: '输入关键词搜索...',
+      confirmText: '搜索',
+      initialValue: _searchController.text,
+    ).then((keyword) {
+      if (keyword != null && keyword.isNotEmpty) {
+        // 更新搜索控制器文本，这会触发 _onSearchChanged
+        _searchController.text = keyword;
+      }
+    });
   }
 }

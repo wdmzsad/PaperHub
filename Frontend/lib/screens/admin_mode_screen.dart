@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../utils/dialog_utils.dart';
+import '../constants/app_colors.dart';
 
 enum _AdminSection {
   users,
@@ -1000,25 +1002,77 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     final reasonController = TextEditingController();
     showDialog<void>(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.4), // 统一半透明遮罩
       builder: (ctx) => AlertDialog(
-        title: const Text('处理帖子举报'),
+        backgroundColor: AppColors.dialogBackground,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0), // 统一圆角
+        ),
+        insetPadding: const EdgeInsets.all(24.0),
+        titlePadding: const EdgeInsets.only(top: 24.0, left: 24.0, right: 24.0, bottom: 16.0),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24.0),
+        actionsPadding: const EdgeInsets.all(24.0),
+        title: Text(
+          '处理帖子举报',
+          style: TextStyle(
+            fontSize: 18.0,
+            fontWeight: FontWeight.w700,
+            color: AppColors.dialogTitle,
+          ),
+          textAlign: TextAlign.center,
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('举报人: ${report['reporterName']}'),
+              Text(
+                '举报人: ${report['reporterName']}',
+                style: TextStyle(
+                  fontSize: 14.0,
+                  color: AppColors.dialogContent,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text('被举报帖子: ${report['postTitle']}'),
+              Text(
+                '被举报帖子: ${report['postTitle']}',
+                style: TextStyle(
+                  fontSize: 14.0,
+                  color: AppColors.dialogContent,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text('举报理由: ${report['description']}'),
+              Text(
+                '举报理由: ${report['description']}',
+                style: TextStyle(
+                  fontSize: 14.0,
+                  color: AppColors.dialogContent,
+                ),
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: reasonController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: '处理原因',
                   hintText: '请输入下架或忽略的原因',
-                  border: OutlineInputBorder(),
+                  filled: true,
+                  fillColor: AppColors.backgroundLight,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                    borderSide: BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 12.0,
+                  ),
                 ),
                 maxLines: 3,
               ),
@@ -1026,24 +1080,65 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _handleIgnoreReport(report['id'], reasonController.text);
-            },
-            child: const Text('忽略举报'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _handleRemovePost(report['id'], reasonController.text);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('下架帖子'),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 下架帖子按钮（危险操作）
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _handleRemovePost(report['id'], reasonController.text);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.danger,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 48.0),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                  ),
+                  child: const Text('下架帖子'),
+                ),
+              ),
+              const SizedBox(height: 8.0),
+              // 忽略举报按钮
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _handleIgnoreReport(report['id'], reasonController.text);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.dialogConfirm,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 48.0),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                  ),
+                  child: const Text('忽略举报'),
+                ),
+              ),
+              const SizedBox(height: 8.0),
+              // 取消按钮
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.dialogCancel,
+                    minimumSize: const Size(double.infinity, 48.0),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                  ),
+                  child: const Text('取消'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1609,36 +1704,15 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
   }
 
   Future<void> _showRecommendDialog(String userId) async {
-    final reasonCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
+    final reason = await DialogUtils.showInputDialog(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('推荐用户为管理员'),
-          content: TextField(
-            controller: reasonCtrl,
-            maxLines: 4,
-            decoration: const InputDecoration(
-              labelText: '推荐理由',
-              hintText: '请输入推荐理由',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('提交'),
-            ),
-          ],
-        );
-      },
+      title: '推荐用户为管理员',
+      hintText: '请输入推荐理由',
+      maxLines: 4,
+      confirmText: '提交',
     );
 
-    if (ok != true) return;
-    final reason = reasonCtrl.text.trim();
+    if (reason == null) return;
     if (reason.isEmpty) {
       ScaffoldMessenger.of(
         context,
