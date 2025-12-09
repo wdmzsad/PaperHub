@@ -38,6 +38,8 @@ class BottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return AnimatedBuilder(
       animation: UnreadService.instance,
       builder: (_, __) {
@@ -52,8 +54,10 @@ class BottomNavigation extends StatelessWidget {
             boxShadow: [
               // 向上的轻微阴影以强调分层（offset y 为负数）
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
+                color: isDark
+                    ? Colors.black.withOpacity(0.3)
+                    : Colors.black.withOpacity(0.1),
+                blurRadius: 12,
                 offset: const Offset(0, -2),
               ),
             ],
@@ -65,11 +69,12 @@ class BottomNavigation extends StatelessWidget {
             ),
             // 使用裁剪保证 BottomNavigationBar 本身也遵循顶部圆角
             child: BottomNavigationBar(
+              backgroundColor: scheme.surface,
               currentIndex: currentIndex,
               onTap: onTap,
               type: BottomNavigationBarType.fixed,
-              selectedItemColor: AppColors.primary,
-              unselectedItemColor: AppColors.textSecondary,
+              selectedItemColor: scheme.primary,
+              unselectedItemColor: scheme.onSurface.withOpacity(0.65),
               selectedFontSize: 12,
               unselectedFontSize: 12,
               selectedLabelStyle: FontUtils.textStyle(text: '', fontSize: 12),

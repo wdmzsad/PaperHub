@@ -91,6 +91,7 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Widget _buildAvatar() {
+    final scheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: widget.onAvatarTap,
       child: Container(
@@ -98,7 +99,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         height: 32,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
-          color: Colors.grey[200],
+          color: scheme.surfaceVariant,
         ),
         child: widget.message.senderAvatar != null
             ? ClipRRect(
@@ -189,13 +190,15 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Widget _buildTextMessage(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final onSurface = scheme.onSurface;
     return Container(
       constraints: BoxConstraints(
         maxWidth: MediaQuery.of(context).size.width * 0.7,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: widget.message.isMe ? const Color(0xFF1976D2) : Colors.white,
+        color: widget.message.isMe ? scheme.primary : scheme.surfaceVariant,
         borderRadius: BorderRadius.circular(18).copyWith(
           bottomLeft: widget.message.isMe
               ? const Radius.circular(18)
@@ -215,7 +218,7 @@ class _MessageBubbleState extends State<MessageBubble> {
       child: Text(
         widget.message.content,
         style: TextStyle(
-          color: widget.message.isMe ? Colors.white : Colors.black87,
+          color: widget.message.isMe ? scheme.onPrimary : onSurface,
           fontSize: 16,
           height: 1.4,
         ),
@@ -776,6 +779,8 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 
   Widget _buildMessageMeta() {
+    final scheme = Theme.of(context).colorScheme;
+    final secondary = scheme.onSurfaceVariant;
     return Row(
       mainAxisAlignment: widget.message.isMe
           ? MainAxisAlignment.end
@@ -784,13 +789,13 @@ class _MessageBubbleState extends State<MessageBubble> {
         if (!widget.message.isMe) ...[
           Text(
             _formatTime(widget.message.createdAt),
-            style: TextStyle(color: Colors.grey[500], fontSize: 11),
+            style: TextStyle(color: secondary, fontSize: 11),
           ),
           const SizedBox(width: 4),
           Text(
             widget.message.senderName,
             style: TextStyle(
-              color: Colors.grey[600],
+              color: secondary,
               fontSize: 11,
               fontWeight: FontWeight.w500,
             ),
@@ -800,7 +805,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           const SizedBox(width: 4),
           Text(
             _formatTime(widget.message.createdAt),
-            style: TextStyle(color: Colors.grey[500], fontSize: 11),
+            style: TextStyle(color: secondary, fontSize: 11),
           ),
         ],
       ],

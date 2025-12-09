@@ -1903,74 +1903,40 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   Widget build(BuildContext context) {
     final bool hasPdf = _pdfFile != null || _existingPdfUrl != null;
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        elevation: 0.3,
+    return Theme(
+      data: ThemeData.light(),
+      child: Scaffold(
         backgroundColor: Colors.white,
-        automaticallyImplyLeading: false,
-        title: Text(
-          _isEditing ? '编辑笔记' : '发布笔记',
-          style: const TextStyle(color: Colors.black),
+        appBar: AppBar(
+          elevation: 0.3,
+          backgroundColor: Colors.white,
+          automaticallyImplyLeading: false,
+          title: Text(
+            _isEditing ? '编辑笔记' : '发布笔记',
+            style: const TextStyle(color: Colors.black),
+          ),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.close, color: Colors.black),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+          actions: const [SizedBox(width: 48)],
         ),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.black),
-          onPressed: () {
-            Navigator.of(context).maybePop();
-          },
-        ),
-        actions: const [
-          SizedBox(width: 48),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              
-              //选择图片
-              _buildImageGrid(),
-              const SizedBox(height: 16),
-
-              // 标题
-              TextField(
-                controller: _titleController,
-                textInputAction: TextInputAction.next,
-                maxLines: 1,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-                decoration: const InputDecoration(
-                  hintText: '添加标题（最多一行）',
-                  hintStyle: TextStyle(color: Colors.grey),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 4),
-                ),
-              ),
-              const Divider(height: 1, color: Colors.grey),
-              const SizedBox(height: 8),
-
-              // 正文（支持#符号添加标签）
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _contentController,
-                    focusNode: _contentFocusNode,
-                    keyboardType: TextInputType.multiline,
-                    maxLines: null,
-                    minLines: 6,
-                    onChanged: _onContentChanged,
-                    decoration: const InputDecoration(
-                      hintText: '写下你的笔记（输入#添加标签，支持学术笔记格式）',
-                      hintStyle: TextStyle(color: Colors.grey),
-                      border: InputBorder.none,
-                      isCollapsed: false,
-                    ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildImageGrid(),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _titleController,
+                  textInputAction: TextInputAction.next,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
                   _buildTagSuggestions(),
                 ],
@@ -2056,8 +2022,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
