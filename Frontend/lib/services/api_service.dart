@@ -379,6 +379,24 @@ class ApiService {
     );
   }
 
+  /// 获取热搜榜单
+  /// GET /hot-searches?limit=20&type=keyword|tag|author
+  static Future<Map<String, dynamic>> getHotSearches({
+    int limit = 20,
+    String? type,
+  }) async {
+    final uri = Uri.parse('$baseUrl/hot-searches').replace(
+      queryParameters: {
+        'limit': limit.toString(),
+        if (type != null && type.isNotEmpty) 'type': type,
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/hot-searches',
+    );
+  }
+
   static Future<Map<String, dynamic>> updateProfile({
     required String displayName,
     String? bio,

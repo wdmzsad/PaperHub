@@ -63,4 +63,11 @@ public interface SearchHistoryRepository extends JpaRepository<SearchHistory, Lo
     List<SearchHistory> findByUserIdAndTimeRange(@Param("userId") Long userId,
                                                  @Param("start") Instant start,
                                                  @Param("end") Instant end);
+
+    /**
+     * 获取所有用户在某时间段内的搜索历史（用于热搜统计）
+     */
+    @Query("SELECT h FROM SearchHistory h WHERE h.updatedAt BETWEEN :start AND :end ORDER BY h.updatedAt DESC")
+    List<SearchHistory> findByTimeRange(@Param("start") Instant start,
+                                        @Param("end") Instant end);
 }
