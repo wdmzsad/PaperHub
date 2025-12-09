@@ -63,13 +63,23 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             Long authorId, java.util.List<PostStatus> statuses, Pageable pageable);
 
     /**
-     * 按标签查询帖子（支持精确匹配标签名）
+     * 按标签查询帖子（支持精确匹配标签名，大小写不敏感）
      * @param tag 标签名称
      * @param pageable 分页参数
      * @return 包含指定标签的帖子分页
      */
-    @Query("SELECT DISTINCT p FROM Post p JOIN p.tags t WHERE t = :tag ORDER BY p.createdAt DESC")
+    @Query("SELECT DISTINCT p FROM Post p JOIN p.tags t WHERE LOWER(t) = LOWER(:tag) ORDER BY p.createdAt DESC")
     Page<Post> findByTagOrderByCreatedAtDesc(@Param("tag") String tag, Pageable pageable);
+
+    /**
+     * 按标签查询帖子并按热度排序（大小写不敏感）
+     * 热度计算公式：likesCount + commentsCount
+     * @param tag 标签名称
+     * @param pageable 分页参数
+     * @return 包含指定标签的帖子分页（按热度降序）
+     */
+    @Query("SELECT p FROM Post p JOIN p.tags t WHERE LOWER(t) = LOWER(:tag) ORDER BY (p.likesCount + p.commentsCount) DESC")
+    Page<Post> findByTagOrderByHot(@Param("tag") String tag, Pageable pageable);
 
     /**
      * 统计包含指定标签的帖子数量

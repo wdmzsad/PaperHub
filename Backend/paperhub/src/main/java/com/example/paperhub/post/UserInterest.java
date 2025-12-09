@@ -20,6 +20,11 @@ public class UserInterest {
     private List<String> researchDirections;
 
     /**
+     * 用户的近期搜索关键词（去重后的小写列表）
+     */
+    private List<String> searchKeywords;
+
+    /**
      * 从收藏得到的标签权重
      */
     private final Map<String, Double> favoriteTagWeights = new HashMap<>();
@@ -79,6 +84,14 @@ public class UserInterest {
 
     public Set<Long> getOwnPostIds() {
         return ownPostIds;
+    }
+
+    public List<String> getSearchKeywords() {
+        return searchKeywords;
+    }
+
+    public void setSearchKeywords(List<String> searchKeywords) {
+        this.searchKeywords = searchKeywords;
     }
 
     /**

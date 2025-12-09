@@ -53,7 +53,13 @@ public interface SearchHistoryRepository extends JpaRepository<SearchHistory, Lo
     /**
      * 获取用户最近搜索的关键词（用于推荐算法）
      */
-    @Query("SELECT DISTINCT h.keyword FROM SearchHistory h WHERE h.user.id = :userId ORDER BY h.updatedAt DESC")
+    @Query("""
+        SELECT h.keyword
+        FROM SearchHistory h
+        WHERE h.user.id = :userId
+        GROUP BY h.keyword
+        ORDER BY MAX(h.updatedAt) DESC
+        """)
     List<String> findRecentKeywordsByUserId(@Param("userId") Long userId, org.springframework.data.domain.Pageable pageable);
 
     /**
