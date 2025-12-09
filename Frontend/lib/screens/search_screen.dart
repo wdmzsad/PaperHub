@@ -45,6 +45,8 @@ class _SearchScreenState extends State<SearchScreen> {
   List<SearchHistoryItem> _searchHistory = [];
   /// 历史加载中的占位状态
   bool _isLoading = true;
+  /// 历史记录展开状态（false：折叠显示最近5条；true：展开显示全部）
+  bool _isHistoryExpanded = false;
   /// 热搜榜单列表
   List<HotSearchItem> _hotSearches = [];
   /// 热搜加载中的占位状态
@@ -469,6 +471,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     '搜索历史',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
+                  // 清空历史按钮
                   if (_searchHistory.isNotEmpty)
                     TextButton(
                       onPressed: _onClearHistory,
@@ -490,11 +493,44 @@ class _SearchScreenState extends State<SearchScreen> {
             else if (_searchHistory.isEmpty)
               _buildEmptyState('暂无搜索历史')
             else
-              ..._searchHistory.map((item) => _buildHistoryItem(item)).toList(),
+              Column(
+                children: [
+                  ..._buildHistoryItemList(),
+                  if (_searchHistory.length > 5)
+                    // 展开/收起按钮
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Center(
+                        child: TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _isHistoryExpanded = !_isHistoryExpanded;
+                            });
+                          },
+                          child: Text(
+                            _isHistoryExpanded ? '收起' : '展开',
+                            style: const TextStyle(fontSize: 14, color: Colors.grey),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
           ],
         ),
       ),
     );
+  }
+
+  /// 构建历史记录项列表（根据展开状态决定显示数量）
+  List<Widget> _buildHistoryItemList() {
+    final displayCount = _isHistoryExpanded || _searchHistory.length <= 5
+        ? _searchHistory.length
+        : 5;
+    return _searchHistory
+        .take(displayCount)
+        .map((item) => _buildHistoryItem(item))
+        .toList();
   }
 
   /// 单条历史记录项
