@@ -24,6 +24,7 @@ import '../widgets/report_post_dialog.dart';
 import '../models/message_model.dart';
 import 'chat_screen.dart';
 import '../pages/note_editor_page.dart';
+import '../utils/dialog_utils.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -2086,22 +2087,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   }
 
   Future<void> _confirmDeletePost() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await DialogUtils.showDeleteConfirmDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('确认删除笔记？'),
-        content: const Text('删除后将无法恢复。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('删除', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      itemName: '笔记',
+      additionalWarning: '删除后将无法恢复。',
     );
 
     if (confirmed == true) {
@@ -2971,23 +2960,13 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     Comment? parentComment,
   }) async {
     // 确认删除
-    final confirmed = await showDialog<bool>(
+    final itemName = isTopLevel ? '评论' : '回复';
+    final additionalWarning = isTopLevel ? '删除后所有回复也会被删除。' : null;
+
+    final confirmed = await DialogUtils.showDeleteConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除评论'),
-        content: Text(isTopLevel ? '确定要删除这条评论吗？删除后所有回复也会被删除。' : '确定要删除这条回复吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      itemName: itemName,
+      additionalWarning: additionalWarning,
     );
 
     if (confirmed != true) return;

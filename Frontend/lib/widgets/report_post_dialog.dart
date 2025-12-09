@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../constants/app_colors.dart';
+import '../constants/dialog_styles.dart';
+import '../utils/dialog_utils.dart';
 
 /// 举报帖子对话框
 class ReportPostDialog extends StatefulWidget {
@@ -71,61 +74,101 @@ class _ReportPostDialogState extends State<ReportPostDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('举报帖子'),
+      backgroundColor: AppColors.dialogBackground,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(DialogStyles.dialogBorderRadius),
+      ),
+      insetPadding: const EdgeInsets.all(24.0),
+      titlePadding: const EdgeInsets.only(top: 24.0, left: 24.0, right: 24.0, bottom: 16.0),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24.0),
+      actionsPadding: const EdgeInsets.all(24.0),
+      title: const Text(
+        '举报帖子',
+        style: DialogStyles.titleTextStyle,
+        textAlign: TextAlign.center,
+      ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               '请描述您举报的理由：',
-              style: TextStyle(fontSize: 14, color: Colors.black87),
+              style: DialogStyles.contentTextStyle,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _descriptionController,
               maxLines: 5,
               maxLength: 500,
-              decoration: InputDecoration(
+              decoration: DialogStyles.inputDecoration.copyWith(
                 hintText: '例如：该帖子包含不实信息、违规内容等',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                filled: true,
-                fillColor: Colors.grey[50],
+                hintStyle: DialogStyles.hintTextStyle,
                 errorText: _errorMessage,
+                errorStyle: TextStyle(
+                  fontSize: 12.0,
+                  color: AppColors.danger,
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(
+                    color: AppColors.danger,
+                    width: 1.5,
+                  ),
+                ),
+                focusedErrorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(
+                    color: AppColors.danger,
+                    width: 1.5,
+                  ),
+                ),
               ),
               enabled: !_isSubmitting,
+              style: DialogStyles.contentTextStyle.copyWith(
+                color: AppColors.textPrimary,
+              ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              '提示：恶意举报可能会受到处罚',
-              style: TextStyle(fontSize: 12, color: Colors.orange),
-            ),
+            // 危险操作警告
+            DialogStyles.buildDangerWarning('提示：恶意举报可能会受到处罚'),
           ],
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        ElevatedButton(
-          onPressed: _isSubmitting ? null : _submitReport,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red,
-            foregroundColor: Colors.white,
-          ),
-          child: _isSubmitting
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Text('提交举报'),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 提交举报按钮（危险操作）
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isSubmitting ? null : _submitReport,
+                style: DialogStyles.dangerButtonStyle,
+                child: _isSubmitting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text('提交举报'),
+              ),
+            ),
+            const SizedBox(height: DialogStyles.dialogButtonSpacing),
+            // 取消按钮
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
+                style: DialogStyles.cancelButtonStyle,
+                child: const Text('取消'),
+              ),
+            ),
+          ],
         ),
       ],
     );

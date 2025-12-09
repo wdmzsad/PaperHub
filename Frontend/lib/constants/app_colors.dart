@@ -23,6 +23,22 @@ class AppColors {
   static const Color textSecondary = Color(0xFF64748B); // 次要文本
   static const Color textOnPrimary = Colors.white; // 主色上的文本
 
+  // 反馈色
+  static const Color success = Color(0xFF10B981);      // 成功
+  static const Color successLight = Color(0xFFD1FAE5); // 成功浅背景
+  static const Color warning = Color(0xFFF59E0B);      // 警告
+  static const Color warningLight = Color(0xFFFEF3C7); // 警告浅背景
+  static const Color danger = Color(0xFFDC2626);       // 危险/错误
+  static const Color dangerLight = Color(0xFFFEE2E2);  // 危险浅背景
+
+  // 弹窗专用颜色 (基于语义化颜色定义)
+  static const Color dialogBackground = Colors.white;
+  static const Color dialogTitle = textPrimary;
+  static const Color dialogContent = textSecondary;
+  static const Color dialogCancel = textSecondary; // 取消按钮文本色
+  static const Color dialogConfirm = primary;      // 确认按钮背景色
+  static const Color dialogDangerBg = dangerLight; // 危险弹窗背景提示色
+
   // 边框和分割线
   static const Color border = Color(0xFFCBD5E1); // 默认边框
   static const Color borderFocused = primary; // 聚焦边框

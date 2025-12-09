@@ -5,6 +5,7 @@ import '../models/user_summary.dart';
 import '../services/api_service.dart';
 import '../services/local_storage.dart';
 import 'profile_screen.dart';
+import '../utils/dialog_utils.dart';
 
 class FollowListScreen extends StatefulWidget {
   final String userId;
@@ -752,31 +753,9 @@ class _FollowActionButtonState extends State<_FollowActionButton> {
   }
 
   Future<bool?> _confirmUnfollow() async {
-    return showDialog<bool>(
+    return DialogUtils.showUnfollowConfirmDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('不再关注该作者？'),
-          actions: [
-            TextButton(
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.grey[200],
-                foregroundColor: Colors.black87,
-              ),
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              style: TextButton.styleFrom(
-                backgroundColor: const Color(0xFFFDE0E0),
-                foregroundColor: const Color(0xFFD32F2F),
-              ),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('不再关注'),
-            ),
-          ],
-        );
-      },
+      userName: widget.user.displayName,
     );
   }
 
