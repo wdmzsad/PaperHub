@@ -58,6 +58,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   bool _showDisciplineDropdown = false; // 控制下拉菜单显示
   String? _currentUserRole; // 当前用户角色
 
+  // 高级选项（外部链接 / arXiv / 引用文献 / PDF）是否展开
+  bool _showAdvancedOptions = false; // 默认收起
+
   // #符号触发标签选择相关状态
   bool _showTagSuggestions = false;
   String _currentTagInput = '';
@@ -1833,6 +1836,69 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 
+    // PDF 附件区域
+  Widget _buildPdfSection(bool hasPdf) {
+    return Row(
+      children: [
+        ElevatedButton.icon(
+          onPressed: _pickPdf,
+          icon: const Icon(Icons.picture_as_pdf_outlined),
+          label: Text(
+            hasPdf ? '替换 PDF' : '添加 PDF 附件（仅一篇）',
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.grey[100],
+            foregroundColor: Colors.black87,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        if (hasPdf)
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.picture_as_pdf, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _pdfFile != null
+                          ? (_pdfFileName ?? '已选择 PDF')
+                          : (_existingPdfUrl!.split('/').last),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      if (_pdfFile != null) {
+                        _removePdf();        // 清空新选 PDF
+                      } else {
+                        _removeExistingPdf(); // 清空旧的 PDF URL
+                      }
+                    },
+                    icon: const Icon(Icons.close, size: 20),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool hasPdf = _pdfFile != null || _existingPdfUrl != null;
@@ -1914,73 +1980,59 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               _buildDisciplineSelector(),
               const SizedBox(height: 16),
 
-              // 外部链接区
-              _buildExternalLinksSection(),
-              const SizedBox(height: 16),
-
-              // arXiv 文献信息区
-              _buildArxivSection(),
-              const SizedBox(height: 16),
-
-              // 引用文献区
-              _buildReferencesSection(),
-              const SizedBox(height: 16),
-
-              // PDF 附件
+              // 高级选项入口（+ 号展开 / 收起）
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  ElevatedButton.icon(
-                    onPressed: _pickPdf,
-                    icon: const Icon(Icons.picture_as_pdf_outlined),
-                    label: Text(
-                      hasPdf ? '替换 PDF' : '添加 PDF 附件（仅一篇）',
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[100],
-                      foregroundColor: Colors.black87,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
+                  const Text(
+                    '更多学术选项（可选）',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  if (hasPdf)
-                    Expanded(
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.attach_file,
-                            size: 18,
-                            color: Colors.grey,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              _pdfFile != null
-                                  ? (_pdfFileName ?? '已选择 PDF')
-                                  : (_existingPdfUrl!.split('/').last),
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () {
-                              if (_pdfFile != null) {
-                                _removePdf();        // 清空新选 PDF
-                              } else {
-                                _removeExistingPdf(); // 清空旧的 PDF URL
-                              }
-                            },
-                            icon: const Icon(Icons.close, size: 20),
-                          ),
-                        ],
-                      ),
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _showAdvancedOptions = !_showAdvancedOptions;
+                      });
+                    },
+                    icon: Icon(
+                      _showAdvancedOptions
+                          ? Icons.remove_circle_outline  // 展开时显示 -
+                          : Icons.add_circle_outline,     // 收起时显示 +
+                      color: const Color(0xFF1976D2),
                     ),
+                  ),
                 ],
               ),
 
+              AnimatedCrossFade(
+                duration: const Duration(milliseconds: 200),
+                crossFadeState: _showAdvancedOptions
+                    ? CrossFadeState.showFirst
+                    : CrossFadeState.showSecond,
+                firstChild: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 外部链接区
+                    _buildExternalLinksSection(),
+                    const SizedBox(height: 16),
+
+                    // arXiv 文献信息区
+                    _buildArxivSection(),
+                    const SizedBox(height: 16),
+
+                    // 引用文献区
+                    _buildReferencesSection(),
+                    const SizedBox(height: 16),
+
+                    // PDF 附件
+                    _buildPdfSection(hasPdf),
+                  ],
+                ),
+                secondChild: const SizedBox.shrink(),
+              ),
 
               const SizedBox(height: 24),
 
