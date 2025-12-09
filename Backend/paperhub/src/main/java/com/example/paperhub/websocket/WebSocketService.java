@@ -24,6 +24,14 @@ public class WebSocketService {
     }
 
     /**
+     * 推送帖子收藏更新
+     */
+    public void sendPostFavoriteUpdate(Long postId, int favoriteCount, boolean isSaved) {
+        FavoriteUpdateMessage message = new FavoriteUpdateMessage("favorite_update", favoriteCount, isSaved);
+        webSocketHandler.sendToPost(postId, message);
+    }
+
+    /**
      * 推送评论点赞更新
      */
     public void sendCommentLikeUpdate(Long postId, String commentId, int likesCount, boolean isLiked) {
@@ -113,6 +121,18 @@ public class WebSocketService {
         public CommentDeletedMessage(String type, String commentId) {
             this.type = type;
             this.commentId = commentId;
+        }
+    }
+
+    public static class FavoriteUpdateMessage {
+        public String type;
+        public int favoriteCount;
+        public boolean isSaved;
+
+        public FavoriteUpdateMessage(String type, int favoriteCount, boolean isSaved) {
+            this.type = type;
+            this.favoriteCount = favoriteCount;
+            this.isSaved = isSaved;
         }
     }
 }

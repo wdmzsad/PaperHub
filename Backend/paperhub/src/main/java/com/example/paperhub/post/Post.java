@@ -88,6 +88,9 @@ public class Post {
     @Column(name = "comments_count", nullable = false)
     private Integer commentsCount = 0;
 
+    @Column(name = "favorite_count", nullable = false)
+    private Integer favoriteCount = 0;
+
     @Column(name = "views_count", nullable = false)
     private Integer viewsCount = 0;
 
@@ -214,6 +217,14 @@ public class Post {
 
     public void setCommentsCount(Integer commentsCount) {
         this.commentsCount = commentsCount;
+    }
+
+    public Integer getFavoriteCount() {
+        return favoriteCount;
+    }
+
+    public void setFavoriteCount(Integer favoriteCount) {
+        this.favoriteCount = favoriteCount;
     }
 
     public Integer getViewsCount() {

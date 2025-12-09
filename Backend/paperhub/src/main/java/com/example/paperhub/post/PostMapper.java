@@ -102,6 +102,7 @@ public class PostMapper {
                 authorInfo,
                 post.getLikesCount(),
                 post.getCommentsCount(),
+                post.getFavoriteCount(),
                 post.getViewsCount(),
                 isLiked,
                 isSaved,

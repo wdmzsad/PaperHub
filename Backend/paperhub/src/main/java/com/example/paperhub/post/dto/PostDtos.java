@@ -5,6 +5,8 @@ import java.util.List;
 
 public class PostDtos {
     public record LikeResp(int likesCount, boolean isLiked) {}
+
+    public record FavoriteResp(int favoritesCount, boolean isSaved) {}
     
     // 创建帖子请求
     public record CreatePostReq(
@@ -38,6 +40,7 @@ public class PostDtos {
         AuthorInfo author,
         int likesCount,
         int commentsCount,
+        int favoriteCount,
         int viewsCount,
         boolean isLiked,
         boolean isSaved,

@@ -57,6 +57,8 @@ class _ProfilePageState extends State<ProfilePage>
   int _authoredPage = 1;
   int _favoritesPage = 1;
 
+  final Set<String> _likeInFlight = {};
+
   @override
   void initState() {
     super.initState();
@@ -250,6 +252,7 @@ class _ProfilePageState extends State<ProfilePage>
                                 .pushNamed('/user/${post.author.id}');
                           }
                         },
+                        onLikeTap: _handlePostLike,
                       );
                     },
                   ),
@@ -855,6 +858,57 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
+  Future<bool> _handlePostLike(Post post) async {
+    // 防止重复请求
+    if (_likeInFlight.contains(post.id)) {
+      return false;
+    }
+
+    _likeInFlight.add(post.id);
+
+    try {
+      final resp = post.isLiked
+          ? await ApiService.unlikePost(post.id)
+          : await ApiService.likePost(post.id);
+
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>?;
+        final updatedLikesCount = (body?['likesCount'] as num?)?.toInt();
+        final updatedIsLiked = body?['isLiked'] as bool?;
+
+        // 更新帖子状态
+        final authoredIndex = _authoredPosts.indexWhere((p) => p.id == post.id);
+        if (authoredIndex != -1) {
+          setState(() {
+            _authoredPosts[authoredIndex].likesCount =
+                updatedLikesCount ?? _authoredPosts[authoredIndex].likesCount;
+            _authoredPosts[authoredIndex].isLiked =
+                updatedIsLiked ?? !_authoredPosts[authoredIndex].isLiked;
+          });
+        }
+
+        final favoriteIndex = _favoritePosts.indexWhere((p) => p.id == post.id);
+        if (favoriteIndex != -1) {
+          setState(() {
+            _favoritePosts[favoriteIndex].likesCount =
+                updatedLikesCount ?? _favoritePosts[favoriteIndex].likesCount;
+            _favoritePosts[favoriteIndex].isLiked =
+                updatedIsLiked ?? !_favoritePosts[favoriteIndex].isLiked;
+          });
+        }
+
+        return true;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      print('点赞失败: $e');
+      return false;
+    } finally {
+      _likeInFlight.remove(post.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -1319,6 +1373,7 @@ class _ProfilePageState extends State<ProfilePage>
                 Navigator.of(context).pushNamed('/user/${post.author.id}');
               }
             },
+            onLikeTap: _handlePostLike,
           );
         },
       ),

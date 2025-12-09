@@ -9,7 +9,7 @@ import java.time.Instant;
  * 用户收藏帖子记录。
  */
 @Entity
-@Table(name = "favorite_posts", uniqueConstraints = {
+@Table(name = "post_favorite", uniqueConstraints = {
         @UniqueConstraint(columnNames = {"user_id", "post_id"})
 })
 public class FavoritePost {

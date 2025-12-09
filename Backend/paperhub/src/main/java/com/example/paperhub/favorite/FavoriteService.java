@@ -6,6 +6,7 @@ import com.example.paperhub.notification.NotificationService;
 import com.example.paperhub.post.Post;
 import com.example.paperhub.post.PostRepository;
 import com.example.paperhub.post.dto.PostDtos;
+import com.example.paperhub.websocket.WebSocketService;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -23,14 +24,17 @@ public class FavoriteService {
     private final FavoritePostRepository favoriteRepository;
     private final PostRepository postRepository;
     private final NotificationService notificationService;
+    private final WebSocketService webSocketService;
 
     public FavoriteService(
-            FavoritePostRepository favoriteRepository, 
+            FavoritePostRepository favoriteRepository,
             PostRepository postRepository,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            WebSocketService webSocketService) {
         this.favoriteRepository = favoriteRepository;
         this.postRepository = postRepository;
         this.notificationService = notificationService;
+        this.webSocketService = webSocketService;
     }
 
     @Transactional
@@ -45,7 +49,14 @@ public class FavoriteService {
         favoritePost.setUser(user);
         favoritePost.setPost(post);
         favoriteRepository.save(favoritePost);
-        
+
+        // 更新收藏计数
+        post.setFavoriteCount(post.getFavoriteCount() + 1);
+        postRepository.save(post);
+
+        // 发送 WebSocket 推送
+        webSocketService.sendPostFavoriteUpdate(post.getId(), post.getFavoriteCount(), true);
+
         // 创建通知
         try {
             notificationService.createPostFavoriteNotification(user, postId);
@@ -58,7 +69,17 @@ public class FavoriteService {
     @Transactional
     public void unfavoritePost(Long postId, User user) {
         ensureUserCanInteract(user);
-        favoriteRepository.deleteByUserIdAndPostId(user.getId(), postId);
+        if (favoriteRepository.existsByUserIdAndPostId(user.getId(), postId)) {
+            favoriteRepository.deleteByUserIdAndPostId(user.getId(), postId);
+            // 更新收藏计数
+            Post post = postRepository.findById(postId)
+                    .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+            post.setFavoriteCount(Math.max(0, post.getFavoriteCount() - 1));
+            postRepository.save(post);
+
+            // 发送 WebSocket 推送
+            webSocketService.sendPostFavoriteUpdate(post.getId(), post.getFavoriteCount(), false);
+        }
     }
 
     public boolean isFavorite(Long postId, Long userId) {
@@ -68,6 +89,10 @@ public class FavoriteService {
 
     public long countFavorites(Long userId) {
         return favoriteRepository.countByUserId(userId);
+    }
+
+    public long countFavoritesByPostId(Long postId) {
+        return favoriteRepository.countByPostId(postId);
     }
 
     public Page<Post> getFavoritePosts(Long userId, Pageable pageable) {
