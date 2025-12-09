@@ -146,6 +146,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     _titleController.text = post.title;
     _contentController.text = post.content;
 
+    // ⭐️ 关键：恢复原来的分区
+    _selectedDiscipline = post.mainDiscipline;
+
     // 已有媒体：区分图片和 PDF
     _existingImageUrls.clear();
     _existingPdfUrl = null;
@@ -394,9 +397,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       mediaUrls.addAll(_existingImageUrls);
 
       // 如果你还有别的要加，比如新选的图片 / pdf，就继续：
-      if (_existingPdfUrl != null) {
-        mediaUrls.add(_existingPdfUrl!);
-      }
+      // if (_existingPdfUrl != null) {
+      //   mediaUrls.add(_existingPdfUrl!);
+      // }
 
 
       // 2) 上传新选择的图片
@@ -1971,6 +1974,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     _buildTagSuggestions(),
                   ],
                 ),
+
                 // 一级标签选择（学科分区）
                 _buildDisciplineSelector(),
                 const SizedBox(height: 16),
