@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -1938,9 +1938,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
-                  _buildTagSuggestions(),
-                ],
-              ),
+                ),
+                const SizedBox(height: 8),
+                _buildTagSuggestions(),
+              ],
+            ),
 
               // 一级标签选择（学科分区）
               _buildDisciplineSelector(),
