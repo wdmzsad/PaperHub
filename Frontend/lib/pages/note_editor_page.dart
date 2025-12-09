@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -1930,6 +1930,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               children: [
                 _buildImageGrid(),
                 const SizedBox(height: 16),
+
+                // 标题
                 TextField(
                   controller: _titleController,
                   textInputAction: TextInputAction.next,
@@ -1938,9 +1940,37 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
+                  decoration: const InputDecoration(
+                    hintText: '添加标题（最多一行）',
+                    hintStyle: TextStyle(color: Colors.grey),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 4),
+                  ),
                 ),
+                const Divider(height: 1, color: Colors.grey),
                 const SizedBox(height: 8),
-                _buildTagSuggestions(),
+
+                // 正文（支持#符号添加标签）
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: _contentController,
+                      focusNode: _contentFocusNode,
+                      keyboardType: TextInputType.multiline,
+                      maxLines: null,
+                      minLines: 6,
+                      onChanged: _onContentChanged,
+                      decoration: const InputDecoration(
+                        hintText: '写下你的笔记（输入#添加标签，支持学术笔记格式）',
+                        hintStyle: TextStyle(color: Colors.grey),
+                        border: InputBorder.none,
+                        isCollapsed: false,
+                      ),
+                    ),
+                    _buildTagSuggestions(),
+                  ],
+                ),
                 // 一级标签选择（学科分区）
                 _buildDisciplineSelector(),
                 const SizedBox(height: 16),
@@ -1952,7 +1982,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     const Text(
                       '更多学术选项（可选）',
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 16,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
