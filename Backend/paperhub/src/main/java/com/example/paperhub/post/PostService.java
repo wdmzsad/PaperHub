@@ -5,8 +5,10 @@ import com.example.paperhub.auth.UserRepository;
 import com.example.paperhub.auth.UserStatus;
 import com.example.paperhub.comment.CommentRepository;
 import com.example.paperhub.favorite.FavoritePostRepository;
+import com.example.paperhub.history.BrowseHistoryRepository;
 import com.example.paperhub.like.CommentLikeRepository;
 import com.example.paperhub.like.PostLikeRepository;
+import com.example.paperhub.notification.NotificationRepository;
 import com.example.paperhub.report.ReportPost;
 import com.example.paperhub.report.ReportPostRepository;
 import com.example.paperhub.report.ReportStatus;
@@ -52,6 +54,8 @@ public class PostService {
     private final CommentRepository commentRepository;
     private final CommentLikeRepository commentLikeRepository;
     private final ReportPostRepository reportPostRepository;
+    private final BrowseHistoryRepository browseHistoryRepository;
+    private final NotificationRepository notificationRepository;
 
     public PostService(
             PostRepository postRepository,
@@ -61,7 +65,9 @@ public class PostService {
             FavoritePostRepository favoritePostRepository,
             CommentRepository commentRepository,
             CommentLikeRepository commentLikeRepository,
-            ReportPostRepository reportPostRepository) {
+            ReportPostRepository reportPostRepository,
+            BrowseHistoryRepository browseHistoryRepository,
+            NotificationRepository notificationRepository) {
         this.postRepository = postRepository;
         this.followFeedRepository = followFeedRepository;
         this.userRepository = userRepository;
@@ -70,6 +76,8 @@ public class PostService {
         this.commentRepository = commentRepository;
         this.commentLikeRepository = commentLikeRepository;
         this.reportPostRepository = reportPostRepository;
+        this.browseHistoryRepository = browseHistoryRepository;
+        this.notificationRepository = notificationRepository;
     }
 
     /**
@@ -348,6 +356,15 @@ public class PostService {
         // 2. 帖子点赞与收藏
         postLikeRepository.deleteByPostId(postId);
         favoritePostRepository.deleteByPostId(postId);
+
+        // 3. 浏览历史
+        browseHistoryRepository.deleteByPost(post);
+
+        // 4. 通知
+        notificationRepository.deleteByPostId(postId);
+
+        // 5. 举报记录
+        reportPostRepository.deleteByPost(post);
 
         postRepository.delete(post);
     }
