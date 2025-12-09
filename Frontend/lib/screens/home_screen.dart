@@ -969,7 +969,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   double _computeHeat(Post p) =>
-      p.likesCount + p.commentsCount * 0.5;
+      p.likesCount +
+      p.commentsCount * 0.5 +
+      p.searchHistoryScore * 1.0;
 
   List<Post> _sortedByHeat(List<Post> list) {
     final sorted = [...list];
