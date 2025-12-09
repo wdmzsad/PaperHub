@@ -44,4 +44,9 @@ public interface ReportPostRepository extends JpaRepository<ReportPost, Long> {
      * 统计待处理的举报数量
      */
     long countByStatus(ReportStatus status);
+
+    /**
+     * 删除与帖子相关的举报记录
+     */
+    void deleteByPost(Post post);
 }
