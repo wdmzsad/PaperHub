@@ -4,7 +4,9 @@
       "Bash(flutter --version:*)",
       "Bash(mvn compile:*)",
       "Bash(dart analyze:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(./mvnw:*)",
+      "Bash(java:*)"
     ],
     "deny": [],
     "ask": []
