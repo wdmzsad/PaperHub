@@ -1941,86 +1941,84 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 ),
                 const SizedBox(height: 8),
                 _buildTagSuggestions(),
-              ],
-            ),
+                // 一级标签选择（学科分区）
+                _buildDisciplineSelector(),
+                const SizedBox(height: 16),
 
-              // 一级标签选择（学科分区）
-              _buildDisciplineSelector(),
-              const SizedBox(height: 16),
-
-              // 高级选项入口（+ 号展开 / 收起）
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    '更多学术选项（可选）',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      setState(() {
-                        _showAdvancedOptions = !_showAdvancedOptions;
-                      });
-                    },
-                    icon: Icon(
-                      _showAdvancedOptions
-                          ? Icons.remove_circle_outline  // 展开时显示 -
-                          : Icons.add_circle_outline,     // 收起时显示 +
-                      color: const Color(0xFF1976D2),
-                    ),
-                  ),
-                ],
-              ),
-
-              AnimatedCrossFade(
-                duration: const Duration(milliseconds: 200),
-                crossFadeState: _showAdvancedOptions
-                    ? CrossFadeState.showFirst
-                    : CrossFadeState.showSecond,
-                firstChild: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                // 高级选项入口（+ 号展开 / 收起）
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // 外部链接区
-                    _buildExternalLinksSection(),
-                    const SizedBox(height: 16),
-
-                    // arXiv 文献信息区
-                    _buildArxivSection(),
-                    const SizedBox(height: 16),
-
-                    // 引用文献区
-                    _buildReferencesSection(),
-                    const SizedBox(height: 16),
-
-                    // PDF 附件
-                    _buildPdfSection(hasPdf),
+                    const Text(
+                      '更多学术选项（可选）',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _showAdvancedOptions = !_showAdvancedOptions;
+                        });
+                      },
+                      icon: Icon(
+                        _showAdvancedOptions
+                            ? Icons.remove_circle_outline  // 展开时显示 -
+                            : Icons.add_circle_outline,     // 收起时显示 +
+                        color: const Color(0xFF1976D2),
+                      ),
+                    ),
                   ],
                 ),
-                secondChild: const SizedBox.shrink(),
-              ),
 
-              const SizedBox(height: 24),
+                AnimatedCrossFade(
+                  duration: const Duration(milliseconds: 200),
+                  crossFadeState: _showAdvancedOptions
+                      ? CrossFadeState.showFirst
+                      : CrossFadeState.showSecond,
+                  firstChild: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 外部链接区
+                      _buildExternalLinksSection(),
+                      const SizedBox(height: 16),
 
-              // 发布按钮
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _publishNote,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1976D2),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                      // arXiv 文献信息区
+                      _buildArxivSection(),
+                      const SizedBox(height: 16),
+
+                      // 引用文献区
+                      _buildReferencesSection(),
+                      const SizedBox(height: 16),
+
+                      // PDF 附件
+                      _buildPdfSection(hasPdf),
+                    ],
                   ),
-                  child: Text(
-                    _isEditing ? '保存修改' : '发布笔记',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.white,
+                  secondChild: const SizedBox.shrink(),
+                ),
+
+                const SizedBox(height: 24),
+
+                // 发布按钮
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _publishNote,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1976D2),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      _isEditing ? '保存修改' : '发布笔记',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
