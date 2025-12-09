@@ -3072,7 +3072,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           Text('${widget.post.commentsCount}'),
           const SizedBox(width: 12),
           IconButton(
-            icon: Icon(isSaved ? Icons.bookmark : Icons.bookmark_border),
+            icon: Icon(
+              isSaved ? Icons.bookmark : Icons.bookmark_border,
+              color: isSaved ? Colors.blue : Colors.black87,
+            ),
             onPressed: _toggleSave,
           ),
           const SizedBox(width: 8),
@@ -3091,7 +3094,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Divider(height: 1),
+        Divider(height: 1, color: Colors.grey.withOpacity(0.2)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
@@ -3121,7 +3124,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: _comments.length + (_hasMoreComments ? 1 : 0),
-          separatorBuilder: (_, __) => const Divider(indent: 16),
+          separatorBuilder: (_, __) => Divider(indent: 16, color: Colors.grey.withOpacity(0.2)),
           itemBuilder: (context, idx) {
             if (idx == _comments.length) {
               // 加载更多按钮
