@@ -621,9 +621,11 @@ class _ChatInputState extends State<ChatInput> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final onSurfaceVariant = scheme.onSurfaceVariant;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
@@ -660,14 +662,14 @@ class _ChatInputState extends State<ChatInput> {
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
                   hintText: widget.hintText,
-                  hintStyle: TextStyle(color: Colors.grey[500], fontSize: 16),
+                  hintStyle: TextStyle(color: onSurfaceVariant, fontSize: 16),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 10,
                   ),
                 ),
-                style: const TextStyle(fontSize: 16, color: Colors.black87),
+                style: TextStyle(fontSize: 16, color: scheme.onSurface),
                 onSubmitted: (text) {
                   if (_isComposing) {
                     _handleSend();
@@ -688,10 +690,11 @@ class _ChatInputState extends State<ChatInput> {
     required IconData icon,
     required VoidCallback onPressed,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
       child: IconButton(
-        icon: Icon(icon, color: const Color(0xFF1976D2), size: 24),
+        icon: Icon(icon, color: scheme.onSurfaceVariant, size: 24),
         onPressed: widget.enabled ? onPressed : null,
         splashRadius: 20,
       ),

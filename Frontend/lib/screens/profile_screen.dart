@@ -861,7 +861,7 @@ class _ProfilePageState extends State<ProfilePage>
       length: 2,
       child: Scaffold(
         drawer: _buildDrawer(),
-        backgroundColor: const Color(0xFFF5F5F5),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         // 只有从底部导航栏进入自己的主页时才显示底部导航栏
         bottomNavigationBar: (_isViewingSelf && widget.isMainPage) 
             ? _buildBottomNavigationBar() 
@@ -1098,7 +1098,8 @@ class _ProfilePageState extends State<ProfilePage>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
+                  // Use theme surface so the card follows dark backgrounds
+                  color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -1131,6 +1132,9 @@ class _ProfilePageState extends State<ProfilePage>
 
   Widget _buildResearchDirections(UserProfile profile) {
     final directions = profile.researchDirections;
+    final scheme = Theme.of(context).colorScheme;
+    final cardColor = scheme.surfaceVariant;
+    final textColor = scheme.onSurface;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -1139,9 +1143,13 @@ class _ProfilePageState extends State<ProfilePage>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 '研究方向',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
               ),
             ],
           ),
@@ -1150,22 +1158,25 @@ class _ProfilePageState extends State<ProfilePage>
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: cardColor,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
+                  color: Colors.black.withOpacity(0.08),
                   blurRadius: 6,
                   offset: const Offset(0, 3),
                 ),
               ],
             ),
             child: directions.isEmpty
-                ? const Text('还没有填写研究方向', style: TextStyle(color: Colors.grey))
+                ? Text(
+                    '还没有填写研究方向',
+                    style: TextStyle(color: textColor.withOpacity(0.6)),
+                  )
                 : Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: directions.map(_buildDirectionChip).toList(),
+                    children: directions.map((d) => _buildDirectionChip(d, scheme)).toList(),
                   ),
           ),
         ],
@@ -1173,30 +1184,35 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Widget _buildDirectionChip(String label) {
+  Widget _buildDirectionChip(String label, ColorScheme scheme) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF2F2F2),
+        color: scheme.surface.withOpacity(0.8),
+        border: Border.all(color: scheme.primary.withOpacity(0.6), width: 1),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         label,
-        style: const TextStyle(color: Colors.black87, fontSize: 14),
+        style: TextStyle(color: scheme.onSurface, fontSize: 14),
       ),
     );
   }
 
   Widget _buildTabsSection() {
+    final scheme = Theme.of(context).colorScheme;
+    final cardColor = scheme.surfaceVariant;
+    final onSurface = scheme.onSurface;
+    final primary = scheme.primary;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withOpacity(0.08),
             blurRadius: 6,
             offset: const Offset(0, 3),
           ),
@@ -1204,9 +1220,10 @@ class _ProfilePageState extends State<ProfilePage>
       ),
       child: Column(
         children: [
-          const TabBar(
-            labelColor: Colors.black,
-            indicatorColor: Colors.blueAccent,
+          TabBar(
+            labelColor: primary,
+            unselectedLabelColor: onSurface.withOpacity(0.7),
+            indicatorColor: primary,
             tabs: [
               Tab(text: '笔记'),
               Tab(text: '收藏'),
