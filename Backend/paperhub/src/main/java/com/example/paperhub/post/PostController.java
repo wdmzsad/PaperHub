@@ -505,7 +505,13 @@ public class PostController {
         }
         try {
             favoriteService.favoritePost(postId, user);
-            return ResponseEntity.ok(Map.of("isSaved", true));
+
+            // 获取最新状态
+            long favoritesCount = favoriteService.countFavoritesByPostId(postId);
+            boolean isSaved = favoriteService.isFavorite(postId, user.getId());
+
+            PostDtos.FavoriteResp resp = new PostDtos.FavoriteResp((int) favoritesCount, isSaved);
+            return ResponseEntity.ok(resp);
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.status(404).body(Map.of("message", ex.getMessage()));
         }
@@ -522,7 +528,13 @@ public class PostController {
             return ResponseEntity.status(401).body(Map.of("message", "未认证，请先登录"));
         }
         favoriteService.unfavoritePost(postId, user);
-        return ResponseEntity.ok(Map.of("isSaved", false));
+
+        // 获取最新状态
+        long favoritesCount = favoriteService.countFavoritesByPostId(postId);
+        boolean isSaved = favoriteService.isFavorite(postId, user.getId());
+
+        PostDtos.FavoriteResp resp = new PostDtos.FavoriteResp((int) favoritesCount, isSaved);
+        return ResponseEntity.ok(resp);
     }
 
     /**

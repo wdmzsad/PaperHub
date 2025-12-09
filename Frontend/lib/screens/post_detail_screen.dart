@@ -549,7 +549,6 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
           _hasMoreComments = _comments.length < total;
           _currentPage++;
-          // 不要用评论API返回的total覆盖post的commentsCount
           // 因为total只包含顶层评论，而post.commentsCount包含所有评论（包括楼中楼）
           // commentCount = total;
           // widget.post.commentsCount = total;
@@ -1409,6 +1408,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           // - comment_created: 新评论推送，payload 中包含 comment 对象
           // - comment_updated: 评论被更新，payload 中包含 comment 对象
           // - comment_deleted: 评论被删除，payload 中包含 commentId
+          // - favorite_update: 帖子收藏变化
 
           if (type == 'like_update') {
             setState(() {
@@ -1416,6 +1416,13 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                 likeCount = data['likesCount'] as int;
               if (data.containsKey('isLiked'))
                 isLiked = data['isLiked'] as bool;
+            });
+          } else if (type == 'favorite_update') {
+            setState(() {
+              if (data.containsKey('favoriteCount'))
+                widget.post.favoriteCount = data['favoriteCount'] as int;
+              if (data.containsKey('isSaved'))
+                widget.post.isSaved = data['isSaved'] as bool;
             });
           } else if (type == 'comment_like_update' &&
               data['commentId'] != null) {
@@ -1728,6 +1735,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     if (_saveInFlight) return;
     _saveInFlight = true;
     final previousSaved = isSaved;
+    final previousFavoriteCount = widget.post.favoriteCount;
+    // 只对收藏状态做乐观更新，不对数量做乐观更新
     setState(() {
       isSaved = !isSaved;
       widget.post.isSaved = isSaved;
@@ -1739,11 +1748,17 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
       if (status >= 200 && status < 300) {
-        if (body != null && body.containsKey('isSaved')) {
-          final serverValue = body['isSaved'] as bool;
+        if (body != null) {
+          final serverValue = body['isSaved'] as bool?;
+          final serverFavoritesCount = body['favoritesCount'] as int?;
           setState(() {
-            isSaved = serverValue;
-            widget.post.isSaved = serverValue;
+            if (serverValue != null) {
+              isSaved = serverValue;
+              widget.post.isSaved = serverValue;
+            }
+            if (serverFavoritesCount != null) {
+              widget.post.favoriteCount = serverFavoritesCount;
+            }
           });
         }
       } else {
@@ -3055,11 +3070,14 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           ),
           const SizedBox(width: 8),
           Text('${widget.post.commentsCount}'),
-          const Spacer(),
+          const SizedBox(width: 12),
           IconButton(
             icon: Icon(isSaved ? Icons.bookmark : Icons.bookmark_border),
             onPressed: _toggleSave,
           ),
+          const SizedBox(width: 8),
+          Text('${widget.post.favoriteCount}'),
+          const Spacer(),
           IconButton(
             icon: const Icon(Icons.share_outlined),
             onPressed: _onShare,

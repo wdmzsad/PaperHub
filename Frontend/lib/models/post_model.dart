@@ -198,6 +198,7 @@ class Post {
   // 统计与状态（通常由后端返回）
   int likesCount;
   int commentsCount;
+  int favoriteCount;
   int viewsCount;
   double recommendationScore;
   double searchHistoryScore;
@@ -239,6 +240,7 @@ class Post {
     this.comments = const [],
     this.likesCount = 0,
     this.commentsCount = 0,
+    this.favoriteCount = 0,
     this.viewsCount = 0,
     this.recommendationScore = 0,
     this.searchHistoryScore = 0,
@@ -297,6 +299,7 @@ class Post {
       ),
       likesCount: (json['likesCount'] as num?)?.toInt() ?? 0,
       commentsCount: (json['commentsCount'] as num?)?.toInt() ?? 0,
+      favoriteCount: (json['favoriteCount'] as num?)?.toInt() ?? 0,
       viewsCount: (json['viewsCount'] as num?)?.toInt() ?? 0,
       recommendationScore:
           (json['score'] as num?)?.toDouble() ??
