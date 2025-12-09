@@ -174,6 +174,12 @@ class Comment {
         'likesCount': likesCount,
         'isLiked': isLiked,
         'replies': replies.map((r) => r.toJson()).toList(),
+        'mentions': mentions.map((m) => {
+          'id': m.id,
+          'name': m.name,
+          'avatar': m.avatar,
+          if (m.affiliation != null) 'affiliation': m.affiliation,
+        }).toList(),
         'createdAt': createdAt.toIso8601String(),
       };
 }

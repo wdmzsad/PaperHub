@@ -171,19 +171,21 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
+        elevation: 0.2,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: scheme.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           '赞和收藏',
           style: TextStyle(
-            color: Colors.black87,
+            color: scheme.onSurface,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -221,6 +223,11 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
     required IconData icon,
     required Color iconColor,
   }) {
+    final scheme = Theme.of(context).colorScheme;
+    final readBg = scheme.surfaceVariant;
+    final unreadBg = scheme.primary.withOpacity(0.12);
+    final textColor = scheme.onSurface;
+    final secondary = scheme.onSurfaceVariant;
     return GestureDetector(
       onTap: () async {
         // 标记为已读
@@ -240,7 +247,7 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: notification.read ? Colors.white : Colors.blue[50],
+          color: notification.read ? readBg : unreadBg,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
@@ -265,9 +272,12 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
                     ? NetworkImage(notification.actor.avatar!)
                     : null,
                 child: notification.actor.avatar == null
-                    ? Text(notification.actor.name.isNotEmpty
-                        ? notification.actor.name[0].toUpperCase()
-                        : '?')
+                    ? Text(
+                        notification.actor.name.isNotEmpty
+                            ? notification.actor.name[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(color: scheme.onPrimaryContainer),
+                      )
                     : null,
               ),
             ),
@@ -278,16 +288,17 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
                 children: [
                   Text(
                     notification.actor.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
+                      color: textColor,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     notification.content,
                     style: TextStyle(
-                      color: Colors.grey[600],
+                      color: secondary,
                       fontSize: 13,
                     ),
                     maxLines: 2,
@@ -303,7 +314,7 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
                 Text(
                   _formatTime(notification.createdAt),
                   style: TextStyle(
-                    color: Colors.grey[500],
+                    color: secondary,
                     fontSize: 12,
                   ),
                 ),
@@ -570,19 +581,23 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final cardColor = Theme.of(context).cardColor;
+    final onSurface = scheme.onSurface;
+    final unreadBg = scheme.primary.withOpacity(0.08);
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: scheme.surface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: onSurface),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           '新增关注',
           style: TextStyle(
-            color: Colors.black87,
+            color: onSurface,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -633,6 +648,9 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
     required VoidCallback onFollow,
     required VoidCallback onAvatarTap,
   }) {
+    final scheme = Theme.of(context).colorScheme;
+    final cardColor = Theme.of(context).cardColor;
+    final unreadBg = scheme.primary.withOpacity(0.08);
     return GestureDetector(
       onTap: () async {
         // 标记为已读
@@ -649,11 +667,11 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: notification.read ? Colors.white : Colors.blue[50],
+              color: notification.read ? cardColor : unreadBg,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withOpacity(0.05),
               blurRadius: 3,
               offset: const Offset(0, 1),
             ),
@@ -866,19 +884,20 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: scheme.surface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: scheme.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           '评论和@',
           style: TextStyle(
-            color: Colors.black87,
+            color: scheme.onSurface,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -908,6 +927,12 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
   }
 
   Widget _buildCommentItem({required NotificationItem notification}) {
+    final scheme = Theme.of(context).colorScheme;
+    final isUnread = !notification.read;
+    final cardColor = isUnread ? scheme.primary.withOpacity(0.12) : scheme.surfaceVariant;
+    final secondary = scheme.onSurfaceVariant;
+    final textColor = scheme.onSurface;
+    final chipBg = scheme.surface.withOpacity(0.6);
     final isMention = notification.type == NotificationType.mention;
     final commentContent = notification.comment?.content ?? '';
     return GestureDetector(
@@ -929,7 +954,7 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: notification.read ? Colors.white : Colors.blue[50],
+          color: cardColor,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
@@ -957,25 +982,29 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
                         ? NetworkImage(notification.actor.avatar!)
                         : null,
                     child: notification.actor.avatar == null
-                        ? Text(notification.actor.name.isNotEmpty
-                            ? notification.actor.name[0].toUpperCase()
-                            : '?')
+                        ? Text(
+                            notification.actor.name.isNotEmpty
+                                ? notification.actor.name[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(color: scheme.onPrimaryContainer),
+                          )
                         : null,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   notification.actor.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
+                    color: textColor,
                   ),
                 ),
                 const Spacer(),
                 Text(
                   _formatTime(notification.createdAt),
                   style: TextStyle(
-                    color: Colors.grey[500],
+                    color: secondary,
                     fontSize: 12,
                   ),
                 ),
@@ -984,9 +1013,10 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
             const SizedBox(height: 8),
             Text(
               commentContent.isNotEmpty ? commentContent : notification.content,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 height: 1.4,
+                color: textColor,
               ),
             ),
             if (notification.post != null) ...[
@@ -994,14 +1024,14 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.grey[50],
+                  color: chipBg,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       isMention ? Icons.alternate_email : Icons.chat_bubble_outline,
-                      color: Colors.grey[500],
+                      color: secondary,
                       size: 16,
                     ),
                     const SizedBox(width: 8),
@@ -1009,7 +1039,7 @@ class _CommentsAndMentionsScreenState extends State<CommentsAndMentionsScreen> {
                       child: Text(
                         notification.post!.title,
                         style: TextStyle(
-                          color: Colors.grey[600],
+                          color: secondary,
                           fontSize: 13,
                         ),
                         maxLines: 1,
@@ -1141,32 +1171,33 @@ class _MessageScreenState extends State<MessageScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: _buildAppBar(),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: _buildAppBar(scheme),
       body: SafeArea(
         child: Column(
           children: [
             // 小红书风格的顶部图标导航
-            _buildTopIconNavigation(),
+            _buildTopIconNavigation(scheme),
             Expanded(
               child: _buildConversationList(),
             ),
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
+      bottomNavigationBar: _buildBottomNavigationBar(scheme),
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
+  PreferredSizeWidget _buildAppBar(ColorScheme scheme) {
     return AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: scheme.surface,
       elevation: 0,
-      title: const Text(
+      title: Text(
         '消息',
         style: TextStyle(
-          color: Colors.black87,
+          color: scheme.onSurface,
           fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
@@ -1174,7 +1205,7 @@ class _MessageScreenState extends State<MessageScreen> {
       centerTitle: true,
       actions: [
         IconButton(
-          icon: const Icon(Icons.search, color: Colors.black87),
+          icon: Icon(Icons.search, color: scheme.onSurface),
           onPressed: _showSearch,
         ),
       ],
@@ -1182,9 +1213,9 @@ class _MessageScreenState extends State<MessageScreen> {
   }
 
   // 小红书风格的顶部图标导航
-  Widget _buildTopIconNavigation() {
+  Widget _buildTopIconNavigation(ColorScheme scheme) {
     return Container(
-      color: Colors.white,
+      color: scheme.surface,
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1194,8 +1225,8 @@ class _MessageScreenState extends State<MessageScreen> {
             activeIcon: Icons.favorite,
             label: '赞和收藏',
             badgeCount: _unreadCount.likes,
-            backgroundColor: const Color(0xFFFFEBEE),
-            iconColor: Colors.redAccent,
+            backgroundColor: scheme.errorContainer.withOpacity(0.5),
+            iconColor: scheme.error,
             onTap: () {
               _navigateToLikesAndFavorites();
               _loadUnreadCount(); // 刷新未读数量
@@ -1206,8 +1237,8 @@ class _MessageScreenState extends State<MessageScreen> {
             activeIcon: Icons.person_add,
             label: '新增关注',
             badgeCount: _unreadCount.follows,
-            backgroundColor: const Color(0xFFE8F4FF),
-            iconColor: const Color(0xFF1976D2),
+            backgroundColor: scheme.primaryContainer.withOpacity(0.5),
+            iconColor: scheme.primary,
             onTap: () {
               _navigateToNewFollowers();
               _loadUnreadCount(); // 刷新未读数量
@@ -1218,8 +1249,8 @@ class _MessageScreenState extends State<MessageScreen> {
             activeIcon: Icons.chat_bubble,
             label: '评论和@',
             badgeCount: _unreadCount.comments,
-            backgroundColor: const Color(0xFFE8F5E9),
-            iconColor: const Color(0xFF43A047),
+            backgroundColor: scheme.secondaryContainer.withOpacity(0.5),
+            iconColor: scheme.secondary,
             onTap: () {
               _navigateToCommentsAndMentions();
               _loadUnreadCount(); // 刷新未读数量
@@ -1239,6 +1270,7 @@ class _MessageScreenState extends State<MessageScreen> {
     Color? backgroundColor,
     Color? iconColor,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -1250,12 +1282,12 @@ class _MessageScreenState extends State<MessageScreen> {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: backgroundColor ?? Colors.grey[100],
+                  color: backgroundColor ?? scheme.surfaceVariant,
                   borderRadius: BorderRadius.circular(25),
                 ),
                 child: Icon(
                   icon,
-                  color: iconColor ?? Colors.black87,
+                  color: iconColor ?? scheme.onSurface,
                   size: 24,
                 ),
               ),
@@ -1289,9 +1321,9 @@ class _MessageScreenState extends State<MessageScreen> {
           const SizedBox(height: 8),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
-              color: Colors.black87,
+              color: scheme.onSurface,
             ),
           ),
         ],
@@ -1300,7 +1332,7 @@ class _MessageScreenState extends State<MessageScreen> {
   }
 
   // 底部导航栏 - 根据home_screen的逻辑重写
-  Widget _buildBottomNavigationBar() {
+  Widget _buildBottomNavigationBar(ColorScheme scheme) {
     return AnimatedBuilder(
       animation: UnreadService.instance,
       builder: (context, _) {
@@ -1309,8 +1341,9 @@ class _MessageScreenState extends State<MessageScreen> {
           currentIndex: _currentIndex,
           onTap: _onBottomNavItemTapped,
           type: BottomNavigationBarType.fixed,
-          selectedItemColor: const Color(0xFF1976D2),
-          unselectedItemColor: Colors.grey[600],
+          backgroundColor: scheme.surface,
+          selectedItemColor: scheme.primary,
+          unselectedItemColor: scheme.onSurfaceVariant,
           selectedLabelStyle: const TextStyle(fontSize: 12),
           unselectedLabelStyle: const TextStyle(fontSize: 12),
           items: [

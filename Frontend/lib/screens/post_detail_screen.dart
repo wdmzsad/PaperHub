@@ -144,7 +144,6 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   late bool isLiked;
   late bool isSaved;
   late int likeCount;
-  late int commentCount;
   //late Post _post;
   Comment? _currentReplyTo; // 当前正在回复的评论
   String? _currentReplyParentId; // 当前回复的父评论 ID
@@ -239,7 +238,6 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     isLiked = widget.post.isLiked;
     isSaved = widget.post.isSaved;
     likeCount = widget.post.likesCount;
-    commentCount = widget.post.commentsCount;
 
     _heartCtrl = AnimationController(
       vsync: this,
@@ -412,7 +410,6 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           setState(() {
             isLiked = updatedPost.isLiked;
             likeCount = updatedPost.likesCount;
-            commentCount = updatedPost.commentsCount;
             widget.post.likesCount = updatedPost.likesCount;
             widget.post.isLiked = updatedPost.isLiked;
             widget.post.commentsCount = updatedPost.commentsCount;
@@ -552,8 +549,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
           _hasMoreComments = _comments.length < total;
           _currentPage++;
-          commentCount = total;
-          widget.post.commentsCount = total;
+          // 不要用评论API返回的total覆盖post的commentsCount
+          // 因为total只包含顶层评论，而post.commentsCount包含所有评论（包括楼中楼）
+          // commentCount = total;
+          // widget.post.commentsCount = total;
         });
       } else {
         // 可选：显示错误信息，body 可能包含 message 字段
@@ -950,6 +949,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         // 添加到已选择列表（单选和多选都累积）
         setState(() {
           _selectedMentions[userNameLower] = user;
+          print('[@功能] 添加到_selectedMentions: "$userNameLower" -> ${user.name}(${user.id})');
           if (isMultiSelectMode) {
             // 多选模式：保持横栏打开，重置@位置
             _mentionQuery = '';
@@ -1077,6 +1077,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     }
   }
 
+  /// 缓存@用户搜索结果，避免重复API调用
+  final Map<String, String?> _mentionUserIdCache = {};
+
   /// 构建包含@提及的评论内容（可点击的@链接）
   Widget _buildCommentContentWithMentions(
     String content,
@@ -1088,14 +1091,34 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     int lastIndex = 0;
 
     // 建立@用户名到用户ID的映射
+    // 注意：我们需要确保这里的键和正则表达式匹配的用户名一致
     final Map<String, String> mentionMap = {};
     for (final mention in mentions) {
-      mentionMap[mention.name.toLowerCase()] = mention.id;
+      // 使用多种可能的名字作为键，确保能匹配到
+      final lowerName = mention.name.toLowerCase();
+      mentionMap[lowerName] = mention.id;
+
+      // 如果名字包含@，也添加@前缀的版本
+      if (lowerName.contains('@')) {
+        final prefix = lowerName.substring(0, lowerName.indexOf('@'));
+        mentionMap[prefix] = mention.id;
+      }
+
+      // 如果名字是email格式，也添加email前缀
+      if (mention.name.contains('@')) {
+        final emailPrefix = mention.name.substring(0, mention.name.indexOf('@')).toLowerCase();
+        mentionMap[emailPrefix] = mention.id;
+      }
     }
 
     print(
-      '[@功能] _buildCommentContentWithMentions: content="$content", mentions=${mentions.map((m) => m.name).toList()}',
+      '[@功能] _buildCommentContentWithMentions: content="$content", mentions=${mentions.map((m) => '${m.name}(${m.id})').toList()}, mentions长度=${mentions.length}',
     );
+
+    // 额外调试：检查content中是否有@符号
+    final hasAtSymbol = content.contains('@');
+    print('[@功能] content中包含@符号: $hasAtSymbol');
+    print('[@功能] mentionMap keys: ${mentionMap.keys.toList()}');
     print('[@功能] mentionMap: $mentionMap');
 
     for (final match in mentionRegex.allMatches(content)) {
@@ -1113,14 +1136,16 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       final mentionText = match.group(0)!; // 包含@的完整文本，如 "@用户名"
       final userName = match.group(1)!; // 用户名部分
 
-      print('[@功能] 匹配到@用户名: "$userName"');
+      print('[@功能] 匹配到@用户名: "$userName", 查找键: "${userName.toLowerCase()}"');
 
       // 从mentions列表中查找对应的用户ID
       final userId = mentionMap[userName.toLowerCase()];
 
+      print('[@功能] mentionMap.containsKey("${userName.toLowerCase()}"): ${mentionMap.containsKey(userName.toLowerCase())}');
+
       if (userId != null) {
         // 如果用户ID存在，显示为可点击的蓝色链接
-        print('[@功能] 找到用户ID: $userId，创建可点击链接');
+        print('[@功能] 从mentions找到用户ID: $userId，创建可点击链接');
         spans.add(
           TextSpan(
             text: mentionText,
@@ -1142,14 +1167,58 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           ),
         );
       } else {
-        // 如果用户ID不存在（用户直接输入@用户名，没有从列表选择），显示为普通文本
-        print('[@功能] 未找到用户ID，显示为普通文本');
-        spans.add(
-          TextSpan(
-            text: mentionText,
-            style: const TextStyle(fontSize: 13, color: Colors.black87),
-          ),
-        );
+        // 如果mentions中没有找到，尝试通过API搜索用户
+        print('[@功能] mentions中未找到用户ID: $userName，尝试API搜索');
+
+        // 检查缓存
+        if (_mentionUserIdCache.containsKey(userName)) {
+          final cachedUserId = _mentionUserIdCache[userName];
+          if (cachedUserId != null) {
+            print('[@功能] 从缓存找到用户ID: $cachedUserId');
+            spans.add(
+              TextSpan(
+                text: mentionText,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.blue,
+                  fontWeight: FontWeight.w500,
+                ),
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ProfilePage(userId: cachedUserId),
+                      ),
+                    );
+                  },
+              ),
+            );
+          } else {
+            spans.add(
+              TextSpan(
+                text: mentionText,
+                style: const TextStyle(fontSize: 13, color: Colors.black87),
+              ),
+            );
+          }
+        } else {
+          // 异步搜索用户
+          _searchUserByName(userName).then((userId) {
+            _mentionUserIdCache[userName] = userId;
+            // 搜索完成后不重新构建，因为这会改变UI
+            // 用户需要刷新页面或重新进入才能看到可点击链接
+          }).catchError((e) {
+            _mentionUserIdCache[userName] = null;
+          });
+
+          spans.add(
+            TextSpan(
+              text: mentionText,
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
+            ),
+          );
+        }
       }
 
       lastIndex = match.end;
@@ -1166,6 +1235,57 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     }
 
     return RichText(text: TextSpan(children: spans));
+  }
+
+  /// 通过用户名搜索用户ID（用于@功能）
+  Future<String?> _searchUserByName(String userName) async {
+    try {
+      print('[@功能] 搜索用户: $userName');
+      final resp = await ApiService.searchUsers(
+        query: userName,
+        type: 'all',
+        pageSize: 10,
+      );
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>?;
+        if (body != null) {
+          final users = (body['users'] as List? ?? []);
+          print('[@功能] 搜索到 ${users.length} 个用户');
+
+          // 精确匹配：先尝试匹配displayName，再尝试匹配email前缀
+          for (final user in users) {
+            final displayName = user['displayName']?.toString() ?? '';
+            final email = user['email']?.toString() ?? '';
+            final emailPrefix = email.contains('@') ? email.split('@')[0] : '';
+
+            // 精确匹配displayName或email前缀
+            if (displayName.toLowerCase() == userName.toLowerCase() ||
+                emailPrefix.toLowerCase() == userName.toLowerCase()) {
+              final userId = user['id']?.toString();
+              if (userId != null) {
+                print('[@功能] 找到匹配用户: id=$userId, displayName=$displayName');
+                return userId;
+              }
+            }
+          }
+
+          // 如果没有精确匹配，使用第一个结果
+          if (users.isNotEmpty) {
+            final user = users[0];
+            final userId = user['id']?.toString();
+            if (userId != null) {
+              print('[@功能] 使用第一个搜索结果: id=$userId');
+              return userId;
+            }
+          }
+        }
+      }
+      print('[@功能] 未找到用户: $userName');
+      return null;
+    } catch (e) {
+      print('[@功能] 搜索用户失败: $e');
+      return null;
+    }
   }
 
   /// 通过用户名导航到用户主页
@@ -1245,6 +1365,13 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       _currentReplyTo = comment;
       _currentReplyParentId = parentId ?? comment.id;
       _commentController.text = '';
+      // 重置@功能状态
+      _showMentionList = false;
+      _mentionCandidates = [];
+      _mentionQuery = '';
+      _mentionStartIndex = -1;
+      _selectedMentions.clear();
+      _isAutoAddingMention = false;
       //_commentController.text = '@${comment.author.name} ';
     });
     _commentFocusNode.requestFocus();
@@ -1255,6 +1382,13 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       _currentReplyTo = null;
       _currentReplyParentId = null;
       _commentController.text = '';
+      // 重置@功能状态
+      _showMentionList = false;
+      _mentionCandidates = [];
+      _mentionQuery = '';
+      _mentionStartIndex = -1;
+      _selectedMentions.clear();
+      _isAutoAddingMention = false;
     });
   }
 
@@ -1370,8 +1504,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         if (newComment.parentId == null) {
           // 顶层评论，插入到顶部
           _comments.insert(0, newComment);
-          commentCount += 1;
-          widget.post.commentsCount = commentCount;
+          widget.post.commentsCount += 1;
         } else {
           // 找到父评论并追加到 replies
           final pIdx = _comments.indexWhere((c) => c.id == newComment.parentId);
@@ -1379,12 +1512,13 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             // 防止重复
             if (!_comments[pIdx].replies.any((r) => r.id == newComment.id)) {
               _comments[pIdx].replies.add(newComment);
+              // 楼中楼回复也需要计入总数
+              widget.post.commentsCount += 1;
             }
           } else {
             // parent评论不在当前页/列表中，作为降级处理，把回复也插为顶层（可根据需求改为忽略）
             _comments.insert(0, newComment);
-            commentCount += 1;
-            widget.post.commentsCount = commentCount;
+            widget.post.commentsCount += 1;
           }
         }
       });
@@ -1459,14 +1593,13 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     setState(() {
       // 从顶层删除
       final tIdx = _comments.indexWhere((c) => c.id == commentId);
-      if (tIdx != -1) {
+        if (tIdx != -1) {
         final deletedComment = _comments[tIdx];
         final deletedCount = 1 + deletedComment.replies.length;
         _comments.removeAt(tIdx);
-        commentCount = (commentCount >= deletedCount)
-            ? commentCount - deletedCount
+        widget.post.commentsCount = (widget.post.commentsCount >= deletedCount)
+            ? widget.post.commentsCount - deletedCount
             : 0;
-        widget.post.commentsCount = commentCount;
         return;
       }
 
@@ -1490,8 +1623,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             replies: updatedReplies,
             createdAt: parent.createdAt,
           );
-          commentCount = (commentCount > 0) ? commentCount - 1 : 0;
-          widget.post.commentsCount = commentCount;
+          widget.post.commentsCount = (widget.post.commentsCount > 0) ? widget.post.commentsCount - 1 : 0;
           return;
         }
       }
@@ -1759,6 +1891,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         }
       }
 
+      print('[@功能] 提交评论 - actualMentionedNames: $actualMentionedNames');
+      print('[@功能] 提交评论 - _selectedMentions: ${_selectedMentions.map((k, v) => MapEntry(k, '${v.name}(${v.id})'))}');
+      print('[@功能] 提交评论 - mentionIds: $mentionIds');
+
       // 如果_selectedMentions中没有匹配到，尝试从文本中直接解析（处理手动输入的情况）
       // 但这种情况下的@用户名不会被识别为有效的mention，因为不在_selectedMentions中
 
@@ -1794,6 +1930,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           _mentionQuery = '';
           _mentionStartIndex = -1;
           _mentionCandidates.clear(); // 清空候选列表
+          // 手动增加评论总数（因为WebSocket推送不给自己）
+          widget.post.commentsCount += 1;
         });
 
         // 失去焦点，关闭键盘
@@ -2852,10 +2990,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             // 计算需要减少的评论数（包括所有子回复）
             final deletedCount = 1 + comment.replies.length;
             _comments.removeWhere((c) => c.id == comment.id);
-            commentCount = (commentCount >= deletedCount)
-                ? commentCount - deletedCount
+            widget.post.commentsCount = (widget.post.commentsCount >= deletedCount)
+                ? widget.post.commentsCount - deletedCount
                 : 0;
-            widget.post.commentsCount = commentCount;
           } else if (parentComment != null) {
             // 找到父评论的索引
             final parentIndex = _comments.indexWhere(
@@ -2877,8 +3014,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                 replies: updatedReplies,
                 createdAt: parentComment.createdAt,
               );
-              commentCount = (commentCount > 0) ? commentCount - 1 : 0;
-              widget.post.commentsCount = commentCount;
+              widget.post.commentsCount = (widget.post.commentsCount > 0) ? widget.post.commentsCount - 1 : 0;
             }
           }
         });
@@ -2918,7 +3054,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             onPressed: () => FocusScope.of(context).requestFocus(FocusNode()),
           ),
           const SizedBox(width: 8),
-          Text('$commentCount'),
+          Text('${widget.post.commentsCount}'),
           const Spacer(),
           IconButton(
             icon: Icon(isSaved ? Icons.bookmark : Icons.bookmark_border),
@@ -2943,7 +3079,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           child: Row(
             children: [
               Text(
-                '评论 ($commentCount)',
+                '评论 (${widget.post.commentsCount})',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               const Spacer(),

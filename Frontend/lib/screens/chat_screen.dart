@@ -432,9 +432,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: _buildAppBar(),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: _buildAppBar(scheme),
       body: Column(
         children: [
           Expanded(
@@ -446,21 +447,21 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
+  PreferredSizeWidget _buildAppBar(ColorScheme scheme) {
     final conversation = widget.conversation ?? _loadedConversation;
 
     if (conversation == null) {
       return AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: scheme.surface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: scheme.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           '加载中...',
           style: TextStyle(
-            color: Colors.black87,
+            color: scheme.onSurface,
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
@@ -469,10 +470,10 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     return AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: scheme.surface,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Colors.black87),
+        icon: Icon(Icons.arrow_back, color: scheme.onSurface),
         onPressed: () => Navigator.pop(context),
       ),
       title: GestureDetector(
@@ -492,8 +493,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   Text(
                     conversation.displayName,
-                    style: const TextStyle(
-                      color: Colors.black87,
+                    style: TextStyle(
+                      color: scheme.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
@@ -502,7 +503,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     Text(
                       '$_typingUser 正在输入...',
                       style: TextStyle(
-                        color: const Color(0xFF1976D2),
+                        color: scheme.primary,
                         fontSize: 12,
                       ),
                     )
@@ -510,7 +511,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     Text(
                       '${conversation.participants.length} 位成员',
                       style: TextStyle(
-                        color: Colors.grey[500],
+                        color: scheme.onSurfaceVariant,
                         fontSize: 12,
                       ),
                     ),
@@ -522,7 +523,7 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.more_vert, color: Colors.black87),
+          icon: Icon(Icons.more_vert, color: scheme.onSurface),
           onPressed: _showMoreOptions,
         ),
       ],
@@ -637,19 +638,20 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildDateHeader(DateTime date) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 16),
       child: Center(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.grey[200],
+            color: scheme.surfaceVariant,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
             _formatDateHeader(date),
             style: TextStyle(
-              color: Colors.grey[600],
+              color: scheme.onSurfaceVariant,
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -713,10 +715,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildInputArea() {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),

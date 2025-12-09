@@ -47,7 +47,16 @@ import '../utils/font_utils.dart';
 
 /// 首页入口组件（Stateful）：承载发现流与分区切换
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({
+    Key? key,
+    this.themeModeNotifier,
+    this.onThemeModeChanged,
+    this.onThemeToggle,
+  }) : super(key: key);
+
+  final ValueNotifier<ThemeMode>? themeModeNotifier;
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
+  final VoidCallback? onThemeToggle;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -699,7 +708,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -725,10 +734,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // 顶部栏
   Widget _buildTopBar() {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: scheme.surface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -758,7 +768,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   text: 'PaperHub',
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: scheme.onSurface,
                 ),
               ),
             ],
@@ -779,13 +789,38 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
 
           // 搜索图标
-          InkWell(
-            onTap: _onSearchTap,
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-              padding: const EdgeInsets.all(6.0),
-              child: Icon(Icons.search, color: AppColors.textSecondary, size: 22),
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.themeModeNotifier != null)
+                ValueListenableBuilder<ThemeMode>(
+                  valueListenable: widget.themeModeNotifier!,
+                  builder: (_, mode, __) {
+                    final isDark = mode == ThemeMode.dark;
+                    return IconButton(
+                      tooltip: isDark ? '切换日间模式' : '切换夜间模式',
+                      icon: Icon(
+                        isDark ? Icons.dark_mode : Icons.light_mode,
+                        color: scheme.onSurface.withOpacity(0.8),
+                      ),
+                      onPressed: widget.onThemeToggle ??
+                          () {
+                            final next = isDark ? ThemeMode.light : ThemeMode.dark;
+                            widget.onThemeModeChanged?.call(next);
+                          },
+                    );
+                  },
+                ),
+              InkWell(
+                onTap: _onSearchTap,
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.all(6.0),
+                  child: Icon(Icons.search,
+                      color: scheme.onSurface.withOpacity(0.7), size: 22),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1062,6 +1097,10 @@ class _HomeScreenState extends State<HomeScreen> {
           final discipline = kMainDisciplines[index];
           final selected = discipline == _currentZoneDiscipline;
           final color = kDisciplineColors[discipline] ?? Colors.blue;
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          final textColor = selected
+              ? Colors.white
+              : (isDark ? Colors.white70 : Colors.black87);
           return GestureDetector(
             onTap: () {
               if (_currentZoneDiscipline == discipline) return;
@@ -1078,10 +1117,14 @@ class _HomeScreenState extends State<HomeScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: selected ? color.withOpacity(0.12) : Colors.transparent,
+                color: selected
+                    ? color.withOpacity(isDark ? 0.3 : 0.12)
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: selected ? color : Colors.grey.shade300,
+                  color: selected
+                      ? color
+                      : (isDark ? Colors.white24 : Colors.grey.shade300),
                 ),
               ),
               child: Center(
@@ -1091,7 +1134,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     fontSize: 14,
                     fontWeight:
                         selected ? FontWeight.w600 : FontWeight.normal,
-                    color: selected ? color : Colors.black87,
+                    color: textColor,
                   ),
                 ),
               ),
