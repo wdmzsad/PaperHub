@@ -11,6 +11,7 @@ import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/chat_screen.dart';
 import 'services/local_storage.dart';
+import 'services/notification_websocket_service.dart';
 import 'constants/app_colors.dart';
 import 'utils/font_utils.dart';
 
@@ -236,6 +237,25 @@ class _SplashOrLoginState extends State<SplashOrLogin> {
   void initState() {
     super.initState();
     _checkToken();
+    _connectWebSocket();
+  }
+
+  Future<void> _connectWebSocket() async {
+    // 延迟连接WebSocket，确保其他初始化完成
+    await Future.delayed(const Duration(seconds: 1));
+
+    // 检查用户是否已登录
+    final token = LocalStorage.instance.read('accessToken');
+    if (token == null || token.isEmpty) {
+      debugPrint('用户未登录，不连接WebSocket');
+      return;
+    }
+
+    try {
+      await NotificationWebSocketService.instance.connect();
+    } catch (e) {
+      debugPrint('WebSocket连接失败: $e');
+    }
   }
 
   Future<void> _checkToken() async {

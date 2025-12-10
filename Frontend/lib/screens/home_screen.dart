@@ -1100,9 +1100,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final selected = discipline == _currentZoneDiscipline;
           final color = kDisciplineColors[discipline] ?? Colors.blue;
           final isDark = Theme.of(context).brightness == Brightness.dark;
-          final textColor = selected
-              ? Colors.white
-              : (isDark ? Colors.white70 : Colors.black87);
+          final textColor = isDark ? Colors.white : Colors.black87;
           return GestureDetector(
             onTap: () {
               if (_currentZoneDiscipline == discipline) return;
