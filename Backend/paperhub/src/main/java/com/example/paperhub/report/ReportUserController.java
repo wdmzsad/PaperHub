@@ -7,12 +7,17 @@ import com.example.paperhub.admin.ReportTargetType;
 import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
 import com.example.paperhub.auth.UserRole;
+import com.example.paperhub.post.Post;
+import com.example.paperhub.post.PostRepository;
+import com.example.paperhub.post.PostStatus;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -22,13 +27,16 @@ public class ReportUserController {
 
     private final AdminReportRepository reportRepository;
     private final UserRepository userRepository;
+    private final PostRepository postRepository;
 
-    public ReportUserController(AdminReportRepository reportRepository, UserRepository userRepository) {
+    public ReportUserController(AdminReportRepository reportRepository, UserRepository userRepository, PostRepository postRepository) {
         this.reportRepository = reportRepository;
         this.userRepository = userRepository;
+        this.postRepository = postRepository;
     }
 
     @PostMapping("/user/{userId}")
+    @Transactional
     public ResponseEntity<?> reportUser(
             @PathVariable Long userId,
             @Valid @RequestBody ReportUserRequest request,
@@ -64,6 +72,10 @@ public class ReportUserController {
             report.setUpdatedAt(Instant.now());
 
             reportRepository.save(report);
+
+            // 将被举报用户状态设置为 AUDIT
+            reportedUser.setStatus(com.example.paperhub.auth.UserStatus.AUDIT);
+            userRepository.save(reportedUser);
 
             return ResponseEntity.ok(Map.of("success", true, "message", "举报成功"));
         } catch (IllegalArgumentException e) {

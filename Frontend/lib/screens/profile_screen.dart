@@ -235,8 +235,10 @@ class _ProfilePageState extends State<ProfilePage>
                     crossAxisCount: 2,
                     crossAxisSpacing: 3,
                     mainAxisSpacing: 3,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 3,
+                      vertical: 3,
+                    ),
                     itemCount: posts.length,
                     itemBuilder: (ctx, index) {
                       final post = posts[index];
@@ -1358,7 +1360,9 @@ class _ProfilePageState extends State<ProfilePage>
                 : Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: directions.map((d) => _buildDirectionChip(d, scheme)).toList(),
+                    children: directions
+                        .map((d) => _buildDirectionChip(d, scheme))
+                        .toList(),
                   ),
           ),
         ],
@@ -1402,7 +1406,7 @@ class _ProfilePageState extends State<ProfilePage>
       ),
       child: Column(
         children: [
-          const TabBar(
+          TabBar(
             labelColor: Colors.black,
             indicatorColor: Colors.blueAccent,
             tabs: [

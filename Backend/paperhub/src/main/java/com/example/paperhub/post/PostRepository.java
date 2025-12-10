@@ -58,6 +58,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
      */
     Page<Post> findByAuthorIdAndStatus(Long authorId, PostStatus status, Pageable pageable);
 
+    java.util.List<Post> findByAuthorIdAndStatus(Long authorId, PostStatus status);
+
     /**
      * 查询作者的所有帖子（包括下架的）
      */

@@ -247,7 +247,7 @@ public class AdminService {
         if (u.getRole() == UserRole.SUPER_ADMIN || u.getRole() == UserRole.ADMIN) {
             throw new IllegalArgumentException("不能禁言管理员或超级管理员");
         }
-        u.setStatus(UserStatus.MUTED);
+        u.setStatus(UserStatus.SILENT);
         u.setMuteUntil(muteUntil);
         userRepository.save(u);
     }
@@ -260,11 +260,62 @@ public class AdminService {
         }
         User u = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
-        if (u.getStatus() == UserStatus.MUTED) {
+        if (u.getStatus() == UserStatus.SILENT) {
             u.setStatus(UserStatus.NORMAL);
             u.setMuteUntil(null);
             userRepository.save(u);
         }
+    }
+
+    // ========== 用户审核 ==========
+
+    @Transactional
+    public void approveUser(Long targetUserId, User currentUser) {
+        if (currentUser == null || (currentUser.getRole() != UserRole.ADMIN
+                && currentUser.getRole() != UserRole.SUPER_ADMIN)) {
+            throw new IllegalArgumentException("仅管理员可以审核用户");
+        }
+        User u = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        if (u.getStatus() == UserStatus.AUDIT) {
+            u.setStatus(UserStatus.NORMAL);
+            userRepository.save(u);
+        } else {
+            throw new IllegalArgumentException("用户不在待审核状态");
+        }
+    }
+
+    @Transactional
+    public void rejectUser(Long targetUserId, String action, String reason, User currentUser) {
+        if (currentUser == null || (currentUser.getRole() != UserRole.ADMIN
+                && currentUser.getRole() != UserRole.SUPER_ADMIN)) {
+            throw new IllegalArgumentException("仅管理员可以审核用户");
+        }
+        User u = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        if (u.getStatus() != UserStatus.AUDIT) {
+            throw new IllegalArgumentException("用户不在待审核状态");
+        }
+
+        // 根据 action 执行不同的处理
+        switch (action.toUpperCase()) {
+            case "BAN":
+                u.setStatus(UserStatus.BANNED);
+                u.setMuteUntil(null);
+                break;
+            case "SILENT":
+                u.setStatus(UserStatus.SILENT);
+                // 默认禁言 7 天
+                u.setMuteUntil(Instant.now().plus(java.time.Duration.ofDays(7)));
+                break;
+            case "NORMAL":
+                u.setStatus(UserStatus.NORMAL);
+                u.setMuteUntil(null);
+                break;
+            default:
+                throw new IllegalArgumentException("无效的处理动作");
+        }
+        userRepository.save(u);
     }
 
     private void ensureSuperAdmin(User currentUser) {

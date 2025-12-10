@@ -67,8 +67,7 @@ public class PostService {
             CommentRepository commentRepository,
             CommentLikeRepository commentLikeRepository,
             ReportPostRepository reportPostRepository,
-            com.example.paperhub.websocket.WebSocketService webSocketService) {
-            ReportPostRepository reportPostRepository,
+            com.example.paperhub.websocket.WebSocketService webSocketService,
             BrowseHistoryRepository browseHistoryRepository,
             NotificationRepository notificationRepository) {
         this.postRepository = postRepository;
@@ -510,7 +509,7 @@ public class PostService {
         if (user.getStatus() == UserStatus.BANNED) {
             throw new IllegalArgumentException("账号已被封禁，无法执行此操作");
         }
-        if (user.getStatus() == UserStatus.MUTED) {
+        if (user.getStatus() == UserStatus.SILENT) {
             Instant muteUntil = user.getMuteUntil();
             if (muteUntil == null || Instant.now().isBefore(muteUntil)) {
                 throw new IllegalArgumentException("账号被禁言中，暂时无法发帖");

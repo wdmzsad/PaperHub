@@ -296,83 +296,93 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       final uri = Uri.parse('${AppEnv.apiBaseUrl}/posts/upload');
       final request = http.MultipartRequest('POST', uri);
 
-    if (fileType == 'image') {
-      if (kIsWeb) {
-        final bytes = await file.readAsBytes();
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'file',
-            bytes,
-            filename: file.name,
-            contentType: MediaType('image', file.mimeType?.split('/').last ?? 'jpeg'),
-          ),
-        );
+      if (fileType == 'image') {
+        if (kIsWeb) {
+          final bytes = await file.readAsBytes();
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'file',
+              bytes,
+              filename: file.name,
+              contentType: MediaType(
+                'image',
+                file.mimeType?.split('/').last ?? 'jpeg',
+              ),
+            ),
+          );
+        } else {
+          request.files.add(
+            await http.MultipartFile.fromPath('file', file.path),
+          );
+        }
+      } else if (fileType == 'pdf') {
+        if (kIsWeb) {
+          final bytes = await file.readAsBytes();
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'file',
+              bytes,
+              filename: file.name,
+              contentType: MediaType('application', 'pdf'),
+            ),
+          );
+        } else {
+          request.files.add(
+            await http.MultipartFile.fromPath('file', file.path),
+          );
+        }
       } else {
-        request.files.add(await http.MultipartFile.fromPath('file', file.path));
+        print('不支持的文件类型');
+        return null;
       }
-    } else if (fileType == 'pdf') {
-      if (kIsWeb) {
-        final bytes = await file.readAsBytes();
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'file',
-            bytes,
-            filename: file.name,
-            contentType: MediaType('application', 'pdf'),
-          ),
-        );
-      } else {
-        request.files.add(await http.MultipartFile.fromPath('file', file.path));
-      }
-    } else {
-      print('不支持的文件类型');
-      return null;
-    }
 
-    final response = await request.send();
-    if (response.statusCode == 200) {
-      final respStr = await response.stream.bytesToString();
-      final data = jsonDecode(respStr) as Map<String, dynamic>;
-      return data['url'] as String?;
-    } else {
-      print('上传失败: ${response.statusCode}');
+      final response = await request.send();
+      if (response.statusCode == 200) {
+        final respStr = await response.stream.bytesToString();
+        final data = jsonDecode(respStr) as Map<String, dynamic>;
+        return data['url'] as String?;
+      } else {
+        print('上传失败: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('上传文件失败: $e');
       return null;
     }
-  } catch (e) {
-    print('上传文件失败: $e');
-    return null;
   }
-}
 
   // 发布 / 编辑 笔记
-  Future<void> _publishNote() async {
+  Future<void> _publishNote({
+    String? statusOverride,
+    String? customSuccessMessage,
+  }) async {
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
 
     // 不允许为空的内容
     if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入标题')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入标题')));
       return;
     }
     if (content.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入正文')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入正文')));
       return;
     }
     // 只有“新建笔记”强制要求必须选择图片；编辑时可以只改文字 / 链接
     if (!_isEditing && _images.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请添加图片')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请添加图片')));
       return;
     }
     if (_selectedDiscipline == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请选择一个学科分区')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请选择一个学科分区')));
       return;
     }
 
@@ -417,9 +427,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           if (_pdfFileBytes == null) {
             if (mounted) {
               Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('PDF 文件数据异常，请重新选择')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('PDF 文件数据异常，请重新选择')));
             }
             return;
           }
@@ -441,12 +451,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       }
 
       // 4) 外部链接（过滤空字符串）
-      final links =
-          _externalLinks.where((e) => e.trim().isNotEmpty).toList();
+      final links = _externalLinks.where((e) => e.trim().isNotEmpty).toList();
 
       // 5) arXiv 相关
-      final String? arxivPublishedDate =
-          _arxivMetadata?.publishedDateFormatted;
+      final String? arxivPublishedDate = _arxivMetadata?.publishedDateFormatted;
       final List<String>? arxivAuthors = _arxivMetadata?.authors;
       final List<String>? arxivCategories = _arxivMetadata?.categories;
 
@@ -472,7 +480,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           arxivAuthors: arxivAuthors,
           arxivPublishedDate: arxivPublishedDate,
           arxivCategories: arxivCategories,
-          references: _selectedReferences.isNotEmpty ? _selectedReferences : null,
+          references: _selectedReferences.isNotEmpty
+              ? _selectedReferences
+              : null,
+          status: normalizedStatus,
         );
       } else {
         // === 新建帖子 ===
@@ -489,7 +500,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           arxivAuthors: arxivAuthors,
           arxivPublishedDate: arxivPublishedDate,
           arxivCategories: arxivCategories,
-          references: _selectedReferences.isNotEmpty ? _selectedReferences : null,
+          references: _selectedReferences.isNotEmpty
+              ? _selectedReferences
+              : null,
+          status: normalizedStatus,
         );
       }
 
@@ -512,7 +526,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(_isEditing ? '笔记已更新' : '发布成功'),
+              content: Text(
+                customSuccessMessage ?? (_isEditing ? '笔记已更新' : '发布成功'),
+              ),
             ),
           );
           // 返回 true，告诉上一个页面“需要刷新”
@@ -523,20 +539,16 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             ? body['message'].toString()
             : (_isEditing ? '保存失败' : '发布失败');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(msg)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(msg)));
         }
       }
     } catch (e) {
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _isEditing ? '保存失败，网络错误' : '发布失败，网络错误',
-            ),
-          ),
+          SnackBar(content: Text(_isEditing ? '保存失败，网络错误' : '发布失败，网络错误')),
         );
       }
     }
@@ -546,9 +558,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   Future<void> _fetchArxivMetadata() async {
     final input = _arxivController.text.trim();
     if (input.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入 arXiv ID 或链接')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入 arXiv ID 或链接')));
       return;
     }
 
@@ -558,23 +570,24 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
     try {
       final metadata = await ArxivService.fetchMetadata(input);
-      
+
       setState(() {
         _arxivMetadata = metadata;
         _arxivId = metadata.id;
-        
+
         // 自动填充标题（如果为空）
         if (_titleController.text.trim().isEmpty) {
           _titleController.text = metadata.title;
         }
-        
+
         // 填充元数据
         _doi = metadata.doi;
         _journal = metadata.journal;
         _year = metadata.yearFormatted;
-        
+
         // 如果摘要存在且内容为空，可以添加到内容中
-        if (metadata.abstract != null && _contentController.text.trim().isEmpty) {
+        if (metadata.abstract != null &&
+            _contentController.text.trim().isEmpty) {
           _contentController.text = '摘要：${metadata.abstract}';
         }
       });
@@ -716,7 +729,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           child: OutlinedButton(
             onPressed: () => _publishNote(
               statusOverride: 'DRAFT',
-              customSuccessMessage: '草稿已保存',
+              customSuccessMessage: '已保存为草稿',
             ),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -842,7 +855,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   color: Colors.grey[200],
                   borderRadius: BorderRadius.circular(8),
                   image: DecorationImage(
-                    image: previewImage,   // ← 用上面选择好的 ImageProvider
+                    image: previewImage, // ← 用上面选择好的 ImageProvider
                     fit: BoxFit.cover,
                   ),
                 ),
@@ -894,10 +907,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       children: [
         const Text(
           'arXiv 文献信息',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Row(
@@ -926,7 +936,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   : const Icon(Icons.search, size: 18),
               label: const Text('获取'),
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
               ),
             ),
           ],
@@ -1008,7 +1021,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       'arXiv ID: $_arxivId',
-                      style: TextStyle(fontSize: 11, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[600],
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ),
               ],
@@ -1027,10 +1044,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         const SizedBox(height: 16),
         const Text(
           '外部链接',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Row(
@@ -1051,9 +1065,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 final text = _linkController.text.trim();
 
                 if (text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('链接不能为空')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('链接不能为空')));
                   return;
                 }
 
@@ -1072,7 +1086,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               icon: const Icon(Icons.add_link, size: 18),
               label: const Text('添加'),
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
               ),
             ),
           ],
@@ -1086,10 +1103,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               return Chip(
                 label: SizedBox(
                   width: 160,
-                  child: Text(
-                    link,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(link, overflow: TextOverflow.ellipsis),
                 ),
                 onDeleted: () {
                   setState(() {
@@ -1115,10 +1129,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           children: [
             const Text(
               '选择分区',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(width: 6),
             Container(
@@ -1143,12 +1154,23 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               children: [
                 if (_selectedDiscipline != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
-                      color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.1) ?? const Color(0xFF1976D2).withOpacity(0.1),
+                      color:
+                          kDisciplineColors[_selectedDiscipline]?.withOpacity(
+                            0.1,
+                          ) ??
+                          const Color(0xFF1976D2).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.3) ?? const Color(0xFF1976D2).withOpacity(0.3),
+                        color:
+                            kDisciplineColors[_selectedDiscipline]?.withOpacity(
+                              0.3,
+                            ) ??
+                            const Color(0xFF1976D2).withOpacity(0.3),
                         width: 1,
                       ),
                     ),
@@ -1156,7 +1178,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                       _selectedDiscipline!,
                       style: TextStyle(
                         fontSize: 14,
-                        color: kDisciplineColors[_selectedDiscipline] ?? const Color(0xFF1976D2),
+                        color:
+                            kDisciplineColors[_selectedDiscipline] ??
+                            const Color(0xFF1976D2),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1397,7 +1421,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       return kMainDisciplines; // 管理员可以看到所有分区
     } else {
       // 普通用户或角色未加载时隐藏"公告区"
-      return kMainDisciplines.where((discipline) => discipline != '公告区').toList();
+      return kMainDisciplines
+          .where((discipline) => discipline != '公告区')
+          .toList();
     }
   }
 
@@ -1458,9 +1484,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           _filteredTagSuggestions.clear();
           if (tagInput.isNotEmpty) {
             _filteredTagSuggestions.addAll(
-              availableTags.where((tag) =>
-                tag.toLowerCase().contains(tagInput.toLowerCase())
-              ).toList()
+              availableTags
+                  .where(
+                    (tag) => tag.toLowerCase().contains(tagInput.toLowerCase()),
+                  )
+                  .toList(),
             );
           }
 
@@ -1509,9 +1537,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       final newText = beforeHash + '#$tag ';
       _contentController.text = newText;
       _contentController.selection = TextSelection.fromPosition(
-        TextPosition(offset: newText.length)
+        TextPosition(offset: newText.length),
       );
-
 
       // 隐藏建议
       setState(() {
@@ -1525,7 +1552,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   // 处理自定义标签完成（按空格或回车）
   void _completeCustomTag() {
-    if (_currentTagInput.isNotEmpty && !_filteredTagSuggestions.contains(_currentTagInput)) {
+    if (_currentTagInput.isNotEmpty &&
+        !_filteredTagSuggestions.contains(_currentTagInput)) {
       // 这是一个自定义标签
       final currentText = _contentController.text;
       final lastIndex = currentText.lastIndexOf('#');
@@ -1543,7 +1571,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         final newText = beforeHash + '#$_currentTagInput ';
         _contentController.text = newText;
         _contentController.selection = TextSelection.fromPosition(
-          TextPosition(offset: newText.length)
+          TextPosition(offset: newText.length),
         );
       }
     }
@@ -1995,34 +2023,26 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 
-    // PDF 附件区域
+  // PDF 附件区域
   Widget _buildPdfSection(bool hasPdf) {
     return Row(
       children: [
         ElevatedButton.icon(
           onPressed: _pickPdf,
           icon: const Icon(Icons.picture_as_pdf_outlined),
-          label: Text(
-            hasPdf ? '替换 PDF' : '添加 PDF 附件（仅一篇）',
-          ),
+          label: Text(hasPdf ? '替换 PDF' : '添加 PDF 附件（仅一篇）'),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.grey[100],
             foregroundColor: Colors.black87,
             elevation: 0,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 10,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           ),
         ),
         const SizedBox(width: 12),
         if (hasPdf)
           Expanded(
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.grey[100],
                 borderRadius: BorderRadius.circular(8),
@@ -2043,7 +2063,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   IconButton(
                     onPressed: () {
                       if (_pdfFile != null) {
-                        _removePdf();        // 清空新选 PDF
+                        _removePdf(); // 清空新选 PDF
                       } else {
                         _removeExistingPdf(); // 清空旧的 PDF URL
                       }
@@ -2069,40 +2089,40 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     final bool isAdminRejectedDraft = isDraft && hasHiddenReason;
 
     return Theme(
-         data: ThemeData.light(),
-         child:Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        elevation: 0.3,
+      data: ThemeData.light(),
+      child: Scaffold(
         backgroundColor: Colors.white,
-        automaticallyImplyLeading: false,
-        title: Text(
-          _isEditing ? '编辑笔记' : '发布笔记',
-          style: const TextStyle(color: Colors.black),
+        appBar: AppBar(
+          elevation: 0.3,
+          backgroundColor: Colors.white,
+          automaticallyImplyLeading: false,
+          title: Text(
+            _isEditing ? '编辑笔记' : '发布笔记',
+            style: const TextStyle(color: Colors.black),
+          ),
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.close, color: Colors.black),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+          actions: const [SizedBox(width: 48)],
         ),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.black),
-          onPressed: () => Navigator.of(context).maybePop();
-        ),
-        actions: const [SizedBox(width: 48)],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (isAdminRejectedDraft) ...[
-                _buildAdminFeedbackBanner(
-                  editingPost!.draftReason ?? editingPost.hiddenReason ?? '',
-                ),
-                const SizedBox(height: 16),
-              ],
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (isAdminRejectedDraft) ...[
+                  _buildAdminFeedbackBanner(
+                    editingPost!.draftReason ?? editingPost.hiddenReason ?? '',
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
-              //选择图片
-              _buildImageGrid(),
-              const SizedBox(height: 16),
+                //选择图片
+                _buildImageGrid(),
+                const SizedBox(height: 16),
 
                 // 标题
                 TextField(
@@ -2168,8 +2188,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                       },
                       icon: Icon(
                         _showAdvancedOptions
-                            ? Icons.remove_circle_outline  // 展开时显示 -
-                            : Icons.add_circle_outline,     // 收起时显示 +
+                            ? Icons
+                                  .remove_circle_outline // 展开时显示 -
+                            : Icons.add_circle_outline, // 收起时显示 +
                         color: const Color(0xFF1976D2),
                       ),
                     ),
@@ -2206,25 +2227,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 const SizedBox(height: 24),
 
                 // 发布按钮
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _publishNote,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1976D2),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: Text(
-                      _isEditing ? '保存修改' : '发布笔记',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+                _buildBottomActions(
+                  isDraft: isDraft,
+                  isAdminRejectedDraft: isAdminRejectedDraft,
                 ),
               ],
             ),

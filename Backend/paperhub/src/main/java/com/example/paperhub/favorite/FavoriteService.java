@@ -110,7 +110,7 @@ public class FavoriteService {
         if (user.getStatus() == UserStatus.BANNED) {
             throw new IllegalArgumentException("账号已被封禁，无法执行此操作");
         }
-        if (user.getStatus() == UserStatus.MUTED) {
+        if (user.getStatus() == UserStatus.SILENT) {
             java.time.Instant muteUntil = user.getMuteUntil();
             if (muteUntil == null || java.time.Instant.now().isBefore(muteUntil)) {
                 throw new IllegalArgumentException("账号被禁言中，暂时无法收藏");

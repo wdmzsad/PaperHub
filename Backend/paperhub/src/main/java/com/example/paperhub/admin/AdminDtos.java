@@ -51,7 +51,9 @@ public class AdminDtos {
     public record SimpleUserInfo(
             Long id,
             String name,
-            String email
+            String email,
+            String role,
+            String status
     ) {}
 
     public record ReportResp(

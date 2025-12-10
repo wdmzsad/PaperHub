@@ -33,6 +33,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
 
   // ==== 用户管理 ====
   String _userSearchKeyword = '';
+  String _userStatusFilter = 'NON_NORMAL'; // 默认加载非正常状态的用户
   List<Map<String, dynamic>> _userList = [];
   bool _userLoading = false;
   int _userPage = 0;
@@ -132,6 +133,11 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
       section: _AdminSection.postReports,
       label: '帖子举报管理',
       icon: Icons.article_outlined,
+    ),
+    _AdminMenuItem(
+      section: _AdminSection.recommend,
+      label: '管理员推荐',
+      icon: Icons.person_add_outlined,
     ),
   ];
 
@@ -358,11 +364,33 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SearchBar(
-            hintText: '输入用户名或邮箱（留空则查询全部）',
-            buttonLabel: '搜索',
-            onPressed: () => _loadUsers(page: 0),
-            onChanged: (v) => _userSearchKeyword = v,
+          Row(
+            children: [
+              Expanded(
+                child: _SearchBar(
+                  hintText: '输入用户名或邮箱（留空则查询全部）',
+                  buttonLabel: '搜索',
+                  onPressed: () => _loadUsers(page: 0),
+                  onChanged: (v) => _userSearchKeyword = v,
+                ),
+              ),
+              const SizedBox(width: 12),
+              DropdownButton<String>(
+                value: _userStatusFilter,
+                items: const [
+                  DropdownMenuItem(value: 'NON_NORMAL', child: Text('非正常状态')),
+                  DropdownMenuItem(value: 'AUDIT', child: Text('待审核')),
+                  DropdownMenuItem(value: 'BANNED', child: Text('已封禁')),
+                  DropdownMenuItem(value: 'SILENT', child: Text('已禁言')),
+                  DropdownMenuItem(value: 'NORMAL', child: Text('正常')),
+                  DropdownMenuItem(value: '', child: Text('全部')),
+                ],
+                onChanged: (v) {
+                  setState(() => _userStatusFilter = v ?? 'NON_NORMAL');
+                  _loadUsers(page: 0);
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           if (_userLoading)
@@ -533,12 +561,13 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
           else
             _buildPlaceholderTable(
               headers: const [
-                '举报人(ID/昵称)',
+                '举报人',
                 '举报时间',
-                '被举报用户(ID/昵称)',
+                '被举报用户',
                 '理由',
-                '状态',
-                '操作',
+                '举报状态',
+                '用户状态',
+                '用户操作',
               ],
               rows: _reportList
                   .where((r) => r['targetType']?.toString() == 'USER')
@@ -551,11 +580,8 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                       Text(_formatReportedTarget(r)),
                       Text(r['reason']?.toString() ?? ''),
                       Text(r['status']?.toString() ?? ''),
-                      OutlinedButton(
-                        onPressed: () =>
-                            _showReportDialog(reportId: r['id'].toString()),
-                        child: const Text('处理'),
-                      ),
+                      _buildUserStatusFromReport(r),
+                      _buildUserActionsFromReport(r),
                     ],
                   )
                   .toList(),
@@ -1242,7 +1268,12 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
           borderRadius: BorderRadius.circular(12.0), // 统一圆角
         ),
         insetPadding: const EdgeInsets.all(24.0),
-        titlePadding: const EdgeInsets.only(top: 24.0, left: 24.0, right: 24.0, bottom: 16.0),
+        titlePadding: const EdgeInsets.only(
+          top: 24.0,
+          left: 24.0,
+          right: 24.0,
+          bottom: 16.0,
+        ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 24.0),
         actionsPadding: const EdgeInsets.all(24.0),
         title: Text(
@@ -1260,13 +1291,14 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (!isAudit) ...[
-              Text(
-                '举报人: ${report['reporterName']}',
-                style: TextStyle(
-                  fontSize: 14.0,
-                  color: AppColors.dialogContent,
+                Text(
+                  '举报人: ${report['reporterName']}',
+                  style: TextStyle(
+                    fontSize: 14.0,
+                    color: AppColors.dialogContent,
+                  ),
                 ),
-              ),              ],
+              ],
               const SizedBox(height: 8),
               Text(
                 '举报人: ${report['reporterName']}',
@@ -1275,18 +1307,21 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                   color: AppColors.dialogContent,
                 ),
               ),
-              Text('帖子: ${report['postTitle']}',
+              Text(
+                '帖子: ${report['postTitle']}',
                 style: TextStyle(
                   fontSize: 14.0,
                   color: AppColors.dialogContent,
                 ),
-               ),
+              ),
               const SizedBox(height: 8),
               if (!isAudit) ...[
-                Text('举报理由: ${report['description']}',
-                style: TextStyle(
-                  fontSize: 14.0,
-                  color: AppColors.dialogContent),
+                Text(
+                  '举报理由: ${report['description']}',
+                  style: TextStyle(
+                    fontSize: 14.0,
+                    color: AppColors.dialogContent,
+                  ),
                 ),
                 const SizedBox(height: 16),
               ],
@@ -1296,24 +1331,23 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                 decoration: InputDecoration(
                   labelText: '处理原因',
                   hintText: isAudit ? '请输入打回原因（审核通过可留空）' : '请输入下架或忽略的原因',
-                  border: const OutlineInputBorder(),
                   filled: true,
-                                    fillColor: AppColors.backgroundLight,
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8.0),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8.0),
-                                      borderSide: BorderSide(
-                                        color: AppColors.primary,
-                                        width: 1.5,
-                                      ),
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16.0,
-                                      vertical: 12.0,
-                                    ),
+                  fillColor: AppColors.backgroundLight,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                    borderSide: BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 12.0,
+                  ),
                 ),
                 maxLines: 3,
               ),
@@ -1551,6 +1585,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
       const pageSize = 10;
       final resp = await ApiService.adminSearchUsers(
         query: _userSearchKeyword,
+        status: _userStatusFilter,
         page: page,
         pageSize: pageSize,
       );
@@ -1815,6 +1850,100 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     await _showMuteDialog(userId);
   }
 
+  Future<void> _approveUser(String userId) async {
+    if (userId.isEmpty) return;
+    final resp = await ApiService.adminApproveUser(userId);
+    final msg = resp['body']?['message']?.toString() ?? '审核通过';
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    // 根据当前界面刷新数据
+    if (_selectedSection == _AdminSection.users) {
+      await _loadUsers();
+    } else if (_selectedSection == _AdminSection.userReports) {
+      await _loadReports();
+    }
+  }
+
+  Future<void> _showRejectUserDialog(String userId) async {
+    String action = 'BAN';
+    final reasonCtrl = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('审核拒绝'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('选择处理方式：'),
+                  const SizedBox(height: 12),
+                  RadioListTile<String>(
+                    title: const Text('封禁用户'),
+                    value: 'BAN',
+                    groupValue: action,
+                    onChanged: (v) => setState(() => action = v!),
+                  ),
+                  RadioListTile<String>(
+                    title: const Text('禁言用户（7天）'),
+                    value: 'SILENT',
+                    groupValue: action,
+                    onChanged: (v) => setState(() => action = v!),
+                  ),
+                  RadioListTile<String>(
+                    title: const Text('恢复正常'),
+                    value: 'NORMAL',
+                    groupValue: action,
+                    onChanged: (v) => setState(() => action = v!),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: reasonCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '处理说明（可选）',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('取消'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text('确定'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true) {
+      final resp = await ApiService.adminRejectUser(
+        userId,
+        action: action,
+        reason: reasonCtrl.text,
+      );
+      final msg = resp['body']?['message']?.toString() ?? '处理完成';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      // 根据当前界面刷新数据
+      if (_selectedSection == _AdminSection.users) {
+        await _loadUsers();
+      } else if (_selectedSection == _AdminSection.userReports) {
+        await _loadReports();
+      }
+    }
+  }
+
   String _formatUserStatus(String? status) {
     switch ((status ?? 'NORMAL').toUpperCase()) {
       case 'BANNED':
@@ -1832,11 +1961,15 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     Color fg = Colors.white;
     String label;
     switch (status) {
+      case 'AUDIT':
+        bg = Colors.blue;
+        label = '待审核';
+        break;
       case 'BANNED':
         bg = Colors.redAccent;
         label = '封禁中';
         break;
-      case 'MUTED':
+      case 'SILENT':
         bg = Colors.orange;
         label = '禁言中';
         break;
@@ -1892,6 +2025,81 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     );
   }
 
+  // 从举报记录中获取被举报用户的状态
+  Widget _buildUserStatusFromReport(Map<String, dynamic> report) {
+    final reportedUser = report['reportedUser'] as Map<String, dynamic>?;
+    if (reportedUser == null) {
+      return const Text('-', style: TextStyle(color: Colors.grey));
+    }
+
+    // 注意：后端需要在举报记录中包含被举报用户的状态信息
+    // 如果后端没有返回，这里会显示为 '-'
+    final status = reportedUser['status']?.toString();
+    if (status == null || status.isEmpty) {
+      return const Text('未知', style: TextStyle(color: Colors.grey));
+    }
+
+    return _buildStatusChip(status);
+  }
+
+  // 从举报记录中构建用户操作按钮
+  Widget _buildUserActionsFromReport(Map<String, dynamic> report) {
+    final reportedUser = report['reportedUser'] as Map<String, dynamic>?;
+    if (reportedUser == null) {
+      return const Text('-', style: TextStyle(color: Colors.grey));
+    }
+
+    final userId = reportedUser['id']?.toString();
+    final status = (reportedUser['status'] ?? 'NORMAL')
+        .toString()
+        .toUpperCase();
+    final role = (reportedUser['role'] ?? 'USER').toString().toUpperCase();
+
+    // 管理员不能被操作
+    if (role == 'ADMIN' || role == 'SUPER_ADMIN') {
+      return const Text(
+        '管理员',
+        style: TextStyle(fontSize: 12, color: Colors.grey),
+      );
+    }
+
+    // 只有 AUDIT 状态的用户才能被操作
+    if (status != 'AUDIT') {
+      return Text(
+        '非待审核状态',
+        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+      );
+    }
+
+    if (userId == null || userId.isEmpty) {
+      return const Text('-', style: TextStyle(color: Colors.grey));
+    }
+
+    // 显示审核操作按钮
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        OutlinedButton(
+          onPressed: () => _approveUser(userId),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.green,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          ),
+          child: const Text('通过', style: TextStyle(fontSize: 12)),
+        ),
+        const SizedBox(width: 4),
+        OutlinedButton(
+          onPressed: () => _showRejectUserDialog(userId),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.redAccent,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          ),
+          child: const Text('拒绝', style: TextStyle(fontSize: 12)),
+        ),
+      ],
+    );
+  }
+
   Widget _buildUserActions(Map<String, dynamic> u) {
     final role = (u['role'] ?? '').toString().toUpperCase();
     final status = (u['status'] ?? 'NORMAL').toString().toUpperCase();
@@ -1905,9 +2113,30 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
       );
     }
 
+    final isAudit = status == 'AUDIT';
     final isBanned = status == 'BANNED';
-    final isMuted = status == 'MUTED';
+    final isSilent = status == 'SILENT';
 
+    // 如果是待审核状态，显示审核按钮
+    if (isAudit) {
+      return Row(
+        children: [
+          OutlinedButton(
+            onPressed: () => _approveUser(id),
+            style: OutlinedButton.styleFrom(foregroundColor: Colors.green),
+            child: const Text('审核通过'),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: () => _showRejectUserDialog(id),
+            style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent),
+            child: const Text('审核拒绝'),
+          ),
+        ],
+      );
+    }
+
+    // 其他状态显示封禁/解封/禁言按钮
     return Row(
       children: [
         OutlinedButton(
@@ -1917,7 +2146,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         ),
         const SizedBox(width: 8),
         OutlinedButton(
-          onPressed: (!isBanned && !isMuted) ? null : () => _unbanUser(id),
+          onPressed: (!isBanned && !isSilent) ? null : () => _unbanUser(id),
           style: OutlinedButton.styleFrom(foregroundColor: Colors.green),
           child: const Text('解封'),
         ),
@@ -1925,7 +2154,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         OutlinedButton(
           onPressed: isBanned ? null : () => _showMuteDialog(id),
           style: OutlinedButton.styleFrom(foregroundColor: Colors.orange),
-          child: Text(isMuted ? '重新禁言' : '禁言'),
+          child: Text(isSilent ? '重新禁言' : '禁言'),
         ),
       ],
     );

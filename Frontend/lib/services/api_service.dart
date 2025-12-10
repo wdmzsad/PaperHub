@@ -889,12 +889,14 @@ class ApiService {
   /// GET /admin/users?q=...&page=&pageSize=
   static Future<Map<String, dynamic>> adminSearchUsers({
     String? query,
+    String? status,
     int page = 0,
     int pageSize = 20,
   }) async {
     final uri = Uri.parse('$baseUrl/admin/users').replace(
       queryParameters: {
         if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+        if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
         'page': page.toString(),
         'pageSize': pageSize.toString(),
       },
@@ -902,6 +904,36 @@ class ApiService {
     return await _makeRequest(
       () => http.get(uri, headers: _buildHeaders()),
       '/admin/users',
+    );
+  }
+
+  /// 审核通过用户
+  static Future<Map<String, dynamic>> adminApproveUser(String userId) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/users/$userId/approve'),
+        headers: _buildHeaders(),
+      ),
+      '/admin/users/$userId/approve',
+    );
+  }
+
+  /// 审核拒绝用户
+  static Future<Map<String, dynamic>> adminRejectUser(
+    String userId, {
+    required String action,
+    String? reason,
+  }) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/users/$userId/reject'),
+        headers: _buildHeaders(),
+        body: jsonEncode({
+          'action': action,
+          if (reason != null && reason.isNotEmpty) 'reason': reason,
+        }),
+      ),
+      '/admin/users/$userId/reject',
     );
   }
 
@@ -1336,11 +1368,11 @@ class ApiService {
   ) async {
     return await _makeRequest(
       () => http.post(
-        Uri.parse('$baseUrl/report/user/$userId'),
+        Uri.parse('$baseUrl/api/report/user/$userId'),
         headers: _buildHeaders(),
         body: jsonEncode({'reason': reason}),
       ),
-      '/report/user/$userId',
+      '/api/report/user/$userId',
     );
   }
 
