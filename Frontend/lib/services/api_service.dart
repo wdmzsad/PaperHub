@@ -381,6 +381,24 @@ class ApiService {
     );
   }
 
+  /// 获取热搜榜单
+  /// GET /hot-searches?limit=20&type=keyword|tag|author
+  static Future<Map<String, dynamic>> getHotSearches({
+    int limit = 20,
+    String? type,
+  }) async {
+    final uri = Uri.parse('$baseUrl/hot-searches').replace(
+      queryParameters: {
+        'limit': limit.toString(),
+        if (type != null && type.isNotEmpty) 'type': type,
+      },
+    );
+    return await _makeRequest(
+      () => http.get(uri, headers: _buildHeaders()),
+      '/hot-searches',
+    );
+  }
+
   static Future<Map<String, dynamic>> updateProfile({
     required String displayName,
     String? bio,
@@ -553,9 +571,10 @@ class ApiService {
   }
 
   /// 搜索帖子
-  /// GET /posts/search?q=keyword&sort=hot|new&page=1&pageSize=20
+  /// GET /posts/search?q=keyword&type=keyword|tag&sort=hot|new&page=1&pageSize=20
   static Future<Map<String, dynamic>> searchPosts({
     required String query,
+    String type = 'keyword', // 'keyword' 或 'tag'
     String sort = 'hot', // 'hot' 或 'new'
     int page = 1,
     int pageSize = 20,
@@ -563,6 +582,7 @@ class ApiService {
     final uri = Uri.parse('$baseUrl/posts/search').replace(
       queryParameters: {
         'q': query,
+        'type': type,
         'sort': sort,
         'page': page.toString(),
         'pageSize': pageSize.toString(),

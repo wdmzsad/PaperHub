@@ -35,6 +35,8 @@ class _ZoneScreenState extends State<ZoneScreen> {
   bool _hasMore = true;
   int _page = 1;
 
+  final Set<String> _likeInFlight = {};
+
   @override
   void initState() {
     super.initState();
@@ -144,6 +146,47 @@ class _ZoneScreenState extends State<ZoneScreen> {
     _loadFirstPage();
   }
 
+  Future<bool> _handlePostLike(Post post) async {
+    // 防止重复请求
+    if (_likeInFlight.contains(post.id)) {
+      return false;
+    }
+
+    _likeInFlight.add(post.id);
+
+    try {
+      final resp = post.isLiked
+          ? await ApiService.unlikePost(post.id)
+          : await ApiService.likePost(post.id);
+
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>?;
+        final updatedLikesCount = (body?['likesCount'] as num?)?.toInt();
+        final updatedIsLiked = body?['isLiked'] as bool?;
+
+        // 更新帖子状态
+        final postIndex = _posts.indexWhere((p) => p.id == post.id);
+        if (postIndex != -1) {
+          setState(() {
+            _posts[postIndex].likesCount =
+                updatedLikesCount ?? _posts[postIndex].likesCount;
+            _posts[postIndex].isLiked =
+                updatedIsLiked ?? !_posts[postIndex].isLiked;
+          });
+        }
+
+        return true;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      print('点赞失败: $e');
+      return false;
+    } finally {
+      _likeInFlight.remove(post.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final color = kDisciplineColors[_currentDiscipline] ?? Colors.blue;
@@ -191,11 +234,11 @@ class _ZoneScreenState extends State<ZoneScreen> {
                         : MasonryGridView.count(
                             controller: _scrollController,
                             crossAxisCount: 2,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
+                            crossAxisSpacing: 3,
+                            mainAxisSpacing: 3,
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 8,
+                              horizontal: 3,
+                              vertical: 3,
                             ),
                             itemCount: _posts.length + (_hasMore ? 1 : 0),
                             itemBuilder: (context, index) {
@@ -228,6 +271,7 @@ class _ZoneScreenState extends State<ZoneScreen> {
                                   Navigator.of(context)
                                       .pushNamed('/user/${post.author.id}');
                                 },
+                                onLikeTap: _handlePostLike,
                               );
                             },
                           ),

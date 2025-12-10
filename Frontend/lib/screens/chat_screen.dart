@@ -432,9 +432,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: _buildAppBar(),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: _buildAppBar(scheme),
       body: Column(
         children: [
           Expanded(
@@ -446,21 +447,21 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
+  PreferredSizeWidget _buildAppBar(ColorScheme scheme) {
     final conversation = widget.conversation ?? _loadedConversation;
 
     if (conversation == null) {
       return AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: scheme.surface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: scheme.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           '加载中...',
           style: TextStyle(
-            color: Colors.black87,
+            color: scheme.onSurface,
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
@@ -469,10 +470,10 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     return AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: scheme.surface,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Colors.black87),
+        icon: Icon(Icons.arrow_back, color: scheme.onSurface),
         onPressed: () => Navigator.pop(context),
       ),
       title: GestureDetector(
@@ -492,8 +493,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   Text(
                     conversation.displayName,
-                    style: const TextStyle(
-                      color: Colors.black87,
+                    style: TextStyle(
+                      color: scheme.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
@@ -502,7 +503,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     Text(
                       '$_typingUser 正在输入...',
                       style: TextStyle(
-                        color: const Color(0xFF1976D2),
+                        color: scheme.primary,
                         fontSize: 12,
                       ),
                     )
@@ -510,7 +511,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     Text(
                       '${conversation.participants.length} 位成员',
                       style: TextStyle(
-                        color: Colors.grey[500],
+                        color: scheme.onSurfaceVariant,
                         fontSize: 12,
                       ),
                     ),
@@ -520,12 +521,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
       ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.more_vert, color: Colors.black87),
-          onPressed: _showMoreOptions,
-        ),
-      ],
     );
   }
 
@@ -637,19 +632,20 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildDateHeader(DateTime date) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 16),
       child: Center(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.grey[200],
+            color: scheme.surfaceVariant,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
             _formatDateHeader(date),
             style: TextStyle(
-              color: Colors.grey[600],
+              color: scheme.onSurfaceVariant,
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -713,10 +709,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildInputArea() {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -734,109 +731,8 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _showMoreOptions() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('聊天信息'),
-              onTap: () {
-                Navigator.pop(context);
-                _showChatInfo();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.search),
-              title: const Text('搜索聊天记录'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: 实现搜索功能
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.red),
-              title: const Text('清空聊天记录', style: TextStyle(color: Colors.red)),
-              onTap: () {
-                Navigator.pop(context);
-                _confirmClearChat();
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
 
-  void _showChatInfo() {
-    final conversation = widget.conversation ?? _loadedConversation;
-    if (conversation == null) return;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(conversation.displayName),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('成员数: ${conversation.participants.length}'),
-            const SizedBox(height: 8),
-            Text('创建时间: ${_formatDateHeader(conversation.updatedAt)}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirmClearChat() {
-    final conversation = widget.conversation ?? _loadedConversation;
-    if (conversation == null) return;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('清空聊天记录'),
-        content: Text('确定要清空与 ${conversation.displayName} 的聊天记录吗？此操作不可恢复。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // TODO: 实现清空聊天记录功能
-            },
-            child: const Text('确定', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
 
   bool _isSameDay(DateTime date1, DateTime date2) {
     return date1.year == date2.year &&

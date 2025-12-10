@@ -4,6 +4,7 @@ import com.example.paperhub.auth.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -34,5 +35,10 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     // 查找特定类型的未读通知数量
     long countByRecipientAndTypeAndReadFalse(User recipient, NotificationType type);
+
+    // 删除与帖子相关的通知
+    @Query("DELETE FROM Notification n WHERE n.post.id = :postId")
+    @Modifying
+    void deleteByPostId(@Param("postId") Long postId);
 }
 

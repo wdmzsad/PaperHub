@@ -47,7 +47,16 @@ import '../utils/font_utils.dart';
 
 /// 首页入口组件（Stateful）：承载发现流与分区切换
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({
+    Key? key,
+    this.themeModeNotifier,
+    this.onThemeModeChanged,
+    this.onThemeToggle,
+  }) : super(key: key);
+
+  final ValueNotifier<ThemeMode>? themeModeNotifier;
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
+  final VoidCallback? onThemeToggle;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -96,6 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _followingLoading = false;
   bool _followingHasMore = true;
   int _followingPage = 1;
+  bool _followingHasNew = false;
   final ScrollController _followingScrollController = ScrollController();
 
   /// 已浏览过的帖子ID集合（用于在关注流中标记未读红点）
@@ -351,6 +361,9 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       // 忽略错误
     }
+
+    // 同步刷新关注流，方便在其他页面刷新时获取最新关注动态
+    _refreshFollowingFeed();
   }
 
   /// 手动刷新推荐流：回到顶部、清空现有列表并重新请求第一页
@@ -372,7 +385,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _hasMore = true;
     });
 
-    await _loadInitialPosts();
+    await Future.wait([
+      _loadInitialPosts(),
+      _refreshFollowingFeed(),
+    ]);
   }
 
   /// 触底后加载下一页（每次追加 6 条）
@@ -458,6 +474,9 @@ class _HomeScreenState extends State<HomeScreen> {
           _followingHasMore = _followingPosts.length < total;
           _followingPage = 2;
           _followingLoading = false;
+          if (_selectedTab != 0 && newPosts.isNotEmpty) {
+            _followingHasNew = true;
+          }
         });
       } else {
         setState(() {
@@ -500,6 +519,52 @@ class _HomeScreenState extends State<HomeScreen> {
           _followingHasMore = _followingPosts.length < total;
           _followingPage += 1;
           _followingLoading = false;
+          if (_selectedTab != 0 && newPosts.isNotEmpty) {
+            _followingHasNew = true;
+          }
+        });
+      } else {
+        setState(() {
+          _followingLoading = false;
+        });
+      }
+    } catch (_) {
+      setState(() {
+        _followingLoading = false;
+      });
+    }
+  }
+
+  /// 刷新关注流（用于其他页面触发的全局刷新）
+  Future<void> _refreshFollowingFeed() async {
+    if (_followingLoading) return;
+    setState(() {
+      _followingLoading = true;
+    });
+
+    try {
+      final resp = await ApiService.getFollowingPosts(page: 1, pageSize: 6);
+      final status = resp['statusCode'] as int? ?? 500;
+      final body = resp['body'] as Map<String, dynamic>?;
+
+      if (status >= 200 && status < 300 && body != null) {
+        final postsData = (body['posts'] as List<dynamic>?) ?? <dynamic>[];
+        final total = body['total'] as int? ?? 0;
+        final newPosts = postsData
+            .map((p) => Post.fromJson(p as Map<String, dynamic>))
+            .toList();
+
+        setState(() {
+          _followingPosts
+            ..clear()
+            ..addAll(newPosts);
+          _followingHasMore = _followingPosts.length < total;
+          _followingPage = 2;
+          _followingLoading = false;
+          // 不在关注页时展示红点提示
+          if (_selectedTab != 0 && newPosts.isNotEmpty) {
+            _followingHasNew = true;
+          }
         });
       } else {
         setState(() {
@@ -643,7 +708,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -669,10 +734,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // 顶部栏
   Widget _buildTopBar() {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: scheme.surface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -702,7 +768,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   text: 'PaperHub',
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: scheme.onSurface,
                 ),
               ),
             ],
@@ -713,7 +779,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildTabButton("关注", 0),
+                _buildTabButton("关注", 0, showUnreadDot: _followingHasNew),
                 const SizedBox(width: 24),
                 _buildTabButton("发现", 1),
                 const SizedBox(width: 24),
@@ -723,13 +789,38 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
 
           // 搜索图标
-          InkWell(
-            onTap: _onSearchTap,
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-              padding: const EdgeInsets.all(6.0),
-              child: Icon(Icons.search, color: AppColors.textSecondary, size: 22),
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.themeModeNotifier != null)
+                ValueListenableBuilder<ThemeMode>(
+                  valueListenable: widget.themeModeNotifier!,
+                  builder: (_, mode, __) {
+                    final isDark = mode == ThemeMode.dark;
+                    return IconButton(
+                      tooltip: isDark ? '切换日间模式' : '切换夜间模式',
+                      icon: Icon(
+                        isDark ? Icons.dark_mode : Icons.light_mode,
+                        color: scheme.onSurface.withOpacity(0.8),
+                      ),
+                      onPressed: widget.onThemeToggle ??
+                          () {
+                            final next = isDark ? ThemeMode.light : ThemeMode.dark;
+                            widget.onThemeModeChanged?.call(next);
+                          },
+                    );
+                  },
+                ),
+              InkWell(
+                onTap: _onSearchTap,
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.all(6.0),
+                  child: Icon(Icons.search,
+                      color: scheme.onSurface.withOpacity(0.7), size: 22),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -737,13 +828,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   //  顶部“发现 / 分区”按钮样式
-  Widget _buildTabButton(String label, int index) {
+  Widget _buildTabButton(String label, int index, {bool showUnreadDot = false}) {
     final bool selected = _selectedTab == index;
     return GestureDetector(
       onTap: () {
         final bool wasSelected = _selectedTab == index;
         setState(() {
           _selectedTab = index;
+          if (index == 0) {
+            _followingHasNew = false; // 进入关注页后红点立即消失
+          }
           // 离开发现页即清除置顶的“我刚发的”帖子
           if (index != 1) {
             _pinnedSelfPost = null;
@@ -758,6 +852,9 @@ class _HomeScreenState extends State<HomeScreen> {
             !_zoneLoading &&
             _zoneHasMore) {
           _loadZonePosts();
+        } else if (index == 1 && !_isLoading) {
+          // 从其他 tab 切回发现时，触发一次关注流刷新以获取最新关注动态
+          _refreshFollowingFeed();
         }
 
         // 点击“发现”文案时，触发刷新推荐流（小红书同款）
@@ -768,14 +865,32 @@ class _HomeScreenState extends State<HomeScreen> {
           _loadInitialPosts();
         }
       },
-      child: Text(
-        label,
-        style: FontUtils.textStyle(
-          text: label,
-          fontSize: 16,
-          fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
-          color: selected ? AppColors.primary : AppColors.textSecondary,
-        ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Text(
+            label,
+            style: FontUtils.textStyle(
+              text: label,
+              fontSize: 16,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
+              color: selected ? AppColors.primary : AppColors.textSecondary,
+            ),
+          ),
+          if (showUnreadDot)
+            Positioned(
+              right: -12,
+              top: -6,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Colors.redAccent,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -791,9 +906,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return MasonryGridView.count(
       controller: _scrollController,
       crossAxisCount: 2,
-      crossAxisSpacing: 8,
-      mainAxisSpacing: 8,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      crossAxisSpacing: 3,
+      mainAxisSpacing: 3,
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
       itemCount: totalCount,
       itemBuilder: (context, index) {
         if (index == baseCount) {
@@ -854,7 +969,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   double _computeHeat(Post p) =>
-      p.likesCount + p.commentsCount * 0.5;
+      p.likesCount +
+      p.commentsCount * 0.5 +
+      p.searchHistoryScore * 1.0;
 
   List<Post> _sortedByHeat(List<Post> list) {
     final sorted = [...list];
@@ -952,22 +1069,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return MasonryGridView.count(
       controller: _followingScrollController,
       crossAxisCount: 2,
-      crossAxisSpacing: 8,
-      mainAxisSpacing: 8,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      crossAxisSpacing: 3,
+      mainAxisSpacing: 3,
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
       itemCount: _followingPosts.length + (_followingLoading ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == _followingPosts.length) {
           return _buildLoadMoreIndicator();
         }
         final post = _followingPosts[index];
-        final isUnread = !_viewedPostIds.contains(post.id);
         return PostCard(
           post: post,
           onTap: () => _onPostTap(post),
           onAuthorTap: () => _openUserProfile(post.author.id),
           onLikeTap: _handlePostLike,
-          showUnreadDot: isUnread,
         );
       },
     );
@@ -984,6 +1099,10 @@ class _HomeScreenState extends State<HomeScreen> {
           final discipline = kMainDisciplines[index];
           final selected = discipline == _currentZoneDiscipline;
           final color = kDisciplineColors[discipline] ?? Colors.blue;
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          final textColor = selected
+              ? Colors.white
+              : (isDark ? Colors.white70 : Colors.black87);
           return GestureDetector(
             onTap: () {
               if (_currentZoneDiscipline == discipline) return;
@@ -1000,10 +1119,14 @@ class _HomeScreenState extends State<HomeScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: selected ? color.withOpacity(0.12) : Colors.transparent,
+                color: selected
+                    ? color.withOpacity(isDark ? 0.3 : 0.12)
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: selected ? color : Colors.grey.shade300,
+                  color: selected
+                      ? color
+                      : (isDark ? Colors.white24 : Colors.grey.shade300),
                 ),
               ),
               child: Center(
@@ -1013,7 +1136,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     fontSize: 14,
                     fontWeight:
                         selected ? FontWeight.w600 : FontWeight.normal,
-                    color: selected ? color : Colors.black87,
+                    color: textColor,
                   ),
                 ),
               ),
@@ -1048,9 +1171,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return MasonryGridView.count(
       crossAxisCount: 2,
-      crossAxisSpacing: 8,
-      mainAxisSpacing: 8,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      crossAxisSpacing: 3,
+      mainAxisSpacing: 3,
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
       itemCount: _zonePosts.length,
       itemBuilder: (context, index) {
         final post = _zonePosts[index];

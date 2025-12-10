@@ -348,7 +348,7 @@ public class CommentController {
                     resolveAvatar(replyAuthor.getAvatar()),
                     replyAuthor.getAffiliation()
                 );
-                
+
                 CommentDtos.AuthorInfo replyReplyToInfo = null;
                 if (reply.getReplyTo() != null) {
                     User replyReplyTo = reply.getReplyTo();
@@ -365,9 +365,32 @@ public class CommentController {
                         replyReplyTo.getAffiliation()
                     );
                 }
-                
+
                 boolean replyIsLiked = userId != null && likeService.isCommentLiked(reply.getId(), userId);
-                
+
+                // 解析楼中楼回复的mentions
+                List<CommentDtos.AuthorInfo> replyMentionInfos = new ArrayList<>();
+                List<Long> replyMentionIds = parseMentionIds(reply.getMentionIds());
+                System.out.println("楼中楼回复 @" + reply.getId() + " 的 mentionIds: " + reply.getMentionIds() + ", 解析结果: " + replyMentionIds);
+                if (replyMentionIds != null && !replyMentionIds.isEmpty()) {
+                    for (Long mentionId : replyMentionIds) {
+                        userRepository.findById(mentionId).ifPresent(mentionedUser -> {
+                            String mentionedUserName = mentionedUser.getName() != null && !mentionedUser.getName().isEmpty()
+                                ? mentionedUser.getName()
+                                : (mentionedUser.getEmail().contains("@")
+                                    ? mentionedUser.getEmail().substring(0, mentionedUser.getEmail().indexOf("@"))
+                                    : mentionedUser.getEmail());
+                            replyMentionInfos.add(new CommentDtos.AuthorInfo(
+                                mentionedUser.getId(),
+                                mentionedUser.getEmail(),
+                                mentionedUserName,
+                                resolveAvatar(mentionedUser.getAvatar()),
+                                mentionedUser.getAffiliation()
+                            ));
+                        });
+                    }
+                }
+
                 return new CommentDtos.CommentResp(
                     reply.getId().toString(),
                     replyAuthorInfo,
@@ -378,7 +401,7 @@ public class CommentController {
                     replyIsLiked,
                     reply.getCreatedAt().atOffset(ZoneOffset.UTC).toString(),
                     List.of(), // 回复的回复不再嵌套
-                    List.of() // 回复暂时不支持@功能
+                    replyMentionInfos // 支持楼中楼@功能
                 );
             })
             .collect(Collectors.toList());

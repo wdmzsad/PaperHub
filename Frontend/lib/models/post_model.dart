@@ -165,27 +165,34 @@ class Comment {
 
   /// 转换为 JSON（用于 API 请求）
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'author': {
-      'id': author.id,
-      'name': author.name,
-      'avatar': author.avatar,
-      if (author.affiliation != null) 'affiliation': author.affiliation,
-    },
-    'content': content,
-    if (parentId != null) 'parentId': parentId,
-    if (replyTo != null)
-      'replyTo': {
-        'id': replyTo!.id,
-        'name': replyTo!.name,
-        'avatar': replyTo!.avatar,
-        if (replyTo!.affiliation != null) 'affiliation': replyTo!.affiliation,
-      },
-    'likesCount': likesCount,
-    'isLiked': isLiked,
-    'replies': replies.map((r) => r.toJson()).toList(),
-    'createdAt': createdAt.toIso8601String(),
-  };
+        'id': id,
+        'author': {
+          'id': author.id,
+          'name': author.name,
+          'avatar': author.avatar,
+          if (author.affiliation != null) 'affiliation': author.affiliation,
+        },
+        'content': content,
+        if (parentId != null) 'parentId': parentId,
+        if (replyTo != null)
+          'replyTo': {
+            'id': replyTo!.id,
+            'name': replyTo!.name,
+            'avatar': replyTo!.avatar,
+            if (replyTo!.affiliation != null)
+              'affiliation': replyTo!.affiliation,
+          },
+        'likesCount': likesCount,
+        'isLiked': isLiked,
+        'replies': replies.map((r) => r.toJson()).toList(),
+        'mentions': mentions.map((m) => {
+          'id': m.id,
+          'name': m.name,
+          'avatar': m.avatar,
+          if (m.affiliation != null) 'affiliation': m.affiliation,
+        }).toList(),
+        'createdAt': createdAt.toIso8601String(),
+      };
 }
 
 class Post {
@@ -202,8 +209,10 @@ class Post {
   // 统计与状态（通常由后端返回）
   int likesCount;
   int commentsCount;
+  int favoriteCount;
   int viewsCount;
   double recommendationScore;
+  double searchHistoryScore;
   bool isLiked;
   bool isSaved;
 
@@ -251,8 +260,10 @@ class Post {
     this.comments = const [],
     this.likesCount = 0,
     this.commentsCount = 0,
+    this.favoriteCount = 0,
     this.viewsCount = 0,
     this.recommendationScore = 0,
+    this.searchHistoryScore = 0,
     this.isLiked = false,
     this.isSaved = false,
     this.status,
@@ -343,12 +354,13 @@ class Post {
       ),
       likesCount: (json['likesCount'] as num?)?.toInt() ?? 0,
       commentsCount: (json['commentsCount'] as num?)?.toInt() ?? 0,
+      favoriteCount: (json['favoriteCount'] as num?)?.toInt() ?? 0,
       viewsCount: (json['viewsCount'] as num?)?.toInt() ?? 0,
       recommendationScore:
           (json['score'] as num?)?.toDouble() ??
-          (json['rankScore'] as num?)?.toDouble() ??
-          (json['recommendationScore'] as num?)?.toDouble() ??
-          0,
+              (json['rankScore'] as num?)?.toDouble() ??
+              (json['recommendationScore'] as num?)?.toDouble() ??
+              0,
       isLiked: json['isLiked'] as bool? ?? false,
       isSaved: json['isSaved'] as bool? ?? false,
       status: status,

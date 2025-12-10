@@ -507,7 +507,13 @@ public class PostController {
         }
         try {
             favoriteService.favoritePost(postId, user);
-            return ResponseEntity.ok(Map.of("isSaved", true));
+
+            // 获取最新状态
+            long favoritesCount = favoriteService.countFavoritesByPostId(postId);
+            boolean isSaved = favoriteService.isFavorite(postId, user.getId());
+
+            PostDtos.FavoriteResp resp = new PostDtos.FavoriteResp((int) favoritesCount, isSaved);
+            return ResponseEntity.ok(resp);
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.status(404).body(Map.of("message", ex.getMessage()));
         }
@@ -524,22 +530,30 @@ public class PostController {
             return ResponseEntity.status(401).body(Map.of("message", "未认证，请先登录"));
         }
         favoriteService.unfavoritePost(postId, user);
-        return ResponseEntity.ok(Map.of("isSaved", false));
+
+        // 获取最新状态
+        long favoritesCount = favoriteService.countFavoritesByPostId(postId);
+        boolean isSaved = favoriteService.isFavorite(postId, user.getId());
+
+        PostDtos.FavoriteResp resp = new PostDtos.FavoriteResp((int) favoritesCount, isSaved);
+        return ResponseEntity.ok(resp);
     }
 
     /**
      * 搜索帖子
-     * GET /posts/search?q=keyword&sort=hot|new&page=1&pageSize=20
+     * GET /posts/search?q=keyword&type=keyword|tag&sort=hot|new&page=1&pageSize=20
+     * type: keyword（关键词搜索）、tag（标签搜索）
      * sort: hot（按热度排序）、new（按最新排序）
      */
     @GetMapping("/search")
     public ResponseEntity<PostDtos.PostListResp> searchPosts(
             @RequestParam String q,
+            @RequestParam(defaultValue = "keyword") String type,
             @RequestParam(defaultValue = "hot") String sort,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize,
             @AuthenticationPrincipal User currentUser) {
-        Page<Post> postPage = postService.searchPosts(q, sort, page, pageSize);
+        Page<Post> postPage = postService.searchPosts(q, type, sort, page, pageSize);
         Long viewerId = currentUser != null ? currentUser.getId() : null;
         List<PostDtos.PostResp> posts = postPage.getContent().stream()
                 .map(post -> postMapper.toPostResp(post, viewerId))

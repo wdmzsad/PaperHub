@@ -58,6 +58,8 @@ class _ProfilePageState extends State<ProfilePage>
   int _favoritesPage = 1;
   int _draftsPage = 1;
 
+  final Set<String> _likeInFlight = {};
+
   @override
   void initState() {
     super.initState();
@@ -231,12 +233,10 @@ class _ProfilePageState extends State<ProfilePage>
                 Expanded(
                   child: MasonryGridView.count(
                     crossAxisCount: 2,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 8,
-                    ),
+                    crossAxisSpacing: 3,
+                    mainAxisSpacing: 3,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
                     itemCount: posts.length,
                     itemBuilder: (ctx, index) {
                       final post = posts[index];
@@ -255,6 +255,7 @@ class _ProfilePageState extends State<ProfilePage>
                             ).pushNamed('/user/${post.author.id}');
                           }
                         },
+                        onLikeTap: _handlePostLike,
                       );
                     },
                   ),
@@ -971,13 +972,64 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
+  Future<bool> _handlePostLike(Post post) async {
+    // 防止重复请求
+    if (_likeInFlight.contains(post.id)) {
+      return false;
+    }
+
+    _likeInFlight.add(post.id);
+
+    try {
+      final resp = post.isLiked
+          ? await ApiService.unlikePost(post.id)
+          : await ApiService.likePost(post.id);
+
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>?;
+        final updatedLikesCount = (body?['likesCount'] as num?)?.toInt();
+        final updatedIsLiked = body?['isLiked'] as bool?;
+
+        // 更新帖子状态
+        final authoredIndex = _authoredPosts.indexWhere((p) => p.id == post.id);
+        if (authoredIndex != -1) {
+          setState(() {
+            _authoredPosts[authoredIndex].likesCount =
+                updatedLikesCount ?? _authoredPosts[authoredIndex].likesCount;
+            _authoredPosts[authoredIndex].isLiked =
+                updatedIsLiked ?? !_authoredPosts[authoredIndex].isLiked;
+          });
+        }
+
+        final favoriteIndex = _favoritePosts.indexWhere((p) => p.id == post.id);
+        if (favoriteIndex != -1) {
+          setState(() {
+            _favoritePosts[favoriteIndex].likesCount =
+                updatedLikesCount ?? _favoritePosts[favoriteIndex].likesCount;
+            _favoritePosts[favoriteIndex].isLiked =
+                updatedIsLiked ?? !_favoritePosts[favoriteIndex].isLiked;
+          });
+        }
+
+        return true;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      print('点赞失败: $e');
+      return false;
+    } finally {
+      _likeInFlight.remove(post.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: _isViewingSelf ? 3 : 2,
       child: Scaffold(
         drawer: _buildDrawer(),
-        backgroundColor: const Color(0xFFF5F5F5),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         // 只有从底部导航栏进入自己的主页时才显示底部导航栏
         bottomNavigationBar: (_isViewingSelf && widget.isMainPage)
             ? _buildBottomNavigationBar()
@@ -1228,7 +1280,8 @@ class _ProfilePageState extends State<ProfilePage>
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
+                  // Use theme surface so the card follows dark backgrounds
+                  color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -1261,6 +1314,9 @@ class _ProfilePageState extends State<ProfilePage>
 
   Widget _buildResearchDirections(UserProfile profile) {
     final directions = profile.researchDirections;
+    final scheme = Theme.of(context).colorScheme;
+    final cardColor = scheme.surfaceVariant;
+    final textColor = scheme.onSurface;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -1269,9 +1325,13 @@ class _ProfilePageState extends State<ProfilePage>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 '研究方向',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
               ),
             ],
           ),
@@ -1280,22 +1340,25 @@ class _ProfilePageState extends State<ProfilePage>
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: cardColor,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
+                  color: Colors.black.withOpacity(0.08),
                   blurRadius: 6,
                   offset: const Offset(0, 3),
                 ),
               ],
             ),
             child: directions.isEmpty
-                ? const Text('还没有填写研究方向', style: TextStyle(color: Colors.grey))
+                ? Text(
+                    '还没有填写研究方向',
+                    style: TextStyle(color: textColor.withOpacity(0.6)),
+                  )
                 : Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: directions.map(_buildDirectionChip).toList(),
+                    children: directions.map((d) => _buildDirectionChip(d, scheme)).toList(),
                   ),
           ),
         ],
@@ -1303,30 +1366,35 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Widget _buildDirectionChip(String label) {
+  Widget _buildDirectionChip(String label, ColorScheme scheme) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF2F2F2),
+        color: scheme.surface.withOpacity(0.8),
+        border: Border.all(color: scheme.primary.withOpacity(0.6), width: 1),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         label,
-        style: const TextStyle(color: Colors.black87, fontSize: 14),
+        style: TextStyle(color: scheme.onSurface, fontSize: 14),
       ),
     );
   }
 
   Widget _buildTabsSection() {
+    final scheme = Theme.of(context).colorScheme;
+    final cardColor = scheme.surfaceVariant;
+    final onSurface = scheme.onSurface;
+    final primary = scheme.primary;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withOpacity(0.08),
             blurRadius: 6,
             offset: const Offset(0, 3),
           ),
@@ -1334,7 +1402,7 @@ class _ProfilePageState extends State<ProfilePage>
       ),
       child: Column(
         children: [
-          TabBar(
+          const TabBar(
             labelColor: Colors.black,
             indicatorColor: Colors.blueAccent,
             tabs: [
@@ -1406,9 +1474,9 @@ class _ProfilePageState extends State<ProfilePage>
       onRefresh: () => loader(refresh: true),
       child: MasonryGridView.count(
         crossAxisCount: 2,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        crossAxisSpacing: 3,
+        mainAxisSpacing: 3,
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
         itemCount: posts.length + (hasMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == posts.length) {
@@ -1438,6 +1506,7 @@ class _ProfilePageState extends State<ProfilePage>
                 Navigator.of(context).pushNamed('/user/${post.author.id}');
               }
             },
+            onLikeTap: _handlePostLike,
           );
         },
       ),

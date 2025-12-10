@@ -6,6 +6,7 @@ import com.example.paperhub.favorite.FavoritePost;
 import com.example.paperhub.favorite.FavoritePostRepository;
 import com.example.paperhub.history.BrowseHistory;
 import com.example.paperhub.history.BrowseHistoryRepository;
+import com.example.paperhub.history.SearchHistoryRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -39,15 +40,18 @@ public class RecommendationService {
     private final UserRepository userRepository;
     private final BrowseHistoryRepository browseHistoryRepository;
     private final FavoritePostRepository favoritePostRepository;
+    private final SearchHistoryRepository searchHistoryRepository;
 
     public RecommendationService(PostRepository postRepository,
                                  UserRepository userRepository,
                                  BrowseHistoryRepository browseHistoryRepository,
-                                 FavoritePostRepository favoritePostRepository) {
+                                 FavoritePostRepository favoritePostRepository,
+                                 SearchHistoryRepository searchHistoryRepository) {
         this.postRepository = postRepository;
         this.userRepository = userRepository;
         this.browseHistoryRepository = browseHistoryRepository;
         this.favoritePostRepository = favoritePostRepository;
+        this.searchHistoryRepository = searchHistoryRepository;
     }
 
     /**
@@ -111,6 +115,8 @@ public class RecommendationService {
     private UserInterest buildUserInterest(User user) {
         UserInterest interest = new UserInterest();
         interest.setResearchDirections(splitResearchDirections(user.getResearchDirections()));
+        // 最近搜索关键词（限制 20 条，全部转小写去重）
+        interest.setSearchKeywords(loadRecentSearchKeywords(user.getId(), 20));
 
         // 浏览历史：取最近 50 条
         List<BrowseHistory> histories = browseHistoryRepository.findTop50ByUserOrderByViewedAtDesc(user);
@@ -146,6 +152,16 @@ public class RecommendationService {
         return interest;
     }
 
+    private List<String> loadRecentSearchKeywords(Long userId, int limit) {
+        return searchHistoryRepository.findRecentKeywordsByUserId(userId, PageRequest.of(0, limit))
+                .stream()
+                .filter(k -> k != null && !k.isBlank())
+                .map(k -> k.toLowerCase(Locale.ROOT).trim())
+                .filter(k -> !k.isEmpty())
+                .distinct()
+                .toList();
+    }
+
     private List<String> splitResearchDirections(String raw) {
         if (raw == null || raw.isBlank()) {
             return List.of();
@@ -159,7 +175,7 @@ public class RecommendationService {
 
     /**
      * 计算单个帖子的总得分。
-     * 权重：研究方向 2 分、收藏兴趣 1 分、发帖兴趣 1 分、时间 1 分、热度 1 分、浏览历史 0.5 分。
+     * 权重：研究方向 2 分、收藏兴趣 1 分、发帖兴趣 1 分、时间 1 分、热度 1 分、浏览历史 0.5 分、搜索历史 1 分。
      */
     private double computeScore(Post post, User user, UserInterest interest, NormalizationContext norm) {
         // 研究方向匹配（0~1）
@@ -169,6 +185,7 @@ public class RecommendationService {
         double favoriteInterestScore = computeTagInterestScore(post, interest.getFavoriteTagWeights());
         double selfPostInterestScore = computeTagInterestScore(post, interest.getSelfPostTagWeights());
         double browseInterestScore = computeTagInterestScore(post, interest.getBrowseTagWeights());
+        double searchHistoryScore = computeSearchHistoryScore(post, interest.getSearchKeywords());
 
         // 时间新鲜度（0~1）
         double timeScore = norm.normalizeTime(post.getCreatedAt());
@@ -192,10 +209,48 @@ public class RecommendationService {
                 1.0 * favoriteInterestScore +
                 1.0 * selfPostInterestScore +
                 0.5 * browseInterestScore +
+                1.0 * searchHistoryScore +
                 1.0 * timeScore +
                 1.0 * hotScore;
 
         return score * repeatPenalty;
+    }
+
+    /**
+     * 基于搜索历史的匹配分（0~1）：关键词命中标题、内容或标签。
+     */
+    private double computeSearchHistoryScore(Post post, List<String> keywords) {
+        if (keywords == null || keywords.isEmpty()) {
+            return 0.0;
+        }
+        String title = safeLower(post.getTitle());
+        String content = safeLower(post.getContent());
+        List<String> tags = extractSecondaryTags(post).stream()
+                .map(s -> s.toLowerCase(Locale.ROOT))
+                .toList();
+
+        int hits = 0;
+        for (String kw : keywords) {
+            boolean matched = false;
+            if (!matched && title.contains(kw)) matched = true;
+            if (!matched && content.contains(kw)) matched = true;
+            if (!matched) {
+                for (String tag : tags) {
+                    if (tag.contains(kw)) {
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+            if (matched) {
+                hits++;
+            }
+        }
+        return Math.min(1.0, hits / (double) keywords.size());
+    }
+
+    private String safeLower(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.ROOT);
     }
 
     /**

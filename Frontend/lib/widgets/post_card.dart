@@ -153,7 +153,7 @@ class PostCard extends StatefulWidget {
   /// 点击点赞时的回调（返回是否点赞成功，用于乐观更新）
   final Future<bool> Function(Post post)? onLikeTap;
 
-  /// 是否在卡片右上角显示“未读”红点（用于关注流未查看提醒）
+  /// 是否在卡片右上角显示"未读"红点（用于关注流未查看提醒）
   final bool showUnreadDot;
 
   const PostCard({
@@ -304,7 +304,7 @@ class _PostCardState extends State<PostCard> {
         return Stack(
           children: [
             Card(
-              margin: const EdgeInsets.all(8),
+              margin: const EdgeInsets.all(3),
               elevation: 2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),

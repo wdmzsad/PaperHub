@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../config/app_env.dart';
 import '../services/api_service.dart';
+import '../utils/dialog_utils.dart';
+import '../constants/app_colors.dart';
 
 enum _AdminSection {
   users,
@@ -1232,21 +1234,60 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
 
     showDialog<void>(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.4), // 统一半透明遮罩
       builder: (ctx) => AlertDialog(
-        title: Text(isAudit ? '处理待审核帖子' : '处理帖子举报'),
+        backgroundColor: AppColors.dialogBackground,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0), // 统一圆角
+        ),
+        insetPadding: const EdgeInsets.all(24.0),
+        titlePadding: const EdgeInsets.only(top: 24.0, left: 24.0, right: 24.0, bottom: 16.0),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24.0),
+        actionsPadding: const EdgeInsets.all(24.0),
+        title: Text(
+          isAudit ? '处理待审核帖子' : '处理帖子举报',
+          style: TextStyle(
+            fontSize: 18.0,
+            fontWeight: FontWeight.w700,
+            color: AppColors.dialogTitle,
+          ),
+          textAlign: TextAlign.center,
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (!isAudit) ...[
-                Text('举报人: ${report['reporterName']}'),
-                const SizedBox(height: 8),
-              ],
-              Text('帖子: ${report['postTitle']}'),
+              Text(
+                '举报人: ${report['reporterName']}',
+                style: TextStyle(
+                  fontSize: 14.0,
+                  color: AppColors.dialogContent,
+                ),
+              ),              ],
+              const SizedBox(height: 8),
+              Text(
+                '举报人: ${report['reporterName']}',
+                style: TextStyle(
+                  fontSize: 14.0,
+                  color: AppColors.dialogContent,
+                ),
+              ),
+              Text('帖子: ${report['postTitle']}',
+                style: TextStyle(
+                  fontSize: 14.0,
+                  color: AppColors.dialogContent,
+                ),
+               ),
               const SizedBox(height: 8),
               if (!isAudit) ...[
-                Text('举报理由: ${report['description']}'),
+                Text('举报理由: ${report['description']}',
+                style: TextStyle(
+                  fontSize: 14.0,
+                  color: AppColors.dialogContent),
+                ),
                 const SizedBox(height: 16),
               ],
               if (isAudit) const SizedBox(height: 16),
@@ -1256,6 +1297,23 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                   labelText: '处理原因',
                   hintText: isAudit ? '请输入打回原因（审核通过可留空）' : '请输入下架或忽略的原因',
                   border: const OutlineInputBorder(),
+                  filled: true,
+                                    fillColor: AppColors.backgroundLight,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8.0),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8.0),
+                                      borderSide: BorderSide(
+                                        color: AppColors.primary,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16.0,
+                                      vertical: 12.0,
+                                    ),
                 ),
                 maxLines: 3,
               ),

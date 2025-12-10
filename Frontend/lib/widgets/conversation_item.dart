@@ -29,7 +29,7 @@ class ConversationItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       child: InkWell(
         onTap: onTap,
         child: Container(
@@ -43,14 +43,14 @@ class ConversationItem extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildHeader(),
+                    _buildHeader(context),
                     const SizedBox(height: 4),
-                    _buildLastMessage(),
+                    _buildLastMessage(context),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              _buildMetaInfo(),
+              _buildMetaInfo(context),
             ],
           ),
         ),
@@ -114,7 +114,10 @@ class ConversationItem extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final primary = scheme.primary;
+    final onSurface = scheme.onSurface;
     return Row(
       children: [
         Expanded(
@@ -123,7 +126,7 @@ class ConversationItem extends StatelessWidget {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: onSurface,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -134,13 +137,13 @@ class ConversationItem extends StatelessWidget {
             margin: const EdgeInsets.only(left: 6),
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: const Color(0xFF1976D2).withOpacity(0.1),
+              color: primary.withOpacity(0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               '${conversation.participants.length}',
               style: TextStyle(
-                color: const Color(0xFF1976D2),
+                color: primary,
                 fontSize: 10,
                 fontWeight: FontWeight.w500,
               ),
@@ -150,12 +153,15 @@ class ConversationItem extends StatelessWidget {
     );
   }
 
-  Widget _buildLastMessage() {
+  Widget _buildLastMessage(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final onSurface = scheme.onSurface;
+    final onSurfaceVariant = scheme.onSurfaceVariant;
     if (conversation.lastMessage == null) {
       return Text(
         '暂无消息',
         style: TextStyle(
-          color: Colors.grey[500],
+          color: onSurfaceVariant,
           fontSize: 14,
         ),
         maxLines: 1,
@@ -196,7 +202,7 @@ class ConversationItem extends StatelessWidget {
             height: 12,
             child: CircularProgressIndicator(
               strokeWidth: 1.5,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[400]!),
+              valueColor: AlwaysStoppedAnimation<Color>(onSurfaceVariant),
             ),
           ),
           const SizedBox(width: 4),
@@ -204,7 +210,7 @@ class ConversationItem extends StatelessWidget {
           Icon(
             Icons.error_outline,
             size: 12,
-            color: Colors.red[400],
+            color: scheme.error,
           ),
           const SizedBox(width: 4),
         ],
@@ -212,7 +218,7 @@ class ConversationItem extends StatelessWidget {
           child: Text(
             content,
             style: TextStyle(
-              color: conversation.unreadCount > 0 ? Colors.black87 : Colors.grey[600],
+              color: conversation.unreadCount > 0 ? onSurface : onSurfaceVariant,
               fontSize: 14,
               fontWeight: conversation.unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
             ),
@@ -224,14 +230,16 @@ class ConversationItem extends StatelessWidget {
     );
   }
 
-  Widget _buildMetaInfo() {
+  Widget _buildMetaInfo(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final onSurfaceVariant = scheme.onSurfaceVariant;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Text(
           _formatTime(conversation.updatedAt),
           style: TextStyle(
-            color: Colors.grey[500],
+            color: onSurfaceVariant,
             fontSize: 12,
           ),
         ),
@@ -240,7 +248,7 @@ class ConversationItem extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: const Color(0xFF1976D2),
+              color: scheme.primary,
               borderRadius: BorderRadius.circular(10),
             ),
             constraints: const BoxConstraints(
@@ -249,8 +257,8 @@ class ConversationItem extends StatelessWidget {
             ),
             child: Text(
               conversation.unreadCount > 99 ? '99+' : '${conversation.unreadCount}',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: scheme.onPrimary,
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
               ),
@@ -261,13 +269,13 @@ class ConversationItem extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: const Color(0xFF4CAF50).withOpacity(0.1),
+              color: scheme.secondaryContainer.withOpacity(0.6),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               '正在输入...',
               style: TextStyle(
-                color: const Color(0xFF4CAF50),
+                color: scheme.onSecondaryContainer,
                 fontSize: 10,
                 fontWeight: FontWeight.w500,
               ),
