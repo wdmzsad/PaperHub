@@ -431,6 +431,37 @@ public class AdminController {
                 app.getDecidedAt()
         );
     }
+
+    // java
+    @PostMapping("/post/{postId}/approve-audit")
+    public ResponseEntity<?> approveAuditPost(@AuthenticationPrincipal User currentUser,
+                                              @PathVariable Long postId) {
+        if (!isAdmin(currentUser)) {
+            return ResponseEntity.status(403).body(Map.of("message", "需要管理员权限"));
+        }
+        try {
+            adminService.approveAuditPost(postId);
+            return ResponseEntity.ok(Map.of("message", "审核通过"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/post/{postId}/reject-audit")
+    public ResponseEntity<?> rejectAuditPost(@AuthenticationPrincipal User currentUser,
+                                             @PathVariable Long postId,
+                                             @RequestBody Map<String, String> body) {
+        if (!isAdmin(currentUser)) {
+            return ResponseEntity.status(403).body(Map.of("message", "需要管理员权限"));
+        }
+        try {
+            String reason = body.getOrDefault("reason", "不符合发布要求");
+            adminService.rejectAuditPost(postId, reason);
+            return ResponseEntity.ok(Map.of("message", "已打回草稿"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
 }
 
 

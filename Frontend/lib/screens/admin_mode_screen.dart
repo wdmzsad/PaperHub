@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import '../config/app_env.dart';
 import '../services/api_service.dart';
 
 enum _AdminSection {
@@ -48,6 +52,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
   bool _reportLoading = false;
   int _reportPage = 0;
   int _reportTotal = 0;
+  WebSocketChannel? _wsChannel;
 
   // ==== 公告管理 ====
   String _noticeSearchKeyword = '';
@@ -136,6 +141,54 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     super.initState();
     _selectedSection = _menuItems.first.section;
     _loadInitialData();
+    _connectWebSocket();
+  }
+
+  @override
+  void dispose() {
+    _wsChannel?.sink.close();
+    _noticeTitleCtrl.dispose();
+    _noticeContentCtrl.dispose();
+    super.dispose();
+  }
+
+  void _connectWebSocket() {
+    try {
+      final wsUrl = '${AppEnv.wsBaseUrl}/ws/admin';
+      _wsChannel = WebSocketChannel.connect(Uri.parse(wsUrl));
+      _wsChannel!.stream.listen(
+        (event) {
+          try {
+            final data = jsonDecode(event);
+            if (data['type'] == 'post_status_update') {
+              _handlePostStatusUpdate(data);
+            }
+          } catch (e) {
+            print('WebSocket message parse error: $e');
+          }
+        },
+        onError: (error) {
+          print('WebSocket error: $error');
+        },
+        onDone: () {
+          print('WebSocket connection closed');
+        },
+      );
+    } catch (e) {
+      print('WebSocket connection error: $e');
+    }
+  }
+
+  void _handlePostStatusUpdate(Map<String, dynamic> data) {
+    if (_selectedSection == _AdminSection.postReports && !_reportLoading) {
+      _loadReports(page: _reportPage);
+    }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _loadInitialData() async {
@@ -549,12 +602,20 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                         '${r['reporterName'] ?? ''} (ID: ${r['reporterId'] ?? ''})',
                       ),
                       Text(_formatPostTime(r['reportTime']?.toString())),
-                      Text('${r['postTitle'] ?? ''} (ID: ${r['postId'] ?? ''})'),
+                      TextButton(
+                        onPressed: () =>
+                            _viewPostDetail(r['postId']?.toString()),
+                        child: Text(
+                          '${r['postTitle'] ?? ''} (ID: ${r['postId'] ?? ''})',
+                        ),
+                      ),
                       Text(r['description']?.toString() ?? ''),
                       _buildStatusChip(r['status']?.toString()),
                       _buildPostStatusChip(r['postStatusAfter']?.toString()),
                       OutlinedButton(
-                        onPressed: r['status']?.toString() == 'PENDING'
+                        onPressed:
+                            (r['status']?.toString() == 'PENDING' ||
+                                r['postStatusAfter']?.toString() == 'AUDIT')
                             ? () => _showPostReportDialog(r)
                             : null,
                         child: const Text('处理'),
@@ -948,39 +1009,85 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
   }
 
   void _showReportDialog({String? reportId}) {
+    final report = _reportList.firstWhere(
+      (r) => r['id'].toString() == reportId,
+    );
+    final targetType = report['targetType']?.toString();
+
+    if (targetType == 'USER') {
+      _showUserReportDialog(report);
+    } else {
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('处理举报'),
+          content: const Text('该举报类型暂不支持'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('关闭'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  void _showUserReportDialog(Map<String, dynamic> report) {
+    final userId = report['reportedUser']?['id']?.toString();
+    if (userId == null) return;
+
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('处理举报'),
+        title: const Text('处理用户举报'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text('举报人: ${report['reporter']?['name']}'),
+            const SizedBox(height: 8),
+            Text('被举报用户: ${report['reportedUser']?['name']}'),
+            const SizedBox(height: 8),
+            Text('举报理由: ${report['reason']}'),
+            const SizedBox(height: 16),
             const Text('请选择处理方式：'),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
+              runSpacing: 8,
               children: [
                 ElevatedButton(
-                  onPressed: () {
-                    // TODO: 调用 ApiService.adminHandleReport(action: DELETE_POST)
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _handleBanUser(userId);
                   },
-                  child: const Text('删除帖子'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('封禁用户'),
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    // TODO: 调用 ApiService.adminHandleReport(action: NO_VIOLATION)
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _handleUnbanUser(userId);
                   },
-                  child: const Text('无违规'),
+                  child: const Text('解除封禁'),
                 ),
-                OutlinedButton(
-                  onPressed: () {
-                    // TODO: 调用 ApiService.adminHandleReport(action: BAN_USER)
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _handleMuteUser(userId);
                   },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.redAccent,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
                   ),
-                  child: const Text('封禁用户'),
+                  child: const Text('禁言'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _handleUnmuteUser(userId);
+                  },
+                  child: const Text('解除禁言'),
                 ),
               ],
             ),
@@ -989,36 +1096,166 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
+            child: const Text('取消'),
           ),
         ],
       ),
     );
   }
 
+  Future<void> _handleBanUser(String userId) async {
+    try {
+      final resp = await ApiService.adminBanUser(userId);
+      if (resp['statusCode'] == 200) {
+        _showSnackBar('用户已封禁');
+        _loadReports(page: _reportPage);
+      } else {
+        _showSnackBar('操作失败: ${resp['body']?['message'] ?? '未知错误'}');
+      }
+    } catch (e) {
+      _showSnackBar('操作失败: $e');
+    }
+  }
+
+  Future<void> _handleUnbanUser(String userId) async {
+    try {
+      final resp = await ApiService.adminUnbanUser(userId);
+      if (resp['statusCode'] == 200) {
+        _showSnackBar('已解除封禁');
+        _loadReports(page: _reportPage);
+      } else {
+        _showSnackBar('操作失败: ${resp['body']?['message'] ?? '未知错误'}');
+      }
+    } catch (e) {
+      _showSnackBar('操作失败: $e');
+    }
+  }
+
+  Future<void> _handleMuteUser(String userId) async {
+    final durationController = TextEditingController(text: '7');
+    String selectedUnit = 'DAYS';
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('禁言用户'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: durationController,
+                decoration: const InputDecoration(
+                  labelText: '禁言时长',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: selectedUnit,
+                decoration: const InputDecoration(
+                  labelText: '时间单位',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'HOURS', child: Text('小时')),
+                  DropdownMenuItem(value: 'DAYS', child: Text('天')),
+                  DropdownMenuItem(value: 'MONTHS', child: Text('月')),
+                  DropdownMenuItem(value: 'YEARS', child: Text('年')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => selectedUnit = value);
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final duration = int.tryParse(durationController.text);
+                if (duration == null || duration <= 0) {
+                  _showSnackBar('请输入有效的时长');
+                  return;
+                }
+                Navigator.pop(ctx);
+                try {
+                  final resp = await ApiService.adminMuteUser(
+                    userId,
+                    duration: duration,
+                    unit: selectedUnit,
+                  );
+                  if (resp['statusCode'] == 200) {
+                    _showSnackBar('用户已禁言');
+                    _loadReports(page: _reportPage);
+                  } else {
+                    _showSnackBar(
+                      '操作失败: ${resp['body']?['message'] ?? '未知错误'}',
+                    );
+                  }
+                } catch (e) {
+                  _showSnackBar('操作失败: $e');
+                }
+              },
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleUnmuteUser(String userId) async {
+    try {
+      final resp = await ApiService.adminUnmuteUser(userId);
+      if (resp['statusCode'] == 200) {
+        _showSnackBar('已解除禁言');
+        _loadReports(page: _reportPage);
+      } else {
+        _showSnackBar('操作失败: ${resp['body']?['message'] ?? '未知错误'}');
+      }
+    } catch (e) {
+      _showSnackBar('操作失败: $e');
+    }
+  }
+
   void _showPostReportDialog(Map<String, dynamic> report) {
     final reasonController = TextEditingController();
+    final postStatus = report['postStatusAfter']?.toString();
+    final isAudit = postStatus == 'AUDIT';
+
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('处理帖子举报'),
+        title: Text(isAudit ? '处理待审核帖子' : '处理帖子举报'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('举报人: ${report['reporterName']}'),
+              if (!isAudit) ...[
+                Text('举报人: ${report['reporterName']}'),
+                const SizedBox(height: 8),
+              ],
+              Text('帖子: ${report['postTitle']}'),
               const SizedBox(height: 8),
-              Text('被举报帖子: ${report['postTitle']}'),
-              const SizedBox(height: 8),
-              Text('举报理由: ${report['description']}'),
-              const SizedBox(height: 16),
+              if (!isAudit) ...[
+                Text('举报理由: ${report['description']}'),
+                const SizedBox(height: 16),
+              ],
+              if (isAudit) const SizedBox(height: 16),
               TextField(
                 controller: reasonController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: '处理原因',
-                  hintText: '请输入下架或忽略的原因',
-                  border: OutlineInputBorder(),
+                  hintText: isAudit ? '请输入打回原因（审核通过可留空）' : '请输入下架或忽略的原因',
+                  border: const OutlineInputBorder(),
                 ),
                 maxLines: 3,
               ),
@@ -1030,21 +1267,43 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
             onPressed: () => Navigator.pop(ctx),
             child: const Text('取消'),
           ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _handleIgnoreReport(report['id'], reasonController.text);
-            },
-            child: const Text('忽略举报'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _handleRemovePost(report['id'], reasonController.text);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('下架帖子'),
-          ),
+          if (isAudit) ...[
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _handleRejectAudit(
+                  report['postId'],
+                  reasonController.text,
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: const Text('继续打回'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _handleApproveAudit(report['postId']);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              child: const Text('审核通过'),
+            ),
+          ] else ...[
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _handleIgnoreReport(report['id'], reasonController.text);
+              },
+              child: const Text('忽略举报'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _handleRemovePost(report['id'], reasonController.text);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('打回帖子'),
+            ),
+          ],
         ],
       ),
     );
@@ -1057,16 +1316,16 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         reason: reason.isEmpty ? '违规内容' : reason,
       );
       if (resp['statusCode'] == 200 && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('帖子已下架')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('帖子已打回')));
         _loadReports(page: _reportPage);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('操作失败: $e')));
       }
     }
   }
@@ -1078,16 +1337,150 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         reason: reason.isEmpty ? '未发现违规' : reason,
       );
       if (resp['statusCode'] == 200 && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已忽略该举报')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已忽略该举报')));
         _loadReports(page: _reportPage);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败: $e')),
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('操作失败: $e')));
+      }
+    }
+  }
+
+  Future<void> _handleRejectAudit(int postId, String reason) async {
+    try {
+      final resp = await ApiService.adminRejectAuditPost(
+        postId: postId,
+        reason: reason.isEmpty ? '不符合发布要求' : reason,
+      );
+      if (resp['statusCode'] == 200 && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已打回草稿')));
+        _loadReports(page: _reportPage);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('操作失败: $e')));
+      }
+    }
+  }
+
+  Future<void> _handleApproveAudit(int postId) async {
+    try {
+      final resp = await ApiService.adminApproveAuditPost(postId: postId);
+      if (resp['statusCode'] == 200 && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('审核通过')));
+        _loadReports(page: _reportPage);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('操作失败: $e')));
+      }
+    }
+  }
+
+  void _viewPostDetail(String? postId) async {
+    if (postId == null || postId.isEmpty) return;
+    try {
+      final resp = await ApiService.getPostDetail(postId);
+      if (resp['statusCode'] == 200 && mounted) {
+        final postData = resp['body'];
+        showDialog(
+          context: context,
+          builder: (ctx) => Dialog(
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.8,
+              height: MediaQuery.of(context).size.height * 0.8,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        '帖子详情',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            postData['title'] ?? '',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '作者: ${postData['author']?['name'] ?? ''}',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '状态: ${postData['status'] ?? ''}',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          if (postData['hiddenReason'] != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              '打回原因: ${postData['hiddenReason']}',
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          Text(postData['content'] ?? ''),
+                          const SizedBox(height: 16),
+                          if (postData['media'] != null &&
+                              (postData['media'] as List).isNotEmpty)
+                            ...((postData['media'] as List).map(
+                              (url) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Image.network(
+                                  url,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const Text('图片加载失败'),
+                                ),
+                              ),
+                            )),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('无法查看帖子: $e')));
       }
     }
   }
@@ -1706,6 +2099,10 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         ],
       ),
     );
+  }
+
+  void showSnackBar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 }
 

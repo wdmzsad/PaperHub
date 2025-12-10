@@ -73,8 +73,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   /// 编辑模式下旧图片的 URL 列表
   final List<String> _existingImageUrls = [];
+
   /// 编辑模式下旧 PDF 的 URL
   String? _existingPdfUrl;
+
   /// 是否处于编辑模式
   bool get _isEditing => widget.initialPost != null;
 
@@ -271,7 +273,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     });
   }
 
-   /// 校验链接格式是否可识别，只接受 http / https
+  /// 校验链接格式是否可识别，只接受 http / https
   bool _isValidUrl(String url) {
     final trimmed = url.trim();
     if (trimmed.isEmpty) return false;
@@ -284,87 +286,97 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   // 上传图片到后端，返回 URL
   Future<String?> _uploadFileToServer(XFile file, String fileType) async {
-  try {
-    final uri = Uri.parse('${AppEnv.apiBaseUrl}/posts/upload');
-    final request = http.MultipartRequest('POST', uri);
+    try {
+      final uri = Uri.parse('${AppEnv.apiBaseUrl}/posts/upload');
+      final request = http.MultipartRequest('POST', uri);
 
-    if (fileType == 'image') {
-      if (kIsWeb) {
-        final bytes = await file.readAsBytes();
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'file',
-            bytes,
-            filename: file.name,
-            contentType: MediaType('image', file.mimeType?.split('/').last ?? 'jpeg'),
-          ),
-        );
+      if (fileType == 'image') {
+        if (kIsWeb) {
+          final bytes = await file.readAsBytes();
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'file',
+              bytes,
+              filename: file.name,
+              contentType: MediaType(
+                'image',
+                file.mimeType?.split('/').last ?? 'jpeg',
+              ),
+            ),
+          );
+        } else {
+          request.files.add(
+            await http.MultipartFile.fromPath('file', file.path),
+          );
+        }
+      } else if (fileType == 'pdf') {
+        if (kIsWeb) {
+          final bytes = await file.readAsBytes();
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'file',
+              bytes,
+              filename: file.name,
+              contentType: MediaType('application', 'pdf'),
+            ),
+          );
+        } else {
+          request.files.add(
+            await http.MultipartFile.fromPath('file', file.path),
+          );
+        }
       } else {
-        request.files.add(await http.MultipartFile.fromPath('file', file.path));
+        print('不支持的文件类型');
+        return null;
       }
-    } else if (fileType == 'pdf') {
-      if (kIsWeb) {
-        final bytes = await file.readAsBytes();
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'file',
-            bytes,
-            filename: file.name,
-            contentType: MediaType('application', 'pdf'),
-          ),
-        );
+
+      final response = await request.send();
+      if (response.statusCode == 200) {
+        final respStr = await response.stream.bytesToString();
+        final data = jsonDecode(respStr) as Map<String, dynamic>;
+        return data['url'] as String?;
       } else {
-        request.files.add(await http.MultipartFile.fromPath('file', file.path));
+        print('上传失败: ${response.statusCode}');
+        return null;
       }
-    } else {
-      print('不支持的文件类型');
+    } catch (e) {
+      print('上传文件失败: $e');
       return null;
     }
-
-    final response = await request.send();
-    if (response.statusCode == 200) {
-      final respStr = await response.stream.bytesToString();
-      final data = jsonDecode(respStr) as Map<String, dynamic>;
-      return data['url'] as String?;
-    } else {
-      print('上传失败: ${response.statusCode}');
-      return null;
-    }
-  } catch (e) {
-    print('上传文件失败: $e');
-    return null;
   }
-}
 
   // 发布 / 编辑 笔记
-  Future<void> _publishNote() async {
+  Future<void> _publishNote({
+    String? statusOverride,
+    String? customSuccessMessage,
+  }) async {
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
 
     // 不允许为空的内容
     if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入标题')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入标题')));
       return;
     }
     if (content.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入正文')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入正文')));
       return;
     }
     // 只有“新建笔记”强制要求必须选择图片；编辑时可以只改文字 / 链接
     if (!_isEditing && _images.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请添加图片')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请添加图片')));
       return;
     }
     if (_selectedDiscipline == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请选择一个学科分区')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请选择一个学科分区')));
       return;
     }
 
@@ -395,7 +407,6 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         mediaUrls.add(_existingPdfUrl!);
       }
 
-
       // 2) 上传新选择的图片
       for (var img in _images) {
         final url = await _uploadFileToServer(img, 'image');
@@ -410,9 +421,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           if (_pdfFileBytes == null) {
             if (mounted) {
               Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('PDF 文件数据异常，请重新选择')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('PDF 文件数据异常，请重新选择')));
             }
             return;
           }
@@ -434,16 +445,18 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       }
 
       // 4) 外部链接（过滤空字符串）
-      final links =
-          _externalLinks.where((e) => e.trim().isNotEmpty).toList();
+      final links = _externalLinks.where((e) => e.trim().isNotEmpty).toList();
 
       // 5) arXiv 相关
-      final String? arxivPublishedDate =
-          _arxivMetadata?.publishedDateFormatted;
+      final String? arxivPublishedDate = _arxivMetadata?.publishedDateFormatted;
       final List<String>? arxivAuthors = _arxivMetadata?.authors;
       final List<String>? arxivCategories = _arxivMetadata?.categories;
 
       // 6) 调用后端接口：新建 or 更新
+      final String? normalizedStatus = statusOverride != null
+          ? statusOverride.toUpperCase()
+          : null;
+
       Map<String, dynamic> resp;
       if (_isEditing && widget.initialPost != null) {
         // === 编辑已有帖子 ===
@@ -461,7 +474,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           arxivAuthors: arxivAuthors,
           arxivPublishedDate: arxivPublishedDate,
           arxivCategories: arxivCategories,
-          references: _selectedReferences.isNotEmpty ? _selectedReferences : null,
+          references: _selectedReferences.isNotEmpty
+              ? _selectedReferences
+              : null,
+          status: normalizedStatus,
         );
       } else {
         // === 新建帖子 ===
@@ -478,7 +494,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           arxivAuthors: arxivAuthors,
           arxivPublishedDate: arxivPublishedDate,
           arxivCategories: arxivCategories,
-          references: _selectedReferences.isNotEmpty ? _selectedReferences : null,
+          references: _selectedReferences.isNotEmpty
+              ? _selectedReferences
+              : null,
+          status: normalizedStatus,
         );
       }
 
@@ -499,11 +518,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             }
           }
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(_isEditing ? '笔记已更新' : '发布成功'),
-            ),
-          );
+          final successText =
+              customSuccessMessage ?? (_isEditing ? '笔记已更新' : '发布成功');
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(successText)));
           // 返回 true，告诉上一个页面“需要刷新”
           Navigator.of(context).pop(createdPost ?? true);
         }
@@ -512,20 +531,16 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             ? body['message'].toString()
             : (_isEditing ? '保存失败' : '发布失败');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(msg)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(msg)));
         }
       }
     } catch (e) {
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _isEditing ? '保存失败，网络错误' : '发布失败，网络错误',
-            ),
-          ),
+          SnackBar(content: Text(_isEditing ? '保存失败，网络错误' : '发布失败，网络错误')),
         );
       }
     }
@@ -535,9 +550,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   Future<void> _fetchArxivMetadata() async {
     final input = _arxivController.text.trim();
     if (input.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入 arXiv ID 或链接')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入 arXiv ID 或链接')));
       return;
     }
 
@@ -547,23 +562,24 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
     try {
       final metadata = await ArxivService.fetchMetadata(input);
-      
+
       setState(() {
         _arxivMetadata = metadata;
         _arxivId = metadata.id;
-        
+
         // 自动填充标题（如果为空）
         if (_titleController.text.trim().isEmpty) {
           _titleController.text = metadata.title;
         }
-        
+
         // 填充元数据
         _doi = metadata.doi;
         _journal = metadata.journal;
         _year = metadata.yearFormatted;
-        
+
         // 如果摘要存在且内容为空，可以添加到内容中
-        if (metadata.abstract != null && _contentController.text.trim().isEmpty) {
+        if (metadata.abstract != null &&
+            _contentController.text.trim().isEmpty) {
           _contentController.text = '摘要：${metadata.abstract}';
         }
       });
@@ -630,6 +646,116 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     _linkController.dispose();
     _arxivController.dispose();
     super.dispose();
+  }
+
+  Widget _buildAdminFeedbackBanner(String reason) {
+    final displayReason = reason.trim().isEmpty ? '管理员未提供具体原因' : reason.trim();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3E0),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFFCC80)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.info_outline, color: Color(0xFFF57C00), size: 18),
+              SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '管理员退回说明',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFFF57C00),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            displayReason,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF5D4037)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomActions({
+    required bool isDraft,
+    required bool isAdminRejectedDraft,
+  }) {
+    if (!_isEditing) {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: () => _publishNote(),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF1976D2),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: const Text(
+            '发布笔记',
+            style: TextStyle(fontSize: 16, color: Colors.white),
+          ),
+        ),
+      );
+    }
+
+    final String secondButtonLabel = isAdminRejectedDraft ? '保存并提交审核' : '保存并发布';
+    final String secondButtonStatus = isAdminRejectedDraft ? 'AUDIT' : 'NORMAL';
+    final String secondButtonSuccess = isAdminRejectedDraft ? '已提交审核' : '发布成功';
+
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: () => _publishNote(
+              statusOverride: 'DRAFT',
+              customSuccessMessage: '草稿已保存',
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              foregroundColor: const Color(0xFF1976D2),
+              side: const BorderSide(color: Color(0xFF1976D2)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('保存为草稿', style: TextStyle(fontSize: 16)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: () => _publishNote(
+              statusOverride: secondButtonStatus,
+              customSuccessMessage: secondButtonSuccess,
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1976D2),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              secondButtonLabel,
+              style: const TextStyle(fontSize: 16, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   // 移除已有图片（编辑模式）
@@ -761,10 +887,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       children: [
         const Text(
           'arXiv 文献信息',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Row(
@@ -793,7 +916,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   : const Icon(Icons.search, size: 18),
               label: const Text('获取'),
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
               ),
             ),
           ],
@@ -875,7 +1001,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       'arXiv ID: $_arxivId',
-                      style: TextStyle(fontSize: 11, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[600],
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ),
               ],
@@ -894,10 +1024,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         const SizedBox(height: 16),
         const Text(
           '外部链接',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Row(
@@ -918,9 +1045,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 final text = _linkController.text.trim();
 
                 if (text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('链接不能为空')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('链接不能为空')));
                   return;
                 }
 
@@ -939,7 +1066,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               icon: const Icon(Icons.add_link, size: 18),
               label: const Text('添加'),
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
               ),
             ),
           ],
@@ -953,10 +1083,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               return Chip(
                 label: SizedBox(
                   width: 160,
-                  child: Text(
-                    link,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(link, overflow: TextOverflow.ellipsis),
                 ),
                 onDeleted: () {
                   setState(() {
@@ -982,10 +1109,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           children: [
             const Text(
               '选择分区',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(width: 6),
             Container(
@@ -1010,12 +1134,23 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               children: [
                 if (_selectedDiscipline != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
-                      color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.1) ?? const Color(0xFF1976D2).withOpacity(0.1),
+                      color:
+                          kDisciplineColors[_selectedDiscipline]?.withOpacity(
+                            0.1,
+                          ) ??
+                          const Color(0xFF1976D2).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: kDisciplineColors[_selectedDiscipline]?.withOpacity(0.3) ?? const Color(0xFF1976D2).withOpacity(0.3),
+                        color:
+                            kDisciplineColors[_selectedDiscipline]?.withOpacity(
+                              0.3,
+                            ) ??
+                            const Color(0xFF1976D2).withOpacity(0.3),
                         width: 1,
                       ),
                     ),
@@ -1023,7 +1158,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                       _selectedDiscipline!,
                       style: TextStyle(
                         fontSize: 14,
-                        color: kDisciplineColors[_selectedDiscipline] ?? const Color(0xFF1976D2),
+                        color:
+                            kDisciplineColors[_selectedDiscipline] ??
+                            const Color(0xFF1976D2),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1044,7 +1181,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                       border: Border.all(color: Colors.grey.shade300),
                     ),
                     child: Icon(
-                      _showDisciplineDropdown ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                      _showDisciplineDropdown
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
                       size: 20,
                       color: Colors.grey.shade700,
                     ),
@@ -1116,7 +1255,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   runSpacing: 10, // 垂直间距
                   children: filteredDisciplines.map((discipline) {
                     final bool selected = _selectedDiscipline == discipline;
-                    final color = kDisciplineColors[discipline] ?? const Color(0xFF1976D2);
+                    final color =
+                        kDisciplineColors[discipline] ??
+                        const Color(0xFF1976D2);
 
                     return GestureDetector(
                       onTap: () {
@@ -1127,9 +1268,14 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                       },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
-                          color: selected ? color.withOpacity(0.12) : Colors.grey.shade50,
+                          color: selected
+                              ? color.withOpacity(0.12)
+                              : Colors.grey.shade50,
                           borderRadius: BorderRadius.circular(20), // 椭圆形
                           border: Border.all(
                             color: selected ? color : Colors.grey.shade300,
@@ -1176,7 +1322,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                               style: TextStyle(
                                 fontSize: 13,
                                 color: selected ? color : Colors.black87,
-                                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                                fontWeight: selected
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
                               ),
                             ),
                             if (selected)
@@ -1201,7 +1349,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     padding: const EdgeInsets.only(top: 16),
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline, size: 14, color: Colors.orange.shade700),
+                        Icon(
+                          Icons.info_outline,
+                          size: 14,
+                          color: Colors.orange.shade700,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -1249,7 +1401,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       return kMainDisciplines; // 管理员可以看到所有分区
     } else {
       // 普通用户或角色未加载时隐藏"公告区"
-      return kMainDisciplines.where((discipline) => discipline != '公告区').toList();
+      return kMainDisciplines
+          .where((discipline) => discipline != '公告区')
+          .toList();
     }
   }
 
@@ -1310,9 +1464,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           _filteredTagSuggestions.clear();
           if (tagInput.isNotEmpty) {
             _filteredTagSuggestions.addAll(
-              availableTags.where((tag) =>
-                tag.toLowerCase().contains(tagInput.toLowerCase())
-              ).toList()
+              availableTags
+                  .where(
+                    (tag) => tag.toLowerCase().contains(tagInput.toLowerCase()),
+                  )
+                  .toList(),
             );
           }
 
@@ -1361,9 +1517,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       final newText = beforeHash + '#$tag ';
       _contentController.text = newText;
       _contentController.selection = TextSelection.fromPosition(
-        TextPosition(offset: newText.length)
+        TextPosition(offset: newText.length),
       );
-
 
       // 隐藏建议
       setState(() {
@@ -1377,7 +1532,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   // 处理自定义标签完成（按空格或回车）
   void _completeCustomTag() {
-    if (_currentTagInput.isNotEmpty && !_filteredTagSuggestions.contains(_currentTagInput)) {
+    if (_currentTagInput.isNotEmpty &&
+        !_filteredTagSuggestions.contains(_currentTagInput)) {
       // 这是一个自定义标签
       final currentText = _contentController.text;
       final lastIndex = currentText.lastIndexOf('#');
@@ -1395,9 +1551,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         final newText = beforeHash + '#$_currentTagInput ';
         _contentController.text = newText;
         _contentController.selection = TextSelection.fromPosition(
-          TextPosition(offset: newText.length)
+          TextPosition(offset: newText.length),
         );
-
       }
     }
 
@@ -1464,9 +1619,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         }
 
         if (favoritesResp['statusCode'] == 200) {
-          final favoritesData = favoritesResp['body']['posts'] as List<dynamic>? ?? [];
+          final favoritesData =
+              favoritesResp['body']['posts'] as List<dynamic>? ?? [];
           setState(() {
-            _userFavorites = favoritesData.map((p) => Post.fromJson(p)).toList();
+            _userFavorites = favoritesData
+                .map((p) => Post.fromJson(p))
+                .toList();
           });
         }
       }
@@ -1569,11 +1727,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               });
             },
           ),
-          title: Text(
-            post.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
+          title: Text(post.title, maxLines: 2, overflow: TextOverflow.ellipsis),
           subtitle: Text(
             '${post.author.name} · ${post.createdAt.year}-${post.createdAt.month.toString().padLeft(2, '0')}-${post.createdAt.day.toString().padLeft(2, '0')}',
             style: const TextStyle(fontSize: 12),
@@ -1596,7 +1750,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   // 构建标签建议列表
   Widget _buildTagSuggestions() {
-        if (!_showTagSuggestions) {
+    if (!_showTagSuggestions) {
       return const SizedBox.shrink();
     }
 
@@ -1623,7 +1777,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               _isTypingCustomTag ? '自定义标签（按空格或回车完成输入）' : '标签建议（输入#继续筛选）',
               style: TextStyle(
                 fontSize: 12,
-                color: _isTypingCustomTag ? Colors.orange.shade700 : Colors.grey.shade600,
+                color: _isTypingCustomTag
+                    ? Colors.orange.shade700
+                    : Colors.grey.shade600,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1631,13 +1787,18 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           const Divider(height: 1),
           ..._filteredTagSuggestions.map((tag) {
             // 检查标签是否已经出现在正文中
-            final bool alreadySelected = _contentController.text.contains('#$tag ');
+            final bool alreadySelected = _contentController.text.contains(
+              '#$tag ',
+            );
             return Material(
               color: Colors.transparent,
               child: InkWell(
                 onTap: () => _selectTagSuggestion(tag),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(
@@ -1651,7 +1812,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                       Icon(
                         Icons.tag,
                         size: 16,
-                        color: alreadySelected ? Colors.blue : Colors.grey.shade600,
+                        color: alreadySelected
+                            ? Colors.blue
+                            : Colors.grey.shade600,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -1659,17 +1822,17 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                           tag,
                           style: TextStyle(
                             fontSize: 14,
-                            color: alreadySelected ? Colors.blue : Colors.black87,
-                            fontWeight: alreadySelected ? FontWeight.w600 : FontWeight.normal,
+                            color: alreadySelected
+                                ? Colors.blue
+                                : Colors.black87,
+                            fontWeight: alreadySelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
                           ),
                         ),
                       ),
                       if (alreadySelected)
-                        Icon(
-                          Icons.check,
-                          size: 16,
-                          color: Colors.blue,
-                        ),
+                        Icon(Icons.check, size: 16, color: Colors.blue),
                     ],
                   ),
                 ),
@@ -1681,13 +1844,17 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, size: 16, color: Colors.orange.shade700),
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: Colors.orange.shade700,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _isTypingCustomTag
-                        ? '正在输入自定义标签 "$_currentTagInput"，按空格或回车完成输入'
-                        : '未找到匹配的标签，按空格或回车可输入自定义标签 "$_currentTagInput"',
+                          ? '正在输入自定义标签 "$_currentTagInput"，按空格或回车完成输入'
+                          : '未找到匹配的标签，按空格或回车可输入自定义标签 "$_currentTagInput"',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.orange.shade700,
@@ -1709,10 +1876,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       children: [
         const Text(
           '引用文献',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Row(
@@ -1725,7 +1889,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 backgroundColor: Colors.grey[100],
                 foregroundColor: Colors.black87,
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -1807,7 +1974,10 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                           Expanded(
                             child: Text(
                               '[${_selectedReferences.indexOf(postId) + 1}] 帖子ID: $postId (信息加载中...)',
-                              style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
                             ),
                           ),
                           IconButton(
@@ -1836,6 +2006,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   @override
   Widget build(BuildContext context) {
     final bool hasPdf = _pdfFile != null || _existingPdfUrl != null;
+    final Post? editingPost = widget.initialPost;
+    final String? currentStatus = editingPost?.status?.toUpperCase();
+    final bool isDraft = _isEditing && currentStatus == 'DRAFT';
+    final bool hasHiddenReason =
+        isDraft && (editingPost?.hiddenReason?.trim().isNotEmpty ?? false);
+    final bool isAdminRejectedDraft = isDraft && hasHiddenReason;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -1854,9 +2030,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             Navigator.of(context).maybePop();
           },
         ),
-        actions: const [
-          SizedBox(width: 48),
-        ],
+        actions: const [SizedBox(width: 48)],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -1864,7 +2038,13 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              
+              if (isAdminRejectedDraft) ...[
+                _buildAdminFeedbackBanner(
+                  editingPost!.draftReason ?? editingPost.hiddenReason ?? '',
+                ),
+                const SizedBox(height: 16),
+              ],
+
               //选择图片
               _buildImageGrid(),
               const SizedBox(height: 16),
@@ -1932,9 +2112,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   ElevatedButton.icon(
                     onPressed: _pickPdf,
                     icon: const Icon(Icons.picture_as_pdf_outlined),
-                    label: Text(
-                      hasPdf ? '替换 PDF' : '添加 PDF 附件（仅一篇）',
-                    ),
+                    label: Text(hasPdf ? '替换 PDF' : '添加 PDF 附件（仅一篇）'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey[100],
                       foregroundColor: Colors.black87,
@@ -1968,7 +2146,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                           IconButton(
                             onPressed: () {
                               if (_pdfFile != null) {
-                                _removePdf();        // 清空新选 PDF
+                                _removePdf(); // 清空新选 PDF
                               } else {
                                 _removeExistingPdf(); // 清空旧的 PDF URL
                               }
@@ -1981,29 +2159,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 ],
               ),
 
-
               const SizedBox(height: 24),
 
-              // 发布按钮
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _publishNote,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1976D2),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    _isEditing ? '保存修改' : '发布笔记',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
+              // 操作按钮区域
+              _buildBottomActions(
+                isDraft: isDraft,
+                isAdminRejectedDraft: isAdminRejectedDraft,
               ),
             ],
           ),

@@ -115,5 +115,27 @@ public class WebSocketService {
             this.commentId = commentId;
         }
     }
+
+    /**
+     * 推送帖子状态更新（给管理员）
+     */
+    public void sendPostStatusUpdate(Long postId, String status, String title) {
+        PostStatusUpdateMessage message = new PostStatusUpdateMessage("post_status_update", postId, status, title);
+        webSocketHandler.sendToAdmins(message);
+    }
+
+    public static class PostStatusUpdateMessage {
+        public String type;
+        public Long postId;
+        public String status;
+        public String title;
+
+        public PostStatusUpdateMessage(String type, Long postId, String status, String title) {
+            this.type = type;
+            this.postId = postId;
+            this.status = status;
+            this.title = title;
+        }
+    }
 }
 

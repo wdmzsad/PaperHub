@@ -111,6 +111,7 @@ public class Post {
     @Column(name = "visible_to_author", nullable = false)
     private Boolean visibleToAuthor = true;
 
+
     // Getters and Setters
     public Long getId() {
         return id;
@@ -313,5 +314,7 @@ public class Post {
     public void setVisibleToAuthor(Boolean visibleToAuthor) {
         this.visibleToAuthor = visibleToAuthor;
     }
+
+
 }
 

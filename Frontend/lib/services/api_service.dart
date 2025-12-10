@@ -369,7 +369,9 @@ class ApiService {
 
   /// 获取用户最近搜索的关键词（用于推荐算法）
   /// GET /search-history/recent-keywords?limit=50
-  static Future<Map<String, dynamic>> getRecentSearchKeywords({int limit = 50}) async {
+  static Future<Map<String, dynamic>> getRecentSearchKeywords({
+    int limit = 50,
+  }) async {
     return await _makeRequest(
       () => http.get(
         Uri.parse('$baseUrl/search-history/recent-keywords?limit=$limit'),
@@ -820,7 +822,9 @@ class ApiService {
 
   /// 标记通知为已读
   /// PUT /notifications/{id}/read
-  static Future<Map<String, dynamic>> markNotificationAsRead(String notificationId) async {
+  static Future<Map<String, dynamic>> markNotificationAsRead(
+    String notificationId,
+  ) async {
     return await _makeRequest(
       () => http.put(
         Uri.parse('$baseUrl/notifications/$notificationId/read'),
@@ -832,7 +836,9 @@ class ApiService {
 
   /// 批量标记指定类型的所有未读通知为已读
   /// PUT /notifications/mark-all-read?types=POST_LIKE,POST_FAVORITE
-  static Future<Map<String, dynamic>> markAllNotificationsAsReadByTypes(List<String> types) async {
+  static Future<Map<String, dynamic>> markAllNotificationsAsReadByTypes(
+    List<String> types,
+  ) async {
     final typesParam = types.join(',');
     return await _makeRequest(
       () => http.put(
@@ -909,9 +915,9 @@ class ApiService {
     if (author != null && author.trim().isNotEmpty) {
       params['author'] = author.trim();
     }
-    final uri = Uri.parse('$baseUrl/admin/posts').replace(
-      queryParameters: params,
-    );
+    final uri = Uri.parse(
+      '$baseUrl/admin/posts',
+    ).replace(queryParameters: params);
     return await _makeRequest(
       () => http.get(uri, headers: _buildHeaders()),
       '/admin/posts',
@@ -1018,9 +1024,9 @@ class ApiService {
     if (targetType != null && targetType.isNotEmpty) {
       params['targetType'] = targetType;
     }
-    final uri = Uri.parse('$baseUrl/admin/reports').replace(
-      queryParameters: params,
-    );
+    final uri = Uri.parse(
+      '$baseUrl/admin/reports',
+    ).replace(queryParameters: params);
     return await _makeRequest(
       () => http.get(uri, headers: _buildHeaders()),
       '/admin/reports',
@@ -1082,9 +1088,9 @@ class ApiService {
     if (status != null && status.isNotEmpty) {
       params['status'] = status;
     }
-    final uri = Uri.parse('$baseUrl/admin/applications').replace(
-      queryParameters: params,
-    );
+    final uri = Uri.parse(
+      '$baseUrl/admin/applications',
+    ).replace(queryParameters: params);
     return await _makeRequest(
       () => http.get(uri, headers: _buildHeaders()),
       '/admin/applications',
@@ -1159,12 +1165,10 @@ class ApiService {
     required String unit, // HOURS / DAYS / MONTHS / YEARS
   }) async {
     final uri = Uri.parse(
-        '$baseUrl/admin/users/$userId/mute?duration=$duration&unit=$unit');
+      '$baseUrl/admin/users/$userId/mute?duration=$duration&unit=$unit',
+    );
     return await _makeRequest(
-      () => http.post(
-        uri,
-        headers: _buildHeaders(),
-      ),
+      () => http.post(uri, headers: _buildHeaders()),
       '/admin/users/$userId/mute',
     );
   }
@@ -1242,7 +1246,8 @@ class ApiService {
                 'content': content,
                 if (parentId != null) 'parentId': parentId,
                 if (replyToId != null) 'replyToId': replyToId,
-                if (mentionIds != null && mentionIds.isNotEmpty) 'mentionIds': mentionIds,
+                if (mentionIds != null && mentionIds.isNotEmpty)
+                  'mentionIds': mentionIds,
               }),
             )
             .timeout(
@@ -1305,6 +1310,20 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> reportUser(
+    String userId,
+    String reason,
+  ) async {
+    return await _makeRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/report/user/$userId'),
+        headers: _buildHeaders(),
+        body: jsonEncode({'reason': reason}),
+      ),
+      '/report/user/$userId',
+    );
+  }
+
   /// 获取帖子列表
   /// @param page 页码，从1开始
   /// @param pageSize 每页数量，默认20
@@ -1321,9 +1340,9 @@ class ApiService {
         if (disciplineTag != null && disciplineTag.isNotEmpty)
           'tag': disciplineTag,
       };
-      final uri = Uri.parse('$baseUrl/posts').replace(
-        queryParameters: queryParameters,
-      );
+      final uri = Uri.parse(
+        '$baseUrl/posts',
+      ).replace(queryParameters: queryParameters);
       print('请求帖子列表: $uri'); // 调试日志
       final result = await _makeRequest(
         () => http
@@ -1356,9 +1375,9 @@ class ApiService {
         'page': page.toString(),
         'pageSize': pageSize.toString(),
       };
-      final uri = Uri.parse('$baseUrl/posts/recommendations').replace(
-        queryParameters: queryParameters,
-      );
+      final uri = Uri.parse(
+        '$baseUrl/posts/recommendations',
+      ).replace(queryParameters: queryParameters);
       final result = await _makeRequest(
         () => http
             .get(uri, headers: _buildHeaders())
@@ -1388,9 +1407,9 @@ class ApiService {
         'page': page.toString(),
         'pageSize': pageSize.toString(),
       };
-      final uri = Uri.parse('$baseUrl/posts/following').replace(
-        queryParameters: queryParameters,
-      );
+      final uri = Uri.parse(
+        '$baseUrl/posts/following',
+      ).replace(queryParameters: queryParameters);
       final result = await _makeRequest(
         () => http
             .get(uri, headers: _buildHeaders())
@@ -1448,6 +1467,7 @@ class ApiService {
     String? arxivPublishedDate,
     List<String>? arxivCategories,
     List<int>? references,
+    String? status,
   }) async {
     return await _makeRequest(
       () => http.post(
@@ -1463,10 +1483,15 @@ class ApiService {
           if (year != null) 'year': year,
           if (externalLinks != null) 'externalLinks': externalLinks,
           if (arxivId != null) 'arxivId': arxivId,
-          if (arxivAuthors != null && arxivAuthors.isNotEmpty) 'arxivAuthors': arxivAuthors,
-          if (arxivPublishedDate != null) 'arxivPublishedDate': arxivPublishedDate,
-          if (arxivCategories != null && arxivCategories.isNotEmpty) 'arxivCategories': arxivCategories,
-          if (references != null && references.isNotEmpty) 'references': references,
+          if (arxivAuthors != null && arxivAuthors.isNotEmpty)
+            'arxivAuthors': arxivAuthors,
+          if (arxivPublishedDate != null)
+            'arxivPublishedDate': arxivPublishedDate,
+          if (arxivCategories != null && arxivCategories.isNotEmpty)
+            'arxivCategories': arxivCategories,
+          if (references != null && references.isNotEmpty)
+            'references': references,
+          if (status != null) 'status': status,
         }),
       ),
       '/posts',
@@ -1490,6 +1515,7 @@ class ApiService {
     String? arxivPublishedDate,
     List<String>? arxivCategories,
     List<int>? references,
+    String? status,
   }) async {
     return await _makeRequest(
       () => http.put(
@@ -1512,13 +1538,14 @@ class ApiService {
             'arxivPublishedDate': arxivPublishedDate,
           if (arxivCategories != null && arxivCategories.isNotEmpty)
             'arxivCategories': arxivCategories,
-          if (references != null && references.isNotEmpty) 'references': references,
+          if (references != null && references.isNotEmpty)
+            'references': references,
+          if (status != null) 'status': status,
         }),
       ),
       '/posts/$postId',
     );
   }
-
 
   /// 删除帖子
   static Future<Map<String, dynamic>> deletePost(String postId) async {
@@ -1538,17 +1565,16 @@ class ApiService {
   static Future<Map<String, dynamic>> getConversations() async {
     final uri = Uri.parse('$baseUrl/api/conversations');
     return await _makeRequest(
-      () => http.get(
-        uri,
-        headers: _buildHeaders(),
-      ),
+      () => http.get(uri, headers: _buildHeaders()),
       '/api/conversations',
     );
   }
 
   /// 创建或获取私聊会话
   /// POST /api/conversations
-  static Future<Map<String, dynamic>> createOrGetConversation(String targetUserId) async {
+  static Future<Map<String, dynamic>> createOrGetConversation(
+    String targetUserId,
+  ) async {
     final uri = Uri.parse('$baseUrl/api/conversations');
     return await _makeRequest(
       () => http.post(
@@ -1567,12 +1593,13 @@ class ApiService {
     int page = 0,
     int pageSize = 100,
   }) async {
-    final uri = Uri.parse('$baseUrl/api/conversations/$conversationId/messages').replace(
-      queryParameters: {
-        'page': page.toString(),
-        'size': pageSize.toString(),
-      },
-    );
+    final uri = Uri.parse('$baseUrl/api/conversations/$conversationId/messages')
+        .replace(
+          queryParameters: {
+            'page': page.toString(),
+            'size': pageSize.toString(),
+          },
+        );
     return await _makeRequest(
       () => http.get(uri, headers: _buildHeaders()),
       '/api/conversations/$conversationId/messages',
@@ -1590,7 +1617,9 @@ class ApiService {
     String? fileName,
     int? fileSize,
   }) async {
-    final uri = Uri.parse('$baseUrl/api/conversations/$conversationId/messages');
+    final uri = Uri.parse(
+      '$baseUrl/api/conversations/$conversationId/messages',
+    );
     return await _makeRequest(
       () => http.post(
         uri,
@@ -1617,7 +1646,9 @@ class ApiService {
     String? fileName,
     int? fileSize,
   }) async {
-    final uri = Uri.parse('$baseUrl/api/conversations/$conversationId/messages');
+    final uri = Uri.parse(
+      '$baseUrl/api/conversations/$conversationId/messages',
+    );
     return await _makeRequest(
       () => http.post(
         uri,
@@ -1636,13 +1667,12 @@ class ApiService {
 
   /// 标记会话为已读
   /// PUT /api/conversations/{conversationId}/read
-  static Future<Map<String, dynamic>> markConversationAsRead(String conversationId) async {
+  static Future<Map<String, dynamic>> markConversationAsRead(
+    String conversationId,
+  ) async {
     final uri = Uri.parse('$baseUrl/api/conversations/$conversationId/read');
     return await _makeRequest(
-      () => http.put(
-        uri,
-        headers: _buildHeaders(),
-      ),
+      () => http.put(uri, headers: _buildHeaders()),
       '/api/conversations/$conversationId/read',
     );
   }
@@ -1732,9 +1762,7 @@ class ApiService {
       () => http.post(
         Uri.parse('$baseUrl/posts/$postId/report'),
         headers: _buildHeaders(),
-        body: jsonEncode({
-          'description': description,
-        }),
+        body: jsonEncode({'description': description}),
       ),
       '/posts/$postId/report',
     );
@@ -1742,13 +1770,55 @@ class ApiService {
   }
 
   /// 获取帖子详情（支持不同状态的帖子）
-  static Future<Map<String, dynamic>> getPostDetailWithStatus(int postId) async {
+  /// 兼容旧用法：获取帖子详情（支持字符串或int参数）
+  static Future<Map<String, dynamic>> getPostDetail(dynamic postId) async {
+    int id;
+    if (postId is int) {
+      id = postId;
+    } else if (postId is String) {
+      id = int.tryParse(postId) ?? -1;
+    } else {
+      throw ArgumentError('postId must be int or String');
+    }
+    return await getPostDetailWithStatus(id);
+  }
+
+  static Future<Map<String, dynamic>> getPostDetailWithStatus(
+    int postId,
+  ) async {
     final resp = await _retryWithRefresh(
       () => http.get(
         Uri.parse('$baseUrl/api/post/$postId'),
         headers: _buildHeaders(),
       ),
       '/api/post/$postId',
+    );
+    return resp;
+  }
+
+  /// 用户主动保存为草稿
+  static Future<Map<String, dynamic>> savePostAsDraft(String postId) async {
+    final resp = await _retryWithRefresh(
+      () => http.post(
+        Uri.parse('$baseUrl/posts/$postId/save-draft'),
+        headers: _buildHeaders(),
+      ),
+      '/posts/$postId/save-draft',
+    );
+    return resp;
+  }
+
+  /// 获取用户的草稿列表
+  static Future<Map<String, dynamic>> getUserDrafts({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    final resp = await _retryWithRefresh(
+      () => http.get(
+        Uri.parse('$baseUrl/posts/drafts?page=$page&pageSize=$pageSize'),
+        headers: _buildHeaders(),
+      ),
+      '/posts/drafts',
     );
     return resp;
   }
@@ -1812,16 +1882,14 @@ class ApiService {
     int page = 0,
     int pageSize = 20,
   }) async {
-    String url = '$baseUrl/api/admin/report/posts?page=$page&pageSize=$pageSize';
+    String url =
+        '$baseUrl/api/admin/report/posts?page=$page&pageSize=$pageSize';
     if (status != null && status.isNotEmpty) {
       url += '&status=$status';
     }
 
     final resp = await _retryWithRefresh(
-      () => http.get(
-        Uri.parse(url),
-        headers: _buildHeaders(),
-      ),
+      () => http.get(Uri.parse(url), headers: _buildHeaders()),
       '/api/admin/report/posts',
     );
     return resp;
@@ -1894,7 +1962,9 @@ class ApiService {
   }) async {
     final resp = await _retryWithRefresh(
       () => http.get(
-        Uri.parse('$baseUrl/api/admin/post/audit?page=$page&pageSize=$pageSize'),
+        Uri.parse(
+          '$baseUrl/api/admin/post/audit?page=$page&pageSize=$pageSize',
+        ),
         headers: _buildHeaders(),
       ),
       '/api/admin/post/audit',
@@ -1914,4 +1984,33 @@ class ApiService {
     return resp;
   }
 
+  /// 管理员审核通过AUDIT状态帖子
+  static Future<Map<String, dynamic>> adminApproveAuditPost({
+    required int postId,
+  }) async {
+    final resp = await _retryWithRefresh(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/post/$postId/approve-audit'),
+        headers: _buildHeaders(),
+      ),
+      '/admin/post/$postId/approve-audit',
+    );
+    return resp;
+  }
+
+  /// 管理员打回AUDIT状态帖子
+  static Future<Map<String, dynamic>> adminRejectAuditPost({
+    required int postId,
+    required String reason,
+  }) async {
+    final resp = await _retryWithRefresh(
+      () => http.post(
+        Uri.parse('$baseUrl/admin/post/$postId/reject-audit'),
+        headers: _buildHeaders(),
+        body: jsonEncode({'reason': reason}),
+      ),
+      '/admin/post/$postId/reject-audit',
+    );
+    return resp;
+  }
 }

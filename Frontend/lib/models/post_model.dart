@@ -34,14 +34,14 @@ class Comment {
   final String id;
   final Author author;
   final String content;
-  final String? parentId;  // 父评论ID，用于嵌套回复，顶层评论为 null
-  final Author? replyTo;   // 被回复的用户，用于 @ 通知
+  final String? parentId; // 父评论ID，用于嵌套回复，顶层评论为 null
+  final Author? replyTo; // 被回复的用户，用于 @ 通知
   int likesCount;
   bool isLiked;
   final DateTime createdAt;
-  final List<Comment> replies;  // 子回复列表
-  final List<Author> mentions;  // 被@的用户列表
-  bool _expanded = true;  // UI 状态：是否展开子回复
+  final List<Comment> replies; // 子回复列表
+  final List<Author> mentions; // 被@的用户列表
+  bool _expanded = true; // UI 状态：是否展开子回复
 
   bool get isExpanded => _expanded;
   void toggleExpanded() => _expanded = !_expanded;
@@ -83,32 +83,38 @@ class Comment {
     // 安全地处理ID（可能是String或数字）
     final idValue = json['id'];
     final id = idValue is String ? idValue : idValue.toString();
-    
+
     // 安全地处理author
     final authorJson = json['author'] as Map<String, dynamic>? ?? {};
     final authorIdValue = authorJson['id'];
-    final authorId = authorIdValue is String ? authorIdValue : authorIdValue.toString();
-    
+    final authorId = authorIdValue is String
+        ? authorIdValue
+        : authorIdValue.toString();
+
     // 安全地处理parentId
     final parentIdValue = json['parentId'];
-    final parentId = parentIdValue == null ? null : 
-        (parentIdValue is String ? parentIdValue : parentIdValue.toString());
-    
+    final parentId = parentIdValue == null
+        ? null
+        : (parentIdValue is String ? parentIdValue : parentIdValue.toString());
+
     // 安全地处理replyTo
     Author? replyTo;
     if (json['replyTo'] != null) {
       final replyToJson = json['replyTo'] as Map<String, dynamic>;
       final replyToIdValue = replyToJson['id'];
-      final replyToId = replyToIdValue is String ? replyToIdValue : replyToIdValue.toString();
+      final replyToId = replyToIdValue is String
+          ? replyToIdValue
+          : replyToIdValue.toString();
       replyTo = Author(
         id: replyToId,
-        name: replyToJson['name'] as String? ?? 
-              (replyToJson['email'] as String? ?? '未知用户'),
+        name:
+            replyToJson['name'] as String? ??
+            (replyToJson['email'] as String? ?? '未知用户'),
         avatar: replyToJson['avatar'] as String? ?? '',
         affiliation: replyToJson['affiliation'] as String?,
       );
     }
-    
+
     // 解析被@的用户列表
     List<Author> mentions = [];
     if (json['mentions'] != null) {
@@ -116,23 +122,27 @@ class Comment {
       mentions = mentionsJson.map((m) {
         final mentionJson = m as Map<String, dynamic>;
         final mentionIdValue = mentionJson['id'];
-        final mentionId = mentionIdValue is String ? mentionIdValue : mentionIdValue.toString();
+        final mentionId = mentionIdValue is String
+            ? mentionIdValue
+            : mentionIdValue.toString();
         return Author(
           id: mentionId,
-          name: mentionJson['name'] as String? ?? 
-                (mentionJson['email'] as String? ?? '未知用户'),
+          name:
+              mentionJson['name'] as String? ??
+              (mentionJson['email'] as String? ?? '未知用户'),
           avatar: mentionJson['avatar'] as String? ?? '',
           affiliation: mentionJson['affiliation'] as String?,
         );
       }).toList();
     }
-    
+
     return Comment(
       id: id,
       author: Author(
         id: authorId,
-        name: authorJson['name'] as String? ?? 
-              (authorJson['email'] as String? ?? '未知用户'),
+        name:
+            authorJson['name'] as String? ??
+            (authorJson['email'] as String? ?? '未知用户'),
         avatar: authorJson['avatar'] as String? ?? '',
         affiliation: authorJson['affiliation'] as String?,
       ),
@@ -141,7 +151,8 @@ class Comment {
       replyTo: replyTo,
       likesCount: (json['likesCount'] as num?)?.toInt() ?? 0,
       isLiked: json['isLiked'] as bool? ?? false,
-      replies: (json['replies'] as List<dynamic>?)
+      replies:
+          (json['replies'] as List<dynamic>?)
               ?.map((e) => Comment.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
@@ -154,28 +165,27 @@ class Comment {
 
   /// 转换为 JSON（用于 API 请求）
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'author': {
-          'id': author.id,
-          'name': author.name,
-          'avatar': author.avatar,
-          if (author.affiliation != null) 'affiliation': author.affiliation,
-        },
-        'content': content,
-        if (parentId != null) 'parentId': parentId,
-        if (replyTo != null)
-          'replyTo': {
-            'id': replyTo!.id,
-            'name': replyTo!.name,
-            'avatar': replyTo!.avatar,
-            if (replyTo!.affiliation != null)
-              'affiliation': replyTo!.affiliation,
-          },
-        'likesCount': likesCount,
-        'isLiked': isLiked,
-        'replies': replies.map((r) => r.toJson()).toList(),
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'author': {
+      'id': author.id,
+      'name': author.name,
+      'avatar': author.avatar,
+      if (author.affiliation != null) 'affiliation': author.affiliation,
+    },
+    'content': content,
+    if (parentId != null) 'parentId': parentId,
+    if (replyTo != null)
+      'replyTo': {
+        'id': replyTo!.id,
+        'name': replyTo!.name,
+        'avatar': replyTo!.avatar,
+        if (replyTo!.affiliation != null) 'affiliation': replyTo!.affiliation,
+      },
+    'likesCount': likesCount,
+    'isLiked': isLiked,
+    'replies': replies.map((r) => r.toJson()).toList(),
+    'createdAt': createdAt.toIso8601String(),
+  };
 }
 
 class Post {
@@ -197,11 +207,17 @@ class Post {
   bool isLiked;
   bool isSaved;
 
+  // 帖子状态
+  final String? status; // PUBLISHED, DRAFT, UNDER_REVIEW, REMOVED
+  final String? hiddenReason; // 被下架原因
+  final String? draftType; // SELF, ADMIN_REJECTED
+  final String? draftReason; // 草稿原因
+
   // 论文 / 元数据（可选）
   final String? doi;
   final String? journal;
   final int? year;
-  
+
   // arXiv 相关元数据（可选）
   final String? arxivId;
   final List<String> arxivAuthors; // arXiv 作者列表
@@ -218,6 +234,9 @@ class Post {
   final DateTime createdAt;
   // 可选：帖子下的评论列表（通常由后端分页查询，这里在 Post 载入详情时可填充）
   final List<Comment> comments;
+
+  // 最后操作的管理员ID
+  final int? updatedByAdmin;
 
   Post({
     required this.id,
@@ -236,6 +255,10 @@ class Post {
     this.recommendationScore = 0,
     this.isLiked = false,
     this.isSaved = false,
+    this.status,
+    this.hiddenReason,
+    this.draftType,
+    this.draftReason,
     this.doi,
     this.journal,
     this.year,
@@ -248,6 +271,7 @@ class Post {
     required this.imageNaturalWidth,
     required this.imageNaturalHeight,
     DateTime? createdAt,
+    this.updatedByAdmin,
   }) : createdAt = createdAt ?? DateTime.now();
 
   double get displayHeight {
@@ -260,30 +284,60 @@ class Post {
     // 安全地处理ID（可能是String或数字）
     final idValue = json['id'];
     final id = idValue is String ? idValue : idValue.toString();
-    
+
     // 安全地处理author
     final authorJson = json['author'] as Map<String, dynamic>? ?? {};
     final authorIdValue = authorJson['id'];
-    final authorId = authorIdValue is String ? authorIdValue : authorIdValue.toString();
-    
+    final authorId = authorIdValue is String
+        ? authorIdValue
+        : authorIdValue.toString();
+
+    final rawStatus = json['status'] as String?;
+    final status = rawStatus?.toUpperCase();
+    final rawHiddenReason = (json['hiddenReason'] as String?)?.trim();
+    final hiddenReason = (rawHiddenReason == null || rawHiddenReason.isEmpty)
+        ? null
+        : rawHiddenReason;
+
+    String? draftType;
+    String? draftReason;
+    if (status == 'DRAFT') {
+      if (hiddenReason != null && hiddenReason.isNotEmpty) {
+        draftType = 'ADMIN_REJECTED';
+        draftReason = hiddenReason;
+      } else {
+        draftType = 'SELF';
+      }
+    }
+
     return Post(
       id: id,
       title: json['title'] as String? ?? '',
       content: json['content'] as String? ?? '',
-      media: (json['media'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      media:
+          (json['media'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
       attachments: [], // 后端暂时不支持附件，需要后续添加
       mainDiscipline: json['mainDiscipline'] as String? ?? '',
-      subTags: (json['subTags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
-
-      externalLinks: (json['externalLinks'] as List<dynamic>?)
+      subTags:
+          (json['subTags'] as List<dynamic>?)
               ?.map((e) => e.toString())
-              .toList()
-          ?? const [],
-          
+              .toList() ??
+          [],
+
+      externalLinks:
+          (json['externalLinks'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+
       author: Author(
         id: authorId,
-        name: authorJson['name'] as String? ?? 
-              (authorJson['email'] as String? ?? '未知用户'),
+        name:
+            authorJson['name'] as String? ??
+            (authorJson['email'] as String? ?? '未知用户'),
         avatar: authorJson['avatar'] as String? ?? '',
         affiliation: authorJson['affiliation'] as String?,
       ),
@@ -292,31 +346,46 @@ class Post {
       viewsCount: (json['viewsCount'] as num?)?.toInt() ?? 0,
       recommendationScore:
           (json['score'] as num?)?.toDouble() ??
-              (json['rankScore'] as num?)?.toDouble() ??
-              (json['recommendationScore'] as num?)?.toDouble() ??
-              0,
+          (json['rankScore'] as num?)?.toDouble() ??
+          (json['recommendationScore'] as num?)?.toDouble() ??
+          0,
       isLiked: json['isLiked'] as bool? ?? false,
       isSaved: json['isSaved'] as bool? ?? false,
+      status: status,
+      hiddenReason: hiddenReason,
+      draftType: draftType,
+      draftReason: draftReason,
       doi: json['doi'] as String?,
       journal: json['journal'] as String?,
       year: (json['year'] as num?)?.toInt(),
       arxivId: json['arxivId'] as String?,
-      arxivAuthors: (json['arxivAuthors'] as List<dynamic>?)
+      arxivAuthors:
+          (json['arxivAuthors'] as List<dynamic>?)
               ?.map((e) => e.toString())
-              .toList() ?? const [],
+              .toList() ??
+          const [],
       arxivPublishedDate: json['arxivPublishedDate'] as String?,
-      arxivCategories: (json['arxivCategories'] as List<dynamic>?)
+      arxivCategories:
+          (json['arxivCategories'] as List<dynamic>?)
               ?.map((e) => e.toString())
-              .toList() ?? const [],
-      references: (json['references'] as List<dynamic>?)
+              .toList() ??
+          const [],
+      references:
+          (json['references'] as List<dynamic>?)
               ?.map((e) => (e as num).toInt())
-              .toList() ?? const [],
+              .toList() ??
+          const [],
       imageAspectRatio: (json['imageAspectRatio'] as num?)?.toDouble() ?? 1.5,
-      imageNaturalWidth: (json['imageNaturalWidth'] as num?)?.toDouble() ?? 800.0,
-      imageNaturalHeight: (json['imageNaturalHeight'] as num?)?.toDouble() ?? 600.0,
+      imageNaturalWidth:
+          (json['imageNaturalWidth'] as num?)?.toDouble() ?? 800.0,
+      imageNaturalHeight:
+          (json['imageNaturalHeight'] as num?)?.toDouble() ?? 600.0,
       createdAt: json['createdAt'] == null
           ? DateTime.now()
           : DateTime.parse(json['createdAt'].toString()),
+      updatedByAdmin: json['updatedByAdmin'] == null
+          ? null
+          : int.tryParse(json['updatedByAdmin'].toString()),
     );
   }
 }

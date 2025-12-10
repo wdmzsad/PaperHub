@@ -4,10 +4,15 @@ import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
 import com.example.paperhub.auth.UserRole;
 import com.example.paperhub.auth.UserStatus;
+import com.example.paperhub.post.Post;
+import com.example.paperhub.post.PostRepository;
+import com.example.paperhub.post.PostStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
 
 @Service
 public class AdminService {
@@ -16,15 +21,21 @@ public class AdminService {
     private final UserRepository userRepository;
     private final AdminReportRepository reportRepository;
     private final AdminApplicationRepository applicationRepository;
+    private final PostRepository postRepository;
+    private final com.example.paperhub.websocket.WebSocketService webSocketService;
 
     public AdminService(AdminNoticeRepository noticeRepository,
                         UserRepository userRepository,
                         AdminReportRepository reportRepository,
-                        AdminApplicationRepository applicationRepository) {
+                        AdminApplicationRepository applicationRepository,
+                        PostRepository postRepository,
+                        com.example.paperhub.websocket.WebSocketService webSocketService) {
         this.noticeRepository = noticeRepository;
         this.userRepository = userRepository;
         this.reportRepository = reportRepository;
         this.applicationRepository = applicationRepository;
+        this.postRepository = postRepository;
+        this.webSocketService = webSocketService;
     }
 
     // ========== 公告相关 ==========
@@ -259,6 +270,66 @@ public class AdminService {
     private void ensureSuperAdmin(User currentUser) {
         if (currentUser == null || currentUser.getRole() != UserRole.SUPER_ADMIN) {
             throw new IllegalArgumentException("仅超级管理员可以执行此操作");
+        }
+    }
+
+    @Transactional
+    public void approveAuditPost(Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+
+        System.out.println("=== 审核通过帖子 ===");
+        System.out.println("帖子ID: " + postId);
+        System.out.println("当前状态: " + post.getStatus());
+
+        if (post.getStatus() != PostStatus.AUDIT) {
+            throw new IllegalArgumentException("帖子不在待审核状态，当前状态: " + post.getStatus());
+        }
+
+        post.setStatus(PostStatus.NORMAL);
+        post.setHiddenReason(null);
+        post.setUpdatedByAdmin(null);
+        post.setUpdatedAt(Instant.now());
+        Post savedPost = postRepository.save(post);
+
+        System.out.println("更新后状态: " + savedPost.getStatus());
+        System.out.println("===================");
+
+        // 发送WebSocket通知
+        try {
+            webSocketService.sendPostStatusUpdate(postId, "NORMAL", post.getTitle());
+        } catch (Exception e) {
+            System.err.println("发送WebSocket通知失败: " + e.getMessage());
+        }
+    }
+
+    @Transactional
+    public void rejectAuditPost(Long postId, String reason) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+
+        System.out.println("=== 打回帖子 ===");
+        System.out.println("帖子ID: " + postId);
+        System.out.println("当前状态: " + post.getStatus());
+
+        if (post.getStatus() != PostStatus.AUDIT) {
+            throw new IllegalArgumentException("帖子不在待审核状态，当前状态: " + post.getStatus());
+        }
+
+        post.setStatus(PostStatus.DRAFT);
+        post.setHiddenReason(reason);
+        post.setUpdatedAt(Instant.now());
+        Post savedPost = postRepository.save(post);
+
+        System.out.println("更新后状态: " + savedPost.getStatus());
+        System.out.println("打回原因: " + savedPost.getHiddenReason());
+        System.out.println("===============");
+
+        // 发送WebSocket通知
+        try {
+            webSocketService.sendPostStatusUpdate(postId, "DRAFT", post.getTitle());
+        } catch (Exception e) {
+            System.err.println("发送WebSocket通知失败: " + e.getMessage());
         }
     }
 }

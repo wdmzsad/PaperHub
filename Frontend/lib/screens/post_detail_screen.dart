@@ -2207,6 +2207,50 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     );
   }
 
+  Widget _buildRemovedWarning() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        border: Border.all(color: Colors.red.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '该笔记已被管理员下架，仅作者可见',
+                  style: TextStyle(
+                    color: Colors.red.shade900,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                if (widget.post.hiddenReason != null && widget.post.hiddenReason!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      '原因：${widget.post.hiddenReason}',
+                      style: TextStyle(
+                        color: Colors.red.shade800,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAuthorRow() {
     // 如果是查看自己的帖子，不显示关注按钮
     if (_isFollowingAuthor == null) {
@@ -3599,6 +3643,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildMediaGallery(),
+                if (widget.post.status == 'REMOVED' && widget.post.hiddenReason != null)
+                  _buildRemovedWarning(),
                 const SizedBox(height: 8),
                 _buildAuthorRow(),
                 _buildContent(),
