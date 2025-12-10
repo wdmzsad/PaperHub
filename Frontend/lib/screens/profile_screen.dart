@@ -26,14 +26,11 @@ import 'privacy_settings_screen.dart';
 
 class ProfilePage extends StatefulWidget {
   final String? userId;
+
   /// 是否作为主页面显示（显示底部导航栏和菜单按钮）
   final bool isMainPage;
-  
-  const ProfilePage({
-    super.key, 
-    this.userId,
-    this.isMainPage = false,
-  });
+
+  const ProfilePage({super.key, this.userId, this.isMainPage = false});
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -50,12 +47,16 @@ class _ProfilePageState extends State<ProfilePage>
   bool? _isFollowing;
   List<Post> _authoredPosts = [];
   List<Post> _favoritePosts = [];
+  List<Post> _draftPosts = [];
   bool _loadingAuthored = false;
   bool _loadingFavorites = false;
+  bool _loadingDrafts = false;
   bool _hasMoreAuthored = true;
   bool _hasMoreFavorites = true;
+  bool _hasMoreDrafts = true;
   int _authoredPage = 1;
   int _favoritesPage = 1;
+  int _draftsPage = 1;
 
   final Set<String> _likeInFlight = {};
 
@@ -117,6 +118,7 @@ class _ProfilePageState extends State<ProfilePage>
       await Future.wait([
         _loadUserPosts(refresh: true),
         if (_canViewFavorites) _loadFavoritePosts(refresh: true),
+        if (_isViewingSelf) _loadDraftPosts(refresh: true),
       ]);
     } catch (e) {
       setState(() {
@@ -233,8 +235,10 @@ class _ProfilePageState extends State<ProfilePage>
                     crossAxisCount: 2,
                     crossAxisSpacing: 3,
                     mainAxisSpacing: 3,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 3,
+                      vertical: 3,
+                    ),
                     itemCount: posts.length,
                     itemBuilder: (ctx, index) {
                       final post = posts[index];
@@ -248,8 +252,9 @@ class _ProfilePageState extends State<ProfilePage>
                         onAuthorTap: () {
                           if (post.author.id != _currentUserId) {
                             Navigator.of(sheetContext).pop();
-                            Navigator.of(rootContext)
-                                .pushNamed('/user/${post.author.id}');
+                            Navigator.of(
+                              rootContext,
+                            ).pushNamed('/user/${post.author.id}');
                           }
                         },
                         onLikeTap: _handlePostLike,
@@ -318,13 +323,11 @@ class _ProfilePageState extends State<ProfilePage>
     setState(() => _saving = true);
     try {
       final bytes = await picked.readAsBytes();
-      final uploadResp = await ApiService.uploadAvatarBytes(
-        bytes,
-        picked.name,
-      );
+      final uploadResp = await ApiService.uploadAvatarBytes(bytes, picked.name);
       if (uploadResp['statusCode'] != 200) {
         final message =
-            (uploadResp['body'] as Map<String, dynamic>?)?['message'] ?? '头像上传失败';
+            (uploadResp['body'] as Map<String, dynamic>?)?['message'] ??
+            '头像上传失败';
         throw Exception(message);
       }
       final body = uploadResp['body'] as Map<String, dynamic>;
@@ -487,14 +490,19 @@ class _ProfilePageState extends State<ProfilePage>
     }
   }
 
-  Future<void> _openFollowList(bool showFollowers, {bool mutual = false}) async {
+  Future<void> _openFollowList(
+    bool showFollowers, {
+    bool mutual = false,
+  }) async {
     if (_profile == null) return;
     final changed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => FollowListScreen(
           userId: _profile!.id,
-          initialTab: mutual ? 'mutual' : (showFollowers ? 'followers' : 'following'),
+          initialTab: mutual
+              ? 'mutual'
+              : (showFollowers ? 'followers' : 'following'),
         ),
       ),
     );
@@ -548,34 +556,50 @@ class _ProfilePageState extends State<ProfilePage>
       _saving = true;
     });
 
-    ChatService().createOrGetPrivateConversation(targetUserId).then((conversation) {
-      if (mounted) {
-        setState(() {
-          _saving = false;
-        });
-      }
+    ChatService()
+        .createOrGetPrivateConversation(targetUserId)
+        .then((conversation) {
+          if (mounted) {
+            setState(() {
+              _saving = false;
+            });
+          }
 
-      if (conversation != null) {
-        // Navigate to chat interface with the full conversation object
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => ChatScreen(conversation: conversation),
-          ),
-        );
-      } else {
-        _showSnack('创建会话失败，请稍后重试');
-      }
-    }).catchError((error) {
-      if (mounted) {
-        setState(() {
-          _saving = false;
+          if (conversation != null) {
+            // Navigate to chat interface with the full conversation object
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => ChatScreen(conversation: conversation),
+              ),
+            );
+          } else {
+            _showSnack('创建会话失败，请稍后重试');
+          }
+        })
+        .catchError((error) {
+          if (mounted) {
+            setState(() {
+              _saving = false;
+            });
+          }
+          _showSnack('创建会话失败：$error');
         });
-      }
-      _showSnack('创建会话失败：$error');
-    });
   }
 
   void _openPostDetail(Post post) {
+    // 如果是草稿或审核中的帖子，直接打开编辑界面
+    if (post.status == 'DRAFT' || post.status == 'AUDIT') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => NoteEditorPage(initialPost: post)),
+      ).then((_) {
+        _loadProfile(forceNetwork: true);
+        _loadDraftPosts(refresh: true);
+      });
+      return;
+    }
+
+    // 正常帖子打开详情页
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => PostDetailScreen(post: post)),
@@ -732,6 +756,47 @@ class _ProfilePageState extends State<ProfilePage>
     }
   }
 
+  Future<void> _loadDraftPosts({bool refresh = false}) async {
+    // 只有查看自己的主页时才加载草稿
+    if (!_isViewingSelf) return;
+    if (_loadingDrafts) return;
+    setState(() {
+      _loadingDrafts = true;
+      if (refresh) {
+        _draftsPage = 1;
+        _hasMoreDrafts = true;
+        _draftPosts = [];
+      }
+    });
+    final page = refresh ? 1 : _draftsPage;
+    try {
+      final resp = await ApiService.getUserDrafts(page: page, pageSize: 10);
+      if (resp['statusCode'] == 200) {
+        final body = resp['body'] as Map<String, dynamic>?;
+        final data = (body?['posts'] as List<dynamic>?) ?? [];
+        final total = body?['total'] as int? ?? data.length;
+        final newPosts = data
+            .map((item) => Post.fromJson(item as Map<String, dynamic>))
+            .toList();
+        setState(() {
+          if (refresh) {
+            _draftPosts = newPosts;
+          } else {
+            _draftPosts.addAll(newPosts);
+          }
+          _hasMoreDrafts = _draftPosts.length < total;
+          _draftsPage = page + 1;
+        });
+      }
+    } catch (e) {
+      _showSnack('加载草稿失败：$e');
+    } finally {
+      if (mounted) {
+        setState(() => _loadingDrafts = false);
+      }
+    }
+  }
+
   Future<String?> _uploadAvatarIfNeeded(_ProfileEditResult result) async {
     if (result.avatarBytes == null || result.avatarBytes!.isEmpty) return null;
     final uploadResp = await ApiService.uploadAvatarBytes(
@@ -788,6 +853,57 @@ class _ProfilePageState extends State<ProfilePage>
       return AssetImage(bg);
     }
     return AssetImage(bg);
+  }
+
+  void _showReportDialog() {
+    final TextEditingController reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('举报用户'),
+        content: TextField(
+          controller: reasonController,
+          decoration: const InputDecoration(
+            hintText: '请输入举报理由',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final reason = reasonController.text.trim();
+              if (reason.isEmpty) {
+                _showMessage('请输入举报理由');
+                return;
+              }
+              Navigator.pop(context);
+              try {
+                final resp = await ApiService.reportUser(
+                  widget.userId!,
+                  reason,
+                );
+                if (resp['statusCode'] == 200) {
+                  _showMessage('举报成功');
+                } else {
+                  final message =
+                      (resp['body'] as Map<String, dynamic>?)?['message'] ??
+                      '举报失败';
+                  _showMessage(message);
+                }
+              } catch (e) {
+                _showMessage('举报失败: $e');
+              }
+            },
+            child: const Text('提交'),
+          ),
+        ],
+      ),
+    );
   }
 
   Drawer? _buildDrawer() {
@@ -912,13 +1028,13 @@ class _ProfilePageState extends State<ProfilePage>
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: _isViewingSelf ? 3 : 2,
       child: Scaffold(
         drawer: _buildDrawer(),
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         // 只有从底部导航栏进入自己的主页时才显示底部导航栏
-        bottomNavigationBar: (_isViewingSelf && widget.isMainPage) 
-            ? _buildBottomNavigationBar() 
+        bottomNavigationBar: (_isViewingSelf && widget.isMainPage)
+            ? _buildBottomNavigationBar()
             : null,
         body: SafeArea(
           child: RefreshIndicator(
@@ -983,7 +1099,9 @@ class _ProfilePageState extends State<ProfilePage>
 
   Widget _buildHeader(UserProfile profile) {
     return GestureDetector(
-      onTap: _isViewingSelf ? () => _showBackgroundViewer(profile.backgroundImage) : null,
+      onTap: _isViewingSelf
+          ? () => _showBackgroundViewer(profile.backgroundImage)
+          : null,
       child: Container(
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 16),
@@ -1029,14 +1147,23 @@ class _ProfilePageState extends State<ProfilePage>
                     )
                   else
                     const SizedBox(width: 48), // 占位保持布局一致
-                  
-                  // 右上角：如果不是主页面但是自己的主页，显示菜单按钮
-                  if (_isViewingSelf && !widget.isMainPage && Navigator.canPop(context))
+                  // 右上角：如果不是主页面但是自己的主页，显示菜单按钮；如果是别人的主页，显示举报按钮
+                  if (_isViewingSelf &&
+                      !widget.isMainPage &&
+                      Navigator.canPop(context))
                     Builder(
                       builder: (ctx) => IconButton(
                         icon: const Icon(Icons.menu, color: Colors.white),
                         onPressed: () => Scaffold.of(ctx).openDrawer(),
                       ),
+                    )
+                  else if (!_isViewingSelf)
+                    IconButton(
+                      icon: const Icon(
+                        Icons.flag_outlined,
+                        color: Colors.white,
+                      ),
+                      onPressed: () => _showReportDialog(),
                     ),
                 ],
               ),
@@ -1150,7 +1277,10 @@ class _ProfilePageState extends State<ProfilePage>
               ),
               const SizedBox(height: 24),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   // Use theme surface so the card follows dark backgrounds
                   color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
@@ -1230,7 +1360,9 @@ class _ProfilePageState extends State<ProfilePage>
                 : Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: directions.map((d) => _buildDirectionChip(d, scheme)).toList(),
+                    children: directions
+                        .map((d) => _buildDirectionChip(d, scheme))
+                        .toList(),
                   ),
           ),
         ],
@@ -1275,12 +1407,12 @@ class _ProfilePageState extends State<ProfilePage>
       child: Column(
         children: [
           TabBar(
-            labelColor: primary,
-            unselectedLabelColor: onSurface.withOpacity(0.7),
-            indicatorColor: primary,
+            labelColor: Colors.black,
+            indicatorColor: Colors.blueAccent,
             tabs: [
-              Tab(text: '笔记'),
-              Tab(text: '收藏'),
+              const Tab(text: '笔记'),
+              const Tab(text: '收藏'),
+              if (_isViewingSelf) const Tab(text: '草稿'),
             ],
           ),
           const SizedBox(height: 8),
@@ -1303,15 +1435,20 @@ class _ProfilePageState extends State<ProfilePage>
                       )
                     : Center(
                         child: Text(
-                          _isViewingSelf
-                              ? '你目前未公开收藏给其他用户'
-                              : '对方已隐藏收藏',
+                          _isViewingSelf ? '你目前未公开收藏给其他用户' : '对方已隐藏收藏',
                           style: const TextStyle(
                             color: Colors.grey,
                             fontSize: 16,
                           ),
                         ),
                       ),
+                if (_isViewingSelf)
+                  _buildPostGridContent(
+                    posts: _draftPosts,
+                    isLoading: _loadingDrafts,
+                    hasMore: _hasMoreDrafts,
+                    loader: _loadDraftPosts,
+                  ),
               ],
             ),
           ),
@@ -1398,8 +1535,10 @@ class _ProfilePageState extends State<ProfilePage>
           Navigator.push(
             context,
             PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) => child,
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  const HomeScreen(),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) => child,
               transitionDuration: Duration.zero,
             ),
           ).then((_) => setState(() => _currentIndex = 3));
@@ -1407,8 +1546,10 @@ class _ProfilePageState extends State<ProfilePage>
           Navigator.push(
             context,
             PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => const MessageScreen(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) => child,
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  const MessageScreen(),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) => child,
               transitionDuration: Duration.zero,
             ),
           ).then((_) => setState(() => _currentIndex = 3));
@@ -1416,8 +1557,10 @@ class _ProfilePageState extends State<ProfilePage>
           Navigator.push(
             context,
             PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => const NoteEditorPage(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) => child,
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  const NoteEditorPage(),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) => child,
               transitionDuration: Duration.zero,
             ),
           ).then((_) => setState(() => _currentIndex = 0));
@@ -1427,8 +1570,10 @@ class _ProfilePageState extends State<ProfilePage>
             Navigator.push(
               context,
               PageRouteBuilder(
-                pageBuilder: (context, animation, secondaryAnimation) => const ProfilePage(isMainPage: true),
-                transitionsBuilder: (context, animation, secondaryAnimation, child) => child,
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                    const ProfilePage(isMainPage: true),
+                transitionsBuilder:
+                    (context, animation, secondaryAnimation, child) => child,
                 transitionDuration: Duration.zero,
               ),
             ).then((_) => setState(() => _currentIndex = 3));
@@ -1438,6 +1583,10 @@ class _ProfilePageState extends State<ProfilePage>
       },
       context: context,
     );
+  }
+
+  void _showMessage(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 }
 

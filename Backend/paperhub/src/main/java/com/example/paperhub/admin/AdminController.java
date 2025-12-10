@@ -54,6 +54,7 @@ public class AdminController {
     public ResponseEntity<?> searchUsers(
             @AuthenticationPrincipal User currentUser,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
         if (!isAdmin(currentUser)) {
@@ -61,13 +62,31 @@ public class AdminController {
         }
         Pageable pageable = PageRequest.of(page, pageSize);
         Page<User> userPage;
-        if (q != null && !q.isBlank()) {
-            // 简单实现：按 name 模糊 + email 精确的一种组合（可根据需要扩展）
+
+        // 如果指定了状态过滤
+        if (status != null && !status.isBlank()) {
+            if ("NON_NORMAL".equals(status.toUpperCase())) {
+                // 加载所有非 NORMAL 状态的用户
+                userPage = userRepository.findByStatusNot(com.example.paperhub.auth.UserStatus.NORMAL, pageable);
+            } else {
+                // 按指定状态过滤
+                try {
+                    com.example.paperhub.auth.UserStatus userStatus =
+                        com.example.paperhub.auth.UserStatus.valueOf(status.toUpperCase());
+                    userPage = userRepository.findByStatus(userStatus, pageable);
+                } catch (IllegalArgumentException e) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "无效的状态值"));
+                }
+            }
+        } else if (q != null && !q.isBlank()) {
+            // 按关键词搜索
             List<User> byName = userRepository.findByNameContainingIgnoreCase(q);
             userPage = new org.springframework.data.domain.PageImpl<>(byName, pageable, byName.size());
         } else {
+            // 查询所有用户
             userPage = userRepository.findAll(pageable);
         }
+
         var list = userPage.getContent().stream().map(u -> Map.<String, Object>of(
                 "id", u.getId(),
                 "email", u.getEmail(),
@@ -147,6 +166,33 @@ public class AdminController {
         try {
             adminService.unmuteUser(userId, currentUser);
             return ResponseEntity.ok(Map.of("message", "已解除禁言"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    // ========== 用户审核 ==========
+
+    @PostMapping("/users/{userId}/approve")
+    public ResponseEntity<?> approveUser(@AuthenticationPrincipal User currentUser,
+                                         @PathVariable Long userId) {
+        try {
+            adminService.approveUser(userId, currentUser);
+            return ResponseEntity.ok(Map.of("message", "审核通过，用户已恢复正常"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/users/{userId}/reject")
+    public ResponseEntity<?> rejectUser(@AuthenticationPrincipal User currentUser,
+                                        @PathVariable Long userId,
+                                        @RequestBody Map<String, String> body) {
+        try {
+            String action = body.getOrDefault("action", "BAN");
+            String reason = body.getOrDefault("reason", "");
+            adminService.rejectUser(userId, action, reason, currentUser);
+            return ResponseEntity.ok(Map.of("message", "审核拒绝，已执行处理"));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
@@ -318,7 +364,9 @@ public class AdminController {
         return new AdminDtos.SimpleUserInfo(
                 u.getId(),
                 u.getName(),
-                u.getEmail()
+                u.getEmail(),
+                u.getRole() != null ? u.getRole().name() : "USER",
+                u.getStatus() != null ? u.getStatus().name() : "NORMAL"
         );
     }
 
@@ -430,6 +478,37 @@ public class AdminController {
                 app.getCreatedAt(),
                 app.getDecidedAt()
         );
+    }
+
+    // java
+    @PostMapping("/post/{postId}/approve-audit")
+    public ResponseEntity<?> approveAuditPost(@AuthenticationPrincipal User currentUser,
+                                              @PathVariable Long postId) {
+        if (!isAdmin(currentUser)) {
+            return ResponseEntity.status(403).body(Map.of("message", "需要管理员权限"));
+        }
+        try {
+            adminService.approveAuditPost(postId);
+            return ResponseEntity.ok(Map.of("message", "审核通过"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/post/{postId}/reject-audit")
+    public ResponseEntity<?> rejectAuditPost(@AuthenticationPrincipal User currentUser,
+                                             @PathVariable Long postId,
+                                             @RequestBody Map<String, String> body) {
+        if (!isAdmin(currentUser)) {
+            return ResponseEntity.status(403).body(Map.of("message", "需要管理员权限"));
+        }
+        try {
+            String reason = body.getOrDefault("reason", "不符合发布要求");
+            adminService.rejectAuditPost(postId, reason);
+            return ResponseEntity.ok(Map.of("message", "已打回草稿"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
     }
 }
 

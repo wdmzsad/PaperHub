@@ -32,6 +32,7 @@ public interface FollowFeedRepository extends JpaRepository<Post, Long> {
             from com.example.paperhub.follow.UserFollow uf
             where uf.follower.id = :followerId
         )
+        and p.status = 'NORMAL'
         order by p.createdAt desc
         """)
     Page<Post> findFollowingPosts(@Param("followerId") Long followerId, Pageable pageable);

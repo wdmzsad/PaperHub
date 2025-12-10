@@ -50,6 +50,7 @@ public class PostService {
     private final FollowFeedRepository followFeedRepository;
     private final UserRepository userRepository;
     private final PostLikeRepository postLikeRepository;
+    private final com.example.paperhub.websocket.WebSocketService webSocketService;
     private final FavoritePostRepository favoritePostRepository;
     private final CommentRepository commentRepository;
     private final CommentLikeRepository commentLikeRepository;
@@ -66,6 +67,7 @@ public class PostService {
             CommentRepository commentRepository,
             CommentLikeRepository commentLikeRepository,
             ReportPostRepository reportPostRepository,
+            com.example.paperhub.websocket.WebSocketService webSocketService,
             BrowseHistoryRepository browseHistoryRepository,
             NotificationRepository notificationRepository) {
         this.postRepository = postRepository;
@@ -76,6 +78,7 @@ public class PostService {
         this.commentRepository = commentRepository;
         this.commentLikeRepository = commentLikeRepository;
         this.reportPostRepository = reportPostRepository;
+        this.webSocketService = webSocketService;
         this.browseHistoryRepository = browseHistoryRepository;
         this.notificationRepository = notificationRepository;
     }
@@ -211,7 +214,7 @@ public class PostService {
     public Post createPost(String title, String content, User author, List<String> media,
                           String mainDiscipline, String doi, String journal, Integer year, List<String> externalLinks,
                           String arxivId, List<String> arxivAuthors, String arxivPublishedDate, List<String> arxivCategories,
-                          List<Long> references) {
+                          List<Long> references, String status) {
         ensureUserCanInteract(author);
         Post post = new Post();
         post.setTitle(title);
@@ -240,12 +243,19 @@ public class PostService {
         // 引用文献
         post.setReferences(references != null ? references : List.of());
 
+        // 设置帖子状态：如果传入 DRAFT 则为草稿，否则为 NORMAL
+        if ("DRAFT".equalsIgnoreCase(status)) {
+            post.setStatus(PostStatus.DRAFT);
+        } else {
+            post.setStatus(PostStatus.NORMAL);
+        }
+
         post.setLikesCount(0);
         post.setCommentsCount(0);
         post.setViewsCount(0);
         post.setCreatedAt(Instant.now());
         post.setUpdatedAt(Instant.now());
-        
+
         return postRepository.save(post);
     }
 
@@ -267,7 +277,8 @@ public class PostService {
                            List<String> arxivAuthors,
                            String arxivPublishedDate,
                            List<String> arxivCategories,
-                           List<Long> references) {
+                           List<Long> references,
+                           String status) {
 
         // 1. 找到帖子
         Post post = postRepository.findById(postId)
@@ -305,6 +316,40 @@ public class PostService {
 
         // 引用文献
         post.setReferences(references != null ? references : List.of());
+
+        // 根据状态调整帖子状态（仅在请求提供时）
+        if (status != null && !status.isBlank()) {
+            PostStatus targetStatus;
+            try {
+                targetStatus = PostStatus.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("不支持的帖子状态: " + status);
+            }
+
+            switch (targetStatus) {
+                case DRAFT -> {
+                    post.setStatus(PostStatus.DRAFT);
+                    post.setVisibleToAuthor(true);
+                }
+                case NORMAL -> {
+                    post.setStatus(PostStatus.NORMAL);
+                    post.setHiddenReason(null);
+                    post.setUpdatedByAdmin(null);
+                    post.setVisibleToAuthor(true);
+                }
+                case AUDIT -> {
+                    post.setStatus(PostStatus.AUDIT);
+                    post.setVisibleToAuthor(true);
+                    // 发送WebSocket通知给管理员
+                    try {
+                        webSocketService.sendPostStatusUpdate(postId, "AUDIT", post.getTitle());
+                    } catch (Exception e) {
+                        System.err.println("发送WebSocket通知失败: " + e.getMessage());
+                    }
+                }
+                default -> throw new IllegalArgumentException("不允许更新到该状态: " + targetStatus.name());
+            }
+        }
 
         // 更新时间
         post.setUpdatedAt(Instant.now());
@@ -428,6 +473,35 @@ public class PostService {
         return reportPostRepository.save(report);
     }
 
+    /**
+     * 保存为草稿（用户主动保存）
+     */
+    @Transactional
+    public Post saveDraft(Long postId, Long userId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+
+        if (!post.getAuthor().getId().equals(userId)) {
+            throw new SecurityException("只能保存自己的帖子为草稿");
+        }
+
+        post.setStatus(PostStatus.DRAFT);
+        post.setUpdatedAt(Instant.now());
+        return postRepository.save(post);
+    }
+
+    /**
+     * 获取用户的草稿列表
+     */
+    public Page<Post> getUserDrafts(Long userId, int page, int pageSize) {
+        Pageable pageable = PageRequest.of(page - 1, pageSize);
+        return postRepository.findByAuthorIdAndStatusInOrderByCreatedAtDesc(
+                userId,
+                List.of(PostStatus.DRAFT, PostStatus.AUDIT),
+                pageable
+        );
+    }
+
     private void ensureUserCanInteract(User user) {
         if (user == null) {
             throw new IllegalArgumentException("未认证用户无法执行此操作");
@@ -435,7 +509,7 @@ public class PostService {
         if (user.getStatus() == UserStatus.BANNED) {
             throw new IllegalArgumentException("账号已被封禁，无法执行此操作");
         }
-        if (user.getStatus() == UserStatus.MUTED) {
+        if (user.getStatus() == UserStatus.SILENT) {
             Instant muteUntil = user.getMuteUntil();
             if (muteUntil == null || Instant.now().isBefore(muteUntil)) {
                 throw new IllegalArgumentException("账号被禁言中，暂时无法发帖");

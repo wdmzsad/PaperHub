@@ -19,17 +19,25 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SimpleWebSocketHandler extends TextWebSocketHandler {
     // 存储每个帖子ID对应的WebSocket会话
     private final Map<Long, Map<String, WebSocketSession>> postSessions = new ConcurrentHashMap<>();
+    // 存储管理员WebSocket会话
+    private final Map<String, WebSocketSession> adminSessions = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        // 从URI中提取postId
+        // 从URI中提取postId或判断是否为admin连接
         String path = session.getUri().getPath();
-        Long postId = extractPostId(path);
-        
-        if (postId != null) {
-            postSessions.computeIfAbsent(postId, k -> new ConcurrentHashMap<>())
-                .put(session.getId(), session);
+
+        if (path.contains("/admin")) {
+            // 管理员连接
+            adminSessions.put(session.getId(), session);
+            System.out.println("管理员WebSocket连接建立: " + session.getId());
+        } else {
+            Long postId = extractPostId(path);
+            if (postId != null) {
+                postSessions.computeIfAbsent(postId, k -> new ConcurrentHashMap<>())
+                    .put(session.getId(), session);
+            }
         }
     }
 
@@ -37,14 +45,19 @@ public class SimpleWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         // 移除会话
         String path = session.getUri().getPath();
-        Long postId = extractPostId(path);
-        
-        if (postId != null) {
-            Map<String, WebSocketSession> sessions = postSessions.get(postId);
-            if (sessions != null) {
-                sessions.remove(session.getId());
-                if (sessions.isEmpty()) {
-                    postSessions.remove(postId);
+
+        if (path.contains("/admin")) {
+            adminSessions.remove(session.getId());
+            System.out.println("管理员WebSocket连接关闭: " + session.getId());
+        } else {
+            Long postId = extractPostId(path);
+            if (postId != null) {
+                Map<String, WebSocketSession> sessions = postSessions.get(postId);
+                if (sessions != null) {
+                    sessions.remove(session.getId());
+                    if (sessions.isEmpty()) {
+                        postSessions.remove(postId);
+                    }
                 }
             }
         }
@@ -64,7 +77,7 @@ public class SimpleWebSocketHandler extends TextWebSocketHandler {
             try {
                 String json = objectMapper.writeValueAsString(message);
                 TextMessage textMessage = new TextMessage(json);
-                
+
                 sessions.values().forEach(session -> {
                     try {
                         if (session.isOpen()) {
@@ -78,6 +91,28 @@ public class SimpleWebSocketHandler extends TextWebSocketHandler {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+    }
+
+    /**
+     * 向所有管理员客户端发送消息
+     */
+    public void sendToAdmins(Object message) {
+        try {
+            String json = objectMapper.writeValueAsString(message);
+            TextMessage textMessage = new TextMessage(json);
+
+            adminSessions.values().forEach(session -> {
+                try {
+                    if (session.isOpen()) {
+                        session.sendMessage(textMessage);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 

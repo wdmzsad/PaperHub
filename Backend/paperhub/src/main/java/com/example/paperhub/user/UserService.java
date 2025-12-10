@@ -68,7 +68,7 @@ public class UserService {
         String statusMessage = null;
         if (status == UserStatus.BANNED) {
             statusMessage = "该用户被封禁中";
-        } else if (status == UserStatus.MUTED && isMuteActive(user)) {
+        } else if (status == UserStatus.SILENT && isMuteActive(user)) {
             statusMessage = "该用户被禁言中";
         }
 
@@ -161,7 +161,7 @@ public class UserService {
     }
 
     private boolean isMuteActive(User user) {
-        if (user.getStatus() != UserStatus.MUTED) {
+        if (user.getStatus() != UserStatus.SILENT) {
             return false;
         }
         if (user.getMuteUntil() == null) {

@@ -199,7 +199,8 @@ public class PostController {
                 req.arxivAuthors() != null ? req.arxivAuthors() : new ArrayList<>(),
                 req.arxivPublishedDate(),
                 req.arxivCategories() != null ? req.arxivCategories() : new ArrayList<>(),
-                req.references() != null ? req.references() : new ArrayList<>()
+                req.references() != null ? req.references() : new ArrayList<>(),
+                req.status() != null ? req.status() : "NORMAL"
             );
             
             PostDtos.PostResp resp = postMapper.toPostResp(post, user.getId());
@@ -301,7 +302,8 @@ public class PostController {
                     req.arxivAuthors() != null ? req.arxivAuthors() : new ArrayList<>(),
                     req.arxivPublishedDate(),
                     req.arxivCategories() != null ? req.arxivCategories() : new ArrayList<>(),
-                    req.references() != null ? req.references() : new ArrayList<>()
+                        req.references() != null ? req.references() : new ArrayList<>(),
+                        req.status()
             );
 
             // 4. 映射成响应对象（保持和详情页一致）
@@ -562,6 +564,69 @@ public class PostController {
                 page,
                 pageSize
         ));
+    }
+
+    /**
+     * 保存为草稿（用户主动保存）
+     * POST /posts/{postId}/save-draft
+     */
+    @PostMapping("/{postId}/save-draft")
+    public ResponseEntity<?> saveDraft(
+            @PathVariable Long postId,
+            @AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("message", "未认证，请先登录"));
+        }
+
+        try {
+            Post post = postService.saveDraft(postId, user.getId());
+            return ResponseEntity.ok(Map.of(
+                    "message", "已保存为草稿",
+                    "postId", post.getId(),
+                    "status", post.getStatus().name()
+            ));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(404)
+                    .body(Map.of("message", ex.getMessage()));
+        } catch (SecurityException ex) {
+            return ResponseEntity.status(403)
+                    .body(Map.of("message", ex.getMessage()));
+        }
+    }
+
+    /**
+     * 获取用户的草稿列表
+     * GET /posts/drafts?page=1&pageSize=20
+     */
+    @GetMapping("/drafts")
+    public ResponseEntity<?> getDrafts(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("message", "未认证，请先登录"));
+        }
+
+        try {
+            Page<Post> postPage = postService.getUserDrafts(user.getId(), page, pageSize);
+            List<PostDtos.PostResp> posts = postPage.getContent().stream()
+                    .map(post -> postMapper.toPostResp(post, user.getId()))
+                    .toList();
+
+            return ResponseEntity.ok(new PostDtos.PostListResp(
+                    posts,
+                    postPage.getTotalElements(),
+                    page,
+                    pageSize
+            ));
+        } catch (Exception e) {
+            System.err.println("获取草稿列表失败: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500)
+                    .body(Map.of("message", "获取草稿列表失败: " + e.getMessage()));
+        }
     }
 
     /**

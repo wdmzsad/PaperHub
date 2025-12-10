@@ -112,7 +112,12 @@ public class ReportPostService {
                 // 草稿状态，只有作者可见
                 if (isAuthor) {
                     response.setVisible(true);
-                    response.setMessage("草稿状态，可继续编辑");
+                    // 判断是否是管理员打回的草稿
+                    if (post.getUpdatedByAdmin() != null && post.getHiddenReason() != null) {
+                        response.setMessage("该帖子已被管理员打回，原因：" + post.getHiddenReason() + "。您可以修改后重新提交审核。");
+                    } else {
+                        response.setMessage("草稿状态，可继续编辑");
+                    }
                     response.setCanEdit(true);
                 } else {
                     response.setVisible(false);
@@ -254,8 +259,8 @@ public class ReportPostService {
 
         Post post = report.getPost();
 
-        // 更新帖子状态
-        post.setStatus(PostStatus.REMOVED);
+        // 更新帖子状态为草稿
+        post.setStatus(PostStatus.DRAFT);
         post.setHiddenReason(reason != null ? reason : "违规内容");
         post.setUpdatedByAdmin(admin.getId());
         post.setVisibleToAuthor(true); // 作者仍可见以便修改
@@ -266,8 +271,8 @@ public class ReportPostService {
         report.setStatus(ReportStatus.PROCESSED);
         report.setAdmin(admin);
         report.setHandleTime(Instant.now());
-        report.setHandleResult("已下架，原因：" + (reason != null ? reason : "违规内容"));
-        report.setPostStatusAfter(PostStatus.REMOVED);
+        report.setHandleResult("已打回，原因：" + (reason != null ? reason : "违规内容"));
+        report.setPostStatusAfter(PostStatus.DRAFT);
 
         // 发送通知给作者
         notificationService.createPostRemovedNotification(admin, post.getId(), reason);
@@ -346,8 +351,8 @@ public class ReportPostService {
             throw new IllegalArgumentException("只有审核中的帖子才能拒绝");
         }
 
-        // 重新下架
-        post.setStatus(PostStatus.REMOVED);
+        // 打回为草稿
+        post.setStatus(PostStatus.DRAFT);
         post.setHiddenReason(reason != null ? reason : "审核未通过");
         post.setUpdatedByAdmin(admin.getId());
         post.setUpdatedAt(Instant.now());

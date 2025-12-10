@@ -4,10 +4,15 @@ import com.example.paperhub.auth.User;
 import com.example.paperhub.auth.UserRepository;
 import com.example.paperhub.auth.UserRole;
 import com.example.paperhub.auth.UserStatus;
+import com.example.paperhub.post.Post;
+import com.example.paperhub.post.PostRepository;
+import com.example.paperhub.post.PostStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
 
 @Service
 public class AdminService {
@@ -16,15 +21,21 @@ public class AdminService {
     private final UserRepository userRepository;
     private final AdminReportRepository reportRepository;
     private final AdminApplicationRepository applicationRepository;
+    private final PostRepository postRepository;
+    private final com.example.paperhub.websocket.WebSocketService webSocketService;
 
     public AdminService(AdminNoticeRepository noticeRepository,
                         UserRepository userRepository,
                         AdminReportRepository reportRepository,
-                        AdminApplicationRepository applicationRepository) {
+                        AdminApplicationRepository applicationRepository,
+                        PostRepository postRepository,
+                        com.example.paperhub.websocket.WebSocketService webSocketService) {
         this.noticeRepository = noticeRepository;
         this.userRepository = userRepository;
         this.reportRepository = reportRepository;
         this.applicationRepository = applicationRepository;
+        this.postRepository = postRepository;
+        this.webSocketService = webSocketService;
     }
 
     // ========== 公告相关 ==========
@@ -236,7 +247,7 @@ public class AdminService {
         if (u.getRole() == UserRole.SUPER_ADMIN || u.getRole() == UserRole.ADMIN) {
             throw new IllegalArgumentException("不能禁言管理员或超级管理员");
         }
-        u.setStatus(UserStatus.MUTED);
+        u.setStatus(UserStatus.SILENT);
         u.setMuteUntil(muteUntil);
         userRepository.save(u);
     }
@@ -249,16 +260,127 @@ public class AdminService {
         }
         User u = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
-        if (u.getStatus() == UserStatus.MUTED) {
+        if (u.getStatus() == UserStatus.SILENT) {
             u.setStatus(UserStatus.NORMAL);
             u.setMuteUntil(null);
             userRepository.save(u);
         }
     }
 
+    // ========== 用户审核 ==========
+
+    @Transactional
+    public void approveUser(Long targetUserId, User currentUser) {
+        if (currentUser == null || (currentUser.getRole() != UserRole.ADMIN
+                && currentUser.getRole() != UserRole.SUPER_ADMIN)) {
+            throw new IllegalArgumentException("仅管理员可以审核用户");
+        }
+        User u = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        if (u.getStatus() == UserStatus.AUDIT) {
+            u.setStatus(UserStatus.NORMAL);
+            userRepository.save(u);
+        } else {
+            throw new IllegalArgumentException("用户不在待审核状态");
+        }
+    }
+
+    @Transactional
+    public void rejectUser(Long targetUserId, String action, String reason, User currentUser) {
+        if (currentUser == null || (currentUser.getRole() != UserRole.ADMIN
+                && currentUser.getRole() != UserRole.SUPER_ADMIN)) {
+            throw new IllegalArgumentException("仅管理员可以审核用户");
+        }
+        User u = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+        if (u.getStatus() != UserStatus.AUDIT) {
+            throw new IllegalArgumentException("用户不在待审核状态");
+        }
+
+        // 根据 action 执行不同的处理
+        switch (action.toUpperCase()) {
+            case "BAN":
+                u.setStatus(UserStatus.BANNED);
+                u.setMuteUntil(null);
+                break;
+            case "SILENT":
+                u.setStatus(UserStatus.SILENT);
+                // 默认禁言 7 天
+                u.setMuteUntil(Instant.now().plus(java.time.Duration.ofDays(7)));
+                break;
+            case "NORMAL":
+                u.setStatus(UserStatus.NORMAL);
+                u.setMuteUntil(null);
+                break;
+            default:
+                throw new IllegalArgumentException("无效的处理动作");
+        }
+        userRepository.save(u);
+    }
+
     private void ensureSuperAdmin(User currentUser) {
         if (currentUser == null || currentUser.getRole() != UserRole.SUPER_ADMIN) {
             throw new IllegalArgumentException("仅超级管理员可以执行此操作");
+        }
+    }
+
+    @Transactional
+    public void approveAuditPost(Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+
+        System.out.println("=== 审核通过帖子 ===");
+        System.out.println("帖子ID: " + postId);
+        System.out.println("当前状态: " + post.getStatus());
+
+        if (post.getStatus() != PostStatus.AUDIT) {
+            throw new IllegalArgumentException("帖子不在待审核状态，当前状态: " + post.getStatus());
+        }
+
+        post.setStatus(PostStatus.NORMAL);
+        post.setHiddenReason(null);
+        post.setUpdatedByAdmin(null);
+        post.setUpdatedAt(Instant.now());
+        Post savedPost = postRepository.save(post);
+
+        System.out.println("更新后状态: " + savedPost.getStatus());
+        System.out.println("===================");
+
+        // 发送WebSocket通知
+        try {
+            webSocketService.sendPostStatusUpdate(postId, "NORMAL", post.getTitle());
+        } catch (Exception e) {
+            System.err.println("发送WebSocket通知失败: " + e.getMessage());
+        }
+    }
+
+    @Transactional
+    public void rejectAuditPost(Long postId, String reason) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
+
+        System.out.println("=== 打回帖子 ===");
+        System.out.println("帖子ID: " + postId);
+        System.out.println("当前状态: " + post.getStatus());
+
+        if (post.getStatus() != PostStatus.AUDIT) {
+            throw new IllegalArgumentException("帖子不在待审核状态，当前状态: " + post.getStatus());
+        }
+
+        post.setStatus(PostStatus.DRAFT);
+        post.setHiddenReason(reason);
+        post.setUpdatedAt(Instant.now());
+        Post savedPost = postRepository.save(post);
+
+        System.out.println("更新后状态: " + savedPost.getStatus());
+        System.out.println("打回原因: " + savedPost.getHiddenReason());
+        System.out.println("===============");
+
+        // 发送WebSocket通知
+        try {
+            webSocketService.sendPostStatusUpdate(postId, "DRAFT", post.getTitle());
+        } catch (Exception e) {
+            System.err.println("发送WebSocket通知失败: " + e.getMessage());
         }
     }
 }

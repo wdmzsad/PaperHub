@@ -22,7 +22,8 @@ public class PostDtos {
         List<String> arxivAuthors, // arXiv 作者列表
         String arxivPublishedDate, // arXiv 发布日期
         List<String> arxivCategories, // arXiv 分类列表
-        List<Long> references // 引用文献：被引用帖子的ID列表
+        List<Long> references, // 引用文献：被引用帖子的ID列表
+        String status // 帖子状态：DRAFT（草稿）或 NORMAL（正常发布），默认为 NORMAL
     ) {}
     
     // 作者信息
@@ -44,6 +45,10 @@ public class PostDtos {
         int viewsCount,
         boolean isLiked,
         boolean isSaved,
+        String status,
+        String hiddenReason,
+        Long updatedByAdmin,
+        Boolean visibleToAuthor,
         String doi,
         String journal,
         Integer year,

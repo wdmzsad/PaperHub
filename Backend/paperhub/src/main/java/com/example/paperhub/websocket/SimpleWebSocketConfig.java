@@ -26,6 +26,9 @@ public class SimpleWebSocketConfig implements WebSocketConfigurer {
         registry.addHandler(webSocketHandler, "/ws/posts/{postId}")
             .setAllowedOrigins("*");
 
+        registry.addHandler(webSocketHandler, "/ws/admin")
+            .setAllowedOrigins("*");
+
         registry.addHandler(chatWebSocketHandler, "/ws/chat/{userId}")
             .setAllowedOrigins("*");
     }

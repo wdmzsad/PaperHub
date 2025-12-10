@@ -80,7 +80,7 @@ public class AdminReportPostController {
                             r.getAdmin() != null ? r.getAdmin().getName() : null,
                             r.getHandleTime(),
                             r.getHandleResult(),
-                            r.getPostStatusAfter() != null ? r.getPostStatusAfter().name() : null
+                            r.getPost().getStatus() != null ? r.getPost().getStatus().name() : null
                     ))
                     .toList();
 

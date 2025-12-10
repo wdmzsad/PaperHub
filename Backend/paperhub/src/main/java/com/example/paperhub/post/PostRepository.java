@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface PostRepository extends JpaRepository<Post, Long> {
+    @Query("SELECT p FROM Post p WHERE p.status = 'NORMAL' ORDER BY p.createdAt DESC")
     Page<Post> findAllByOrderByCreatedAtDesc(Pageable pageable);
     Page<Post> findByAuthorIdOrderByCreatedAtDesc(Long authorId, Pageable pageable);
     long countByAuthorId(Long authorId);
@@ -23,9 +24,10 @@ public interface PostRepository extends JpaRepository<Post, Long> {
      * 搜索范围：标题、内容、标签
      */
     @Query("SELECT DISTINCT p FROM Post p LEFT JOIN p.tags t " +
-           "WHERE LOWER(p.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "WHERE (LOWER(p.title) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "   OR LOWER(p.content) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-           "   OR LOWER(t) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "   OR LOWER(t) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+           "AND p.status = 'NORMAL' " +
            "ORDER BY (p.likesCount + p.commentsCount) DESC")
     Page<Post> searchByKeywordOrderByHot(@Param("keyword") String keyword, Pageable pageable);
 
@@ -56,6 +58,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
      */
     Page<Post> findByAuthorIdAndStatus(Long authorId, PostStatus status, Pageable pageable);
 
+    java.util.List<Post> findByAuthorIdAndStatus(Long authorId, PostStatus status);
+
     /**
      * 查询作者的所有帖子（包括下架的）
      */
@@ -68,7 +72,7 @@ public interface PostRepository extends JpaRepository<Post, Long> {
      * @param pageable 分页参数
      * @return 包含指定标签的帖子分页
      */
-    @Query("SELECT DISTINCT p FROM Post p JOIN p.tags t WHERE LOWER(t) = LOWER(:tag) ORDER BY p.createdAt DESC")
+    @Query("SELECT DISTINCT p FROM Post p JOIN p.tags t WHERE t = :tag AND p.status = 'NORMAL' ORDER BY p.createdAt DESC")
     Page<Post> findByTagOrderByCreatedAtDesc(@Param("tag") String tag, Pageable pageable);
 
     /**
@@ -95,7 +99,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
      * @param pageable 分页参数
      * @return 属于指定主分区的帖子分页
      */
-    Page<Post> findByMainDisciplineOrderByCreatedAtDesc(String mainDiscipline, Pageable pageable);
+    @Query("SELECT p FROM Post p WHERE p.mainDiscipline = :mainDiscipline AND p.status = 'NORMAL' ORDER BY p.createdAt DESC")
+    Page<Post> findByMainDisciplineOrderByCreatedAtDesc(@Param("mainDiscipline") String mainDiscipline, Pageable pageable);
 
     /**
      * 统计属于指定主分区的帖子数量
