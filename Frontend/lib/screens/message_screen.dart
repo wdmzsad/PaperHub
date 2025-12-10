@@ -1180,7 +1180,7 @@ class _MessageScreenState extends State<MessageScreen> {
         child: Column(
           children: [
             // 小红书风格的顶部图标导航
-            _buildTopIconNavigation(scheme),
+            _buildTopIconNavigation(),
             Expanded(
               child: _buildConversationList(),
             ),
@@ -1214,9 +1214,18 @@ class _MessageScreenState extends State<MessageScreen> {
   }
 
   // 小红书风格的顶部图标导航
-  Widget _buildTopIconNavigation(ColorScheme scheme) {
+  Widget _buildTopIconNavigation() {
+    // 小红书风格的静态配色
+    const likesBg = Color(0xFFFFEEF0);
+    const likesIcon = Color(0xFFE53935);
+    const followsBg = Color(0xFFE8F3FF);
+    const followsIcon = Color(0xFF1E88E5);
+    const commentsBg = Color(0xFFEFF8F1);
+    const commentsIcon = Color(0xFF2E7D32);
+    const labelColor = Color(0xFF222222);
+
     return Container(
-      color: scheme.surface,
+      color: Colors.white,
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1226,8 +1235,9 @@ class _MessageScreenState extends State<MessageScreen> {
             activeIcon: Icons.favorite,
             label: '赞和收藏',
             badgeCount: _unreadCount.likes,
-            backgroundColor: scheme.errorContainer.withOpacity(0.5),
-            iconColor: scheme.error,
+            backgroundColor: likesBg,
+            iconColor: likesIcon,
+            labelColor: labelColor,
             onTap: () {
               _navigateToLikesAndFavorites();
               _loadUnreadCount(); // 刷新未读数量
@@ -1238,8 +1248,9 @@ class _MessageScreenState extends State<MessageScreen> {
             activeIcon: Icons.person_add,
             label: '新增关注',
             badgeCount: _unreadCount.follows,
-            backgroundColor: scheme.primaryContainer.withOpacity(0.5),
-            iconColor: scheme.primary,
+            backgroundColor: followsBg,
+            iconColor: followsIcon,
+            labelColor: labelColor,
             onTap: () {
               _navigateToNewFollowers();
               _loadUnreadCount(); // 刷新未读数量
@@ -1250,8 +1261,9 @@ class _MessageScreenState extends State<MessageScreen> {
             activeIcon: Icons.chat_bubble,
             label: '评论和@',
             badgeCount: _unreadCount.comments,
-            backgroundColor: scheme.secondaryContainer.withOpacity(0.5),
-            iconColor: scheme.secondary,
+            backgroundColor: commentsBg,
+            iconColor: commentsIcon,
+            labelColor: labelColor,
             onTap: () {
               _navigateToCommentsAndMentions();
               _loadUnreadCount(); // 刷新未读数量
@@ -1270,8 +1282,8 @@ class _MessageScreenState extends State<MessageScreen> {
     int badgeCount = 0,
     Color? backgroundColor,
     Color? iconColor,
+    Color? labelColor,
   }) {
-    final scheme = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -1283,12 +1295,12 @@ class _MessageScreenState extends State<MessageScreen> {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: backgroundColor ?? scheme.surfaceVariant,
+                  color: backgroundColor ?? Colors.white,
                   borderRadius: BorderRadius.circular(25),
                 ),
                 child: Icon(
                   icon,
-                  color: iconColor ?? scheme.onSurface,
+                  color: iconColor ?? Colors.black87,
                   size: 24,
                 ),
               ),
@@ -1324,7 +1336,7 @@ class _MessageScreenState extends State<MessageScreen> {
             label,
             style: TextStyle(
               fontSize: 12,
-              color: scheme.onSurface,
+              color: labelColor ?? Colors.black87,
             ),
           ),
         ],
