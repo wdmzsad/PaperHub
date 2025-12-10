@@ -235,7 +235,7 @@ public class CommentService {
         if (user.getStatus() == UserStatus.BANNED) {
             throw new IllegalArgumentException("账号已被封禁，无法执行此操作");
         }
-        if (user.getStatus() == UserStatus.SILENT) {
+        if (user.getStatus() == UserStatus.MUTE) {
             Instant muteUntil = user.getMuteUntil();
             if (muteUntil == null || Instant.now().isBefore(muteUntil)) {
                 throw new IllegalArgumentException("账号被禁言中，暂时无法评论");

@@ -6,7 +6,8 @@
       "Bash(dart analyze:*)",
       "Bash(find:*)",
       "Bash(./mvnw:*)",
-      "Bash(java:*)"
+      "Bash(java:*)",
+      "Bash(flutter analyze:*)"
     ],
     "deny": [],
     "ask": []

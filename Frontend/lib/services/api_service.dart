@@ -885,7 +885,7 @@ class ApiService {
 
   // ===================== 管理员后台相关 =====================
 
-  /// 管理员搜索用户（用于“用户管理”页面）
+  /// 管理员搜索用户（用于"用户管理"页面）
   /// GET /admin/users?q=...&page=&pageSize=
   static Future<Map<String, dynamic>> adminSearchUsers({
     String? query,
@@ -904,6 +904,18 @@ class ApiService {
     return await _makeRequest(
       () => http.get(uri, headers: _buildHeaders()),
       '/admin/users',
+    );
+  }
+
+  /// 获取所有待审核用户（status = AUDIT）
+  /// GET /admin/users/audit-list
+  static Future<Map<String, dynamic>> getAuditUsers() async {
+    return await _makeRequest(
+      () => http.get(
+        Uri.parse('$baseUrl/admin/users/audit-list'),
+        headers: _buildHeaders(),
+      ),
+      '/admin/users/audit-list',
     );
   }
 
