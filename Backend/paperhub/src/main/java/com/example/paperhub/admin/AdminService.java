@@ -221,6 +221,8 @@ public class AdminService {
         u.setStatus(UserStatus.BANNED);
         u.setMuteUntil(null);
         userRepository.save(u);
+
+
     }
 
     @Transactional
@@ -234,6 +236,8 @@ public class AdminService {
         u.setStatus(UserStatus.NORMAL);
         u.setMuteUntil(null);
         userRepository.save(u);
+
+
     }
 
     @Transactional
@@ -247,7 +251,7 @@ public class AdminService {
         if (u.getRole() == UserRole.SUPER_ADMIN || u.getRole() == UserRole.ADMIN) {
             throw new IllegalArgumentException("不能禁言管理员或超级管理员");
         }
-        u.setStatus(UserStatus.SILENT);
+        u.setStatus(UserStatus.MUTE);
         u.setMuteUntil(muteUntil);
         userRepository.save(u);
     }
@@ -260,7 +264,7 @@ public class AdminService {
         }
         User u = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
-        if (u.getStatus() == UserStatus.SILENT) {
+        if (u.getStatus() == UserStatus.MUTE) {
             u.setStatus(UserStatus.NORMAL);
             u.setMuteUntil(null);
             userRepository.save(u);
@@ -303,8 +307,9 @@ public class AdminService {
                 u.setStatus(UserStatus.BANNED);
                 u.setMuteUntil(null);
                 break;
-            case "SILENT":
-                u.setStatus(UserStatus.SILENT);
+            case "MUTE":
+            case "SILENT":  // 兼容旧的前端代码
+                u.setStatus(UserStatus.MUTE);
                 // 默认禁言 7 天
                 u.setMuteUntil(Instant.now().plus(java.time.Duration.ofDays(7)));
                 break;

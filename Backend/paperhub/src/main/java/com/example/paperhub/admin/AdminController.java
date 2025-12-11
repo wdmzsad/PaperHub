@@ -6,6 +6,8 @@ import com.example.paperhub.auth.UserRole;
 import com.example.paperhub.post.Post;
 import com.example.paperhub.post.PostRepository;
 import jakarta.validation.Valid;
+
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.data.domain.Page;
@@ -87,13 +89,22 @@ public class AdminController {
             userPage = userRepository.findAll(pageable);
         }
 
-        var list = userPage.getContent().stream().map(u -> Map.<String, Object>of(
-                "id", u.getId(),
-                "email", u.getEmail(),
-                "name", u.getName(),
-                "role", u.getRole() != null ? u.getRole().name() : UserRole.USER.name(),
-                "status", u.getStatus() != null ? u.getStatus().name() : "NORMAL"
-        )).toList();
+        var list = userPage.getContent().stream().map(u -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("id", u.getId());
+            m.put("email", u.getEmail());   // 允许 null
+            m.put("name", u.getName());     // 允许 null
+
+            m.put("role",
+                    u.getRole() != null ? u.getRole().name() : UserRole.USER.name()
+            );
+
+            m.put("status",
+                    u.getStatus() != null ? u.getStatus().name() : "NORMAL"
+            );
+
+            return m;
+        }).toList();
         return ResponseEntity.ok(Map.of(
                 "users", list,
                 "total", userPage.getTotalElements(),
@@ -172,6 +183,31 @@ public class AdminController {
     }
 
     // ========== 用户审核 ==========
+
+    @GetMapping("/users/audit-list")
+    public ResponseEntity<?> getAuditUsers(@AuthenticationPrincipal User currentUser) {
+//        if (!isAdmin(currentUser)) {
+//            return ResponseEntity.status(403).body(Map.of("message", "仅管理员可访问"));
+//        }
+        List<User> auditUsers = userRepository.findByStatus(com.example.paperhub.auth.UserStatus.AUDIT);
+        var list = auditUsers.stream().map(u -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("id", u.getId());
+            m.put("email", u.getEmail()); // 允许 null
+            m.put("name", u.getName());   // 允许 null
+
+            m.put("role",
+                    u.getRole() != null ? u.getRole().name() : UserRole.USER.name()
+            );
+
+            m.put("status",
+                    u.getStatus() != null ? u.getStatus().name() : "NORMAL"
+            );
+
+            return m;
+        }).toList();
+        return ResponseEntity.ok(Map.of("users", list));
+    }
 
     @PostMapping("/users/{userId}/approve")
     public ResponseEntity<?> approveUser(@AuthenticationPrincipal User currentUser,

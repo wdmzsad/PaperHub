@@ -13,6 +13,7 @@ public interface UserRepository extends JpaRepository<User, Long> {//定义用�
     java.util.List<User> findByNameContainingIgnoreCase(String name);
     // 根据状态查询用户
     Page<User> findByStatus(UserStatus status, Pageable pageable);
+    java.util.List<User> findByStatus(UserStatus status);
     // 查询所有非指定状态的用户
     Page<User> findByStatusNot(UserStatus status, Pageable pageable);
 }

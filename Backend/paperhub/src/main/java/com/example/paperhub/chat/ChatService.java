@@ -438,7 +438,7 @@ public class ChatService {
         if (user.getStatus() == UserStatus.BANNED) {
             throw new IllegalArgumentException("账号已被封禁，无法发送私信");
         }
-        if (user.getStatus() == UserStatus.SILENT) {
+        if (user.getStatus() == UserStatus.MUTE) {
             java.time.Instant muteUntil = user.getMuteUntil();
             if (muteUntil == null || java.time.Instant.now().isBefore(muteUntil)) {
                 throw new IllegalArgumentException("账号被禁言中，暂时无法发送私信");
