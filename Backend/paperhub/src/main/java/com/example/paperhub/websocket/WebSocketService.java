@@ -3,6 +3,9 @@ package com.example.paperhub.websocket;
 import com.example.paperhub.comment.dto.CommentDtos;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
+import java.util.HashMap;
+
 /**
  * WebSocket服务类
  * 用于向客户端推送实时消息
@@ -155,6 +158,44 @@ public class WebSocketService {
             this.type = type;
             this.favoriteCount = favoriteCount;
             this.isSaved = isSaved;
+        }
+    }
+
+    /**
+     * 推送新通知给用户
+     */
+    public void sendNewNotification(Long userId, String notificationType, Map<String, Object> data) {
+        NotificationMessage message = new NotificationMessage("new_notification", notificationType, data);
+        webSocketHandler.sendToUser(userId, message);
+    }
+
+    /**
+     * 推送未读数量更新给用户
+     */
+    public void sendUnreadCountUpdate(Long userId, Map<String, Integer> unreadCounts) {
+        UnreadCountUpdateMessage message = new UnreadCountUpdateMessage("unread_count_update", unreadCounts);
+        webSocketHandler.sendToUser(userId, message);
+    }
+
+    public static class NotificationMessage {
+        public String type;
+        public String notificationType;
+        public Map<String, Object> data;
+
+        public NotificationMessage(String type, String notificationType, Map<String, Object> data) {
+            this.type = type;
+            this.notificationType = notificationType;
+            this.data = data;
+        }
+    }
+
+    public static class UnreadCountUpdateMessage {
+        public String type;
+        public Map<String, Integer> unreadCounts;
+
+        public UnreadCountUpdateMessage(String type, Map<String, Integer> unreadCounts) {
+            this.type = type;
+            this.unreadCounts = unreadCounts;
         }
     }
 }

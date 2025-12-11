@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
 import 'pages/verify_email_page.dart';
@@ -11,11 +12,24 @@ import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/chat_screen.dart';
 import 'services/local_storage.dart';
+import 'services/notification_websocket_service.dart';
 import 'constants/app_colors.dart';
 import 'utils/font_utils.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 初始化ServicesBinding（用于应用生命周期监听）
+  // 注意：ServicesBinding.instance在Flutter 3.0+中可能为null，需要检查
+  try {
+    // 确保ServicesBinding已初始化
+    if (ServicesBinding.instance == null) {
+      // 在Flutter 3.0+中，可能需要手动初始化
+      // 这里使用try-catch避免崩溃
+    }
+  } catch (e) {
+    debugPrint('ServicesBinding初始化失败: $e');
+  }
 
   // 初始化本地存储（SharedPreferences），失败时不要让应用崩掉
   try {
@@ -236,6 +250,25 @@ class _SplashOrLoginState extends State<SplashOrLogin> {
   void initState() {
     super.initState();
     _checkToken();
+    _connectWebSocket();
+  }
+
+  Future<void> _connectWebSocket() async {
+    // 延迟连接WebSocket，确保其他初始化完成
+    await Future.delayed(const Duration(seconds: 1));
+
+    // 检查用户是否已登录
+    final token = LocalStorage.instance.read('accessToken');
+    if (token == null || token.isEmpty) {
+      debugPrint('用户未登录，不连接WebSocket');
+      return;
+    }
+
+    try {
+      await NotificationWebSocketService.instance.connect();
+    } catch (e) {
+      debugPrint('WebSocket连接失败: $e');
+    }
   }
 
   Future<void> _checkToken() async {
