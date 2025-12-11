@@ -8,7 +8,8 @@
       "Bash(./mvnw:*)",
       "Bash(java:*)",
       "Bash(/usr/bin/dart analyze:*)",
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "Bash(/mnt/f/flutter/flutter/bin/flutter analyze:*)"
     ],
     "deny": [],
     "ask": []

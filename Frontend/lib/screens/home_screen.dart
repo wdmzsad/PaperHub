@@ -37,6 +37,7 @@ import '../pages/note_editor_page.dart';
 import '../services/api_service.dart';
 import '../services/chat_service.dart';
 import '../services/unread_service.dart';
+import '../services/notification_websocket_service.dart';
 import '../models/notification_model.dart';
 import '../services/local_storage.dart';
 import '../services/browse_history_service.dart';
@@ -129,6 +130,20 @@ class _HomeScreenState extends State<HomeScreen> {
     _preloadUnreadBadges();
     _loadViewedPostIds();
     _evaluateUserSignals();
+
+    // 检查WebSocket连接状态
+    _checkWebSocketConnection();
+  }
+
+  /// 检查WebSocket连接状态
+  Future<void> _checkWebSocketConnection() async {
+    try {
+      // 延迟执行，确保其他初始化完成
+      await Future.delayed(const Duration(seconds: 2));
+      await NotificationWebSocketService.instance.checkAndReconnect();
+    } catch (e) {
+      print('检查WebSocket连接失败: $e');
+    }
   }
 
   /// 加载当前用户的浏览历史，用于关注流“未读”标记
