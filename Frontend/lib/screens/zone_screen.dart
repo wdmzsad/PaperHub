@@ -294,16 +294,17 @@ class _ZoneScreenState extends State<ZoneScreen> {
           final discipline = kMainDisciplines[index];
           final selected = discipline == _currentDiscipline;
           final color = kDisciplineColors[discipline] ?? Colors.blue;
+          final isDark = Theme.of(context).brightness == Brightness.dark;
           return GestureDetector(
             onTap: () => _onDisciplineChanged(discipline),
             child: Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: selected ? color.withOpacity(0.12) : Colors.transparent,
+                color: selected ? color.withOpacity(isDark ? 0.3 : 0.12) : Colors.transparent,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: selected ? color : Colors.grey.shade300,
+                  color: selected ? color : (isDark ? Colors.white24 : Colors.grey.shade300),
                 ),
               ),
               child: Center(
@@ -313,7 +314,7 @@ class _ZoneScreenState extends State<ZoneScreen> {
                     fontSize: 14,
                     fontWeight:
                         selected ? FontWeight.w600 : FontWeight.normal,
-                    color: selected ? color : Colors.black87,
+                    color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
               ),

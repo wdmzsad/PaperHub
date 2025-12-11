@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
 import '../services/local_storage.dart';
+import '../services/notification_websocket_service.dart';
 import '../widgets/animated_title_background.dart';
 import '../constants/app_colors.dart';
 import '../utils/font_utils.dart';
@@ -61,6 +62,14 @@ class _LoginPageState extends State<LoginPage> {
       await LocalStorage.instance.write('refreshToken', refreshToken);
       await _cacheCurrentUserProfile();
       _showSnack(res['body']['message'] ?? '登录成功');
+
+      // 登录成功后连接WebSocket接收实时通知
+      try {
+        await NotificationWebSocketService.instance.connect();
+      } catch (e) {
+        print('WebSocket连接失败: $e');
+      }
+
       Navigator.of(context).pushReplacementNamed('/home');
     } else {
       _showSnack(res['body']['message'] ?? '登录失败');

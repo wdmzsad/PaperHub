@@ -1416,9 +1416,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   // 获取过滤后的分区列表（根据用户角色隐藏"公告区"）
   List<String> _getFilteredDisciplines() {
-    // 如果用户角色未加载或不是管理员，隐藏"公告区"
-    if (_currentUserRole == 'ADMIN') {
-      return kMainDisciplines; // 管理员可以看到所有分区
+    // 如果用户角色是管理员或超级管理员，显示所有分区（包括公告区）
+    if (_currentUserRole == 'ADMIN' || _currentUserRole == 'SUPER_ADMIN') {
+      return kMainDisciplines; // 管理员和超级管理员可以看到所有分区
     } else {
       // 普通用户或角色未加载时隐藏"公告区"
       return kMainDisciplines

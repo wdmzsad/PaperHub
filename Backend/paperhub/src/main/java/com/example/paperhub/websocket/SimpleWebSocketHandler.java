@@ -21,6 +21,8 @@ public class SimpleWebSocketHandler extends TextWebSocketHandler {
     private final Map<Long, Map<String, WebSocketSession>> postSessions = new ConcurrentHashMap<>();
     // 存储管理员WebSocket会话
     private final Map<String, WebSocketSession> adminSessions = new ConcurrentHashMap<>();
+    // 存储用户ID对应的WebSocket会话（用于实时通知）
+    private final Map<Long, Map<String, WebSocketSession>> userSessions = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -32,6 +34,14 @@ public class SimpleWebSocketHandler extends TextWebSocketHandler {
             // 管理员连接
             adminSessions.put(session.getId(), session);
             System.out.println("管理员WebSocket连接建立: " + session.getId());
+        } else if (path.contains("/notifications")) {
+            // 用户通知连接
+            Long userId = extractUserId(path);
+            if (userId != null) {
+                userSessions.computeIfAbsent(userId, k -> new ConcurrentHashMap<>())
+                    .put(session.getId(), session);
+                System.out.println("用户通知WebSocket连接建立: userId=" + userId + ", sessionId=" + session.getId());
+            }
         } else {
             Long postId = extractPostId(path);
             if (postId != null) {
@@ -49,6 +59,18 @@ public class SimpleWebSocketHandler extends TextWebSocketHandler {
         if (path.contains("/admin")) {
             adminSessions.remove(session.getId());
             System.out.println("管理员WebSocket连接关闭: " + session.getId());
+        } else if (path.contains("/notifications")) {
+            Long userId = extractUserId(path);
+            if (userId != null) {
+                Map<String, WebSocketSession> sessions = userSessions.get(userId);
+                if (sessions != null) {
+                    sessions.remove(session.getId());
+                    if (sessions.isEmpty()) {
+                        userSessions.remove(userId);
+                    }
+                }
+                System.out.println("用户通知WebSocket连接关闭: userId=" + userId + ", sessionId=" + session.getId());
+            }
         } else {
             Long postId = extractPostId(path);
             if (postId != null) {
@@ -127,6 +149,45 @@ public class SimpleWebSocketHandler extends TextWebSocketHandler {
             // 忽略解析错误
         }
         return null;
+    }
+
+    private Long extractUserId(String path) {
+        try {
+            // 路径格式: /ws/notifications/{userId}
+            String[] parts = path.split("/");
+            if (parts.length >= 4 && "notifications".equals(parts[2])) {
+                return Long.parseLong(parts[3]);
+            }
+        } catch (Exception e) {
+            // 忽略解析错误
+        }
+        return null;
+    }
+
+    /**
+     * 向指定用户的所有客户端发送消息
+     */
+    public void sendToUser(Long userId, Object message) {
+        Map<String, WebSocketSession> sessions = userSessions.get(userId);
+        if (sessions != null) {
+            try {
+                String json = objectMapper.writeValueAsString(message);
+                TextMessage textMessage = new TextMessage(json);
+
+                sessions.values().forEach(session -> {
+                    try {
+                        if (session.isOpen()) {
+                            session.sendMessage(textMessage);
+                        }
+                    } catch (IOException e) {
+                        // 记录错误
+                        e.printStackTrace();
+                    }
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 }
 
