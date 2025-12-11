@@ -34,7 +34,11 @@ public class User {
     private UserRole role = UserRole.USER;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, columnDefinition = "varchar(20) default 'NORMAL'")
+    @Column(
+            name = "status",
+            nullable = false,
+            columnDefinition = "ENUM('NORMAL','BANNED','MUTE','AUDIT') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'NORMAL'"
+    )
     private UserStatus status = UserStatus.NORMAL;
 
     /**

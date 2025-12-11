@@ -576,11 +576,17 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SearchBar(
-            hintText: '输入用户名或邮箱（留空则查询全部）',
-            buttonLabel: '搜索',
-            onPressed: () => setState(() => _auditUserPage = 0),
-            onChanged: (v) => _auditUserSearchKeyword = v,
+          Row(
+            children: [
+              Expanded(
+                child: _SearchBar(
+                  hintText: '输入用户名或邮箱（留空则查询全部）',
+                  buttonLabel: '搜索',
+                  onPressed: () => setState(() => _auditUserPage = 0),
+                  onChanged: (v) => _auditUserSearchKeyword = v,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           if (_auditUserLoading)
@@ -595,7 +601,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                       Text(u['email']?.toString() ?? ''),
                       Text(u['role']?.toString() ?? ''),
                       _buildStatusChip(u['status']?.toString()),
-                      _buildUserActionsForAudit(u),
+                      _buildUserActions(u),
                     ],
                   )
                   .toList(),
@@ -1920,7 +1926,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('审核拒绝'),
+              title: const Text('处理举报'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2240,7 +2246,9 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     // 立即更新本地状态
     if (resp['statusCode'] == 200) {
       setState(() {
-        final index = _auditUserList.indexWhere((u) => u['id']?.toString() == userId);
+        final index = _auditUserList.indexWhere(
+          (u) => u['id']?.toString() == userId,
+        );
         if (index != -1) {
           _auditUserList[index]['status'] = 'MUTE';
         }
@@ -2694,13 +2702,13 @@ class UserModerationActions extends StatelessWidget {
           OutlinedButton(
             onPressed: onApprove,
             style: OutlinedButton.styleFrom(foregroundColor: Colors.green),
-            child: const Text('审核通过'),
+            child: const Text('忽略举报'),
           ),
           const SizedBox(width: 8),
           OutlinedButton(
             onPressed: onReject,
             style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent),
-            child: const Text('审核拒绝'),
+            child: const Text('处理举报'),
           ),
         ],
       );
