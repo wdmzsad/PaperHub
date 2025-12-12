@@ -283,9 +283,9 @@ public class AdminController {
         }
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("帖子不存在"));
-        // 目前后端没有 status 字段，这里可以用 likesCount<0 之类的方式临时标记，实际项目建议加 status。
-        // 为避免破坏现有逻辑，这里先返回占位响应，由你后续补充真实下架实现。
-        return ResponseEntity.ok(Map.of("message", "下架帖子接口占位，需在 Post 中增加状态字段后完善实现"));
+        post.setStatus(com.example.paperhub.post.PostStatus.REMOVED);
+        postRepository.save(post);
+        return ResponseEntity.ok(Map.of("message", "帖子已下架"));
     }
 
     /**
@@ -313,14 +313,17 @@ public class AdminController {
         } else {
             postPage = postRepository.findAll(pageable);
         }
-        var list = postPage.getContent().stream().map(p -> Map.of(
-                "id", p.getId(),
-                "title", p.getTitle(),
-                "authorId", p.getAuthor() != null ? p.getAuthor().getId() : null,
-                "authorName", p.getAuthor() != null ? p.getAuthor().getName() : null,
-                "authorEmail", p.getAuthor() != null ? p.getAuthor().getEmail() : null,
-                "createdAt", p.getCreatedAt()
-        )).toList();
+        var list = postPage.getContent().stream().map(p -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("id", p.getId());
+            m.put("title", p.getTitle());
+            m.put("authorId", p.getAuthor() != null ? p.getAuthor().getId() : null);
+            m.put("authorName", p.getAuthor() != null ? p.getAuthor().getName() : null);
+            m.put("authorEmail", p.getAuthor() != null ? p.getAuthor().getEmail() : null);
+            m.put("status", p.getStatus() != null ? p.getStatus().name() : null);
+            m.put("createdAt", p.getCreatedAt());
+            return m;
+        }).toList();
         return ResponseEntity.ok(Map.of(
                 "posts", list,
                 "total", postPage.getTotalElements(),

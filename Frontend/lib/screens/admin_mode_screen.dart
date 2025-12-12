@@ -453,7 +453,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
             const Center(child: CircularProgressIndicator())
           else
             _buildPlaceholderTable(
-              headers: const ['ID', '标题', '作者信息', '发布时间', '操作'],
+              headers: const ['ID', '标题', '作者信息', '状态', '发布时间', '操作'],
               rows: _postList
                   .map(
                     (p) => [
@@ -465,23 +465,28 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                       Text(
                         'ID: ${p['authorId'] ?? ''} | 昵称: ${p['authorName'] ?? ''} | 邮箱: ${p['authorEmail'] ?? ''}',
                       ),
+                      _buildPostStatusChip(p['status']?.toString()),
                       Text(_formatPostTime(p['createdAt']?.toString())),
-                      ElevatedButton(
-                        onPressed: () async {
-                          final id = (p['id'] ?? '').toString();
-                          if (id.isEmpty) return;
-                          final resp = await ApiService.adminHidePost(id);
-                          final msg =
-                              resp['body']?['message']?.toString() ?? '已发送下架请求';
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(SnackBar(content: Text(msg)));
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                        ),
-                        child: const Text('下架'),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: () => _viewPostDetailForManagement(
+                              p['id']?.toString(),
+                            ),
+                            child: const Text('查看详情'),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: (p['status']?.toString().toUpperCase() == 'REMOVED')
+                                ? null
+                                : () => _showRemovePostDialog(p),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.redAccent,
+                              disabledBackgroundColor: Colors.grey,
+                            ),
+                            child: const Text('下架'),
+                          ),
+                        ],
                       ),
                     ],
                   )
@@ -1591,6 +1596,239 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('无法查看帖子: $e')));
+      }
+    }
+  }
+
+  void _viewPostDetailForManagement(String? postId) async {
+    if (postId == null || postId.isEmpty) return;
+    try {
+      final resp = await ApiService.getPostDetail(postId);
+      if (resp['statusCode'] == 200 && mounted) {
+        final postData = resp['body'];
+        showDialog(
+          context: context,
+          builder: (ctx) => Dialog(
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.8,
+              height: MediaQuery.of(context).size.height * 0.8,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        '帖子详情',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            postData['title'] ?? '',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '作者: ${postData['author']?['name'] ?? ''}',
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Text('状态: '),
+                              _buildPostStatusChip(postData['status']?.toString()),
+                            ],
+                          ),
+                          if (postData['hiddenReason'] != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              '下架原因: ${postData['hiddenReason']}',
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          Text(postData['content'] ?? ''),
+                          const SizedBox(height: 16),
+                          if (postData['media'] != null &&
+                              (postData['media'] as List).isNotEmpty)
+                            ...((postData['media'] as List).map(
+                              (url) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Image.network(
+                                  url,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const Text('图片加载失败'),
+                                ),
+                              ),
+                            )),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  if (postData['status']?.toString() != 'REMOVED')
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showRemovePostDialog(postData);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                        ),
+                        child: const Text('下架此帖子'),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('无法查看帖子: $e')));
+      }
+    }
+  }
+
+  void _showRemovePostDialog(Map<String, dynamic> post) {
+    final reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.4),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.dialogBackground,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        title: Text(
+          '确认下架帖子',
+          style: TextStyle(
+            fontSize: 18.0,
+            fontWeight: FontWeight.w700,
+            color: AppColors.dialogTitle,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '帖子标题: ${post['title'] ?? ''}',
+              style: TextStyle(
+                fontSize: 14.0,
+                color: AppColors.dialogContent,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '作者: ${post['authorName'] ?? ''}',
+              style: TextStyle(
+                fontSize: 14.0,
+                color: AppColors.dialogContent,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              decoration: InputDecoration(
+                labelText: '下架原因',
+                hintText: '请输入下架原因（必填）',
+                filled: true,
+                fillColor: AppColors.backgroundLight,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                  borderSide: BorderSide(
+                    color: AppColors.primary,
+                    width: 1.5,
+                  ),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 12.0,
+                ),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final reason = reasonController.text.trim();
+              if (reason.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('请输入下架原因')),
+                );
+                return;
+              }
+              Navigator.pop(ctx);
+              await _handleRemovePostDirectly(
+                post['id']?.toString() ?? '',
+                reason,
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('确认下架'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleRemovePostDirectly(String postId, String reason) async {
+    if (postId.isEmpty) return;
+    try {
+      final resp = await ApiService.adminHidePost(postId);
+      if (resp['statusCode'] == 200 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('帖子已下架')),
+        );
+        await _loadPosts(page: _postPage);
+      } else {
+        final msg = resp['body']?['message']?.toString() ?? '下架失败';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg)),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('操作失败: $e')),
+        );
       }
     }
   }

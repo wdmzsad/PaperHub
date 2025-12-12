@@ -43,6 +43,7 @@ public class User {
 
     /**
      * 禁言截止时间（可为空，空表示不限期）
+     * 
      */
     @Column(name = "mute_until")
     private Instant muteUntil;
