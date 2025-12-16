@@ -71,24 +71,25 @@ class _FollowListScreenState extends State<FollowListScreen>
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return WillPopScope(
       onWillPop: () async {
         Navigator.pop(context, _hasRelationshipChanges);
         return false;
       },
       child: Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: scheme.surface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: scheme.onSurface),
             onPressed: () => Navigator.pop(context, _hasRelationshipChanges),
         ),
-        title: const Text(
+        title: Text(
           '关注与粉丝',
           style: TextStyle(
-            color: Colors.black87,
+            color: scheme.onSurface,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -97,13 +98,13 @@ class _FollowListScreenState extends State<FollowListScreen>
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
-            color: Colors.white,
+            color: scheme.surface,
             child: TabBar(
               controller: _tabController,
-              indicatorColor: Colors.black87,
+              indicatorColor: scheme.primary,
               indicatorWeight: 2,
-              labelColor: Colors.black87,
-              unselectedLabelColor: Colors.grey[600],
+              labelColor: scheme.primary,
+              unselectedLabelColor: scheme.onSurfaceVariant,
               labelStyle: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
@@ -421,6 +422,7 @@ class _FollowTabState extends State<_FollowTab>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final scheme = Theme.of(context).colorScheme;
 
     if (_forbiddenMessage != null) {
       return Center(
@@ -429,7 +431,7 @@ class _FollowTabState extends State<_FollowTab>
           child: Text(
             _forbiddenMessage!,
             style: TextStyle(
-              color: Colors.grey[600],
+              color: scheme.onSurfaceVariant,
               fontSize: 15,
             ),
             textAlign: TextAlign.center,
@@ -439,8 +441,10 @@ class _FollowTabState extends State<_FollowTab>
     }
 
     if (_isFetching && _users.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(),
+      return Center(
+        child: CircularProgressIndicator(
+          color: scheme.primary,
+        ),
       );
     }
 
@@ -452,7 +456,7 @@ class _FollowTabState extends State<_FollowTab>
             Icon(
               Icons.people_outline,
               size: 64,
-              color: Colors.grey[400],
+              color: scheme.onSurfaceVariant,
             ),
             const SizedBox(height: 16),
             Text(
@@ -462,7 +466,7 @@ class _FollowTabState extends State<_FollowTab>
                       ? '暂无粉丝'
                       : '暂无关注',
               style: TextStyle(
-                color: Colors.grey[600],
+                color: scheme.onSurfaceVariant,
                 fontSize: 16,
               ),
             ),
@@ -545,6 +549,7 @@ class _UserListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentUserId = LocalStorage.instance.read('userId')?.toString();
     final isMe = currentUserId != null && currentUserId == user.id;
+    final scheme = Theme.of(context).colorScheme;
 
     return InkWell(
       onTap: () {
@@ -577,13 +582,13 @@ class _UserListItem extends StatelessWidget {
                     right: 0,
                     child: Container(
                       padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
+                      decoration: BoxDecoration(
+                        color: scheme.surface,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.check_circle,
-                        color: Colors.blue,
+                        color: scheme.primary,
                         size: 16,
                       ),
                     ),
@@ -598,9 +603,10 @@ class _UserListItem extends StatelessWidget {
                 children: [
                   Text(
                     user.displayName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
+                      color: scheme.onSurface,
                     ),
                   ),
                   if (user.bio != null && user.bio!.isNotEmpty) ...[
@@ -609,7 +615,7 @@ class _UserListItem extends StatelessWidget {
                       user.bio!,
                       style: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey[600],
+                        color: scheme.onSurfaceVariant,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -759,39 +765,39 @@ class _FollowActionButtonState extends State<_FollowActionButton> {
     );
   }
 
-  ButtonStyle _buttonStyle() {
+  ButtonStyle _buttonStyle(ColorScheme scheme) {
     final baseShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(20));
     if (_needsFollowBack) {
       return OutlinedButton.styleFrom(
-        backgroundColor: const Color(0xFFE6F0FF),
-        foregroundColor: const Color(0xFF1C64D9),
-        side: const BorderSide(color: Color(0xFFA0C4FF)),
+        backgroundColor: scheme.primary.withOpacity(0.1),
+        foregroundColor: scheme.primary,
+        side: BorderSide(color: scheme.primary.withOpacity(0.5)),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         shape: baseShape,
       );
     }
     if (_isMutual) {
       return OutlinedButton.styleFrom(
-        backgroundColor: const Color(0xFFF5F5F5),
-        foregroundColor: Colors.grey[700],
-        side: const BorderSide(color: Color(0xFFE0E0E0)),
+        backgroundColor: scheme.surfaceVariant,
+        foregroundColor: scheme.onSurfaceVariant,
+        side: BorderSide(color: scheme.outline.withOpacity(0.5)),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         shape: baseShape,
       );
     }
     if (_isFollowing) {
       return OutlinedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.grey[700],
-        side: BorderSide(color: Colors.grey[300]!),
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurfaceVariant,
+        side: BorderSide(color: scheme.outline.withOpacity(0.5)),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         shape: baseShape,
       );
     }
     return OutlinedButton.styleFrom(
-      backgroundColor: const Color(0xFF1A73E8),
-      foregroundColor: Colors.white,
-      side: const BorderSide(color: Color(0xFF1A73E8)),
+      backgroundColor: scheme.primary,
+      foregroundColor: scheme.onPrimary,
+      side: BorderSide(color: scheme.primary),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       shape: baseShape,
     );
@@ -816,16 +822,20 @@ class _FollowActionButtonState extends State<_FollowActionButton> {
   @override
   Widget build(BuildContext context) {
     if (widget.user.id.isEmpty) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
     return SizedBox(
       height: 36,
       child: OutlinedButton(
         onPressed: _isProcessing ? null : _handlePressed,
-        style: _buttonStyle(),
+        style: _buttonStyle(scheme),
         child: _isProcessing
-            ? const SizedBox(
+            ? SizedBox(
                 width: 16,
                 height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: scheme.primary,
+                ),
               )
             : Text(
                 _label,
