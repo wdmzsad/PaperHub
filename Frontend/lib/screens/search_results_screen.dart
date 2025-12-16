@@ -256,11 +256,17 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
 
   /// 构建排序选择器
   Widget _buildSortSelector() {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+        color: isDark ? scheme.surface : Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? scheme.outline.withOpacity(0.12) : Colors.grey[200]!,
+          ),
+        ),
       ),
       child: Row(
         children: [
@@ -295,6 +301,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
       return Container();
     }
 
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     // 决定显示多少用户
     final usersToShow = _showAllUsers ? _users : _users.take(5).toList();
 
@@ -302,8 +310,12 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+        color: isDark ? scheme.surface : Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? scheme.outline.withOpacity(0.12) : Colors.grey[200]!,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

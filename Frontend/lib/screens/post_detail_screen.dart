@@ -1085,6 +1085,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     String content,
     List<Author> mentions,
   ) {
+    final scheme = Theme.of(context).colorScheme;
     final List<TextSpan> spans = [];
     // 使用与提交时相同的正则表达式，匹配@后面跟着非@非空格的字符（格式：@A @B @C，有空格）
     final RegExp mentionRegex = RegExp(r'@([^\s@]+)');
@@ -1127,7 +1128,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         spans.add(
           TextSpan(
             text: content.substring(lastIndex, match.start),
-            style: const TextStyle(fontSize: 13, color: Colors.black87),
+            style: TextStyle(fontSize: 13, color: scheme.onSurface),
           ),
         );
       }
@@ -1149,9 +1150,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         spans.add(
           TextSpan(
             text: mentionText,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
-              color: Colors.blue,
+              color: scheme.primary,
               fontWeight: FontWeight.w500,
             ),
             recognizer: TapGestureRecognizer()
@@ -1178,9 +1179,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             spans.add(
               TextSpan(
                 text: mentionText,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
-                  color: Colors.blue,
+                  color: scheme.primary,
                   fontWeight: FontWeight.w500,
                 ),
                 recognizer: TapGestureRecognizer()
@@ -1198,7 +1199,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             spans.add(
               TextSpan(
                 text: mentionText,
-                style: const TextStyle(fontSize: 13, color: Colors.black87),
+                style: TextStyle(fontSize: 13, color: scheme.onSurface),
               ),
             );
           }
@@ -1215,7 +1216,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           spans.add(
             TextSpan(
               text: mentionText,
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
+              style: TextStyle(fontSize: 13, color: scheme.onSurface),
             ),
           );
         }
@@ -1229,7 +1230,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       spans.add(
         TextSpan(
           text: content.substring(lastIndex),
-          style: const TextStyle(fontSize: 13, color: Colors.black87),
+          style: TextStyle(fontSize: 13, color: scheme.onSurface),
         ),
       );
     }
@@ -2782,12 +2783,17 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   }
 
   Widget _buildPdfSection() {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'PDF 附件',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: scheme.onSurface,
+          ),
         ),
         const SizedBox(height: 8),
         ..._pdfMedia.map(_buildPdfTile),
@@ -2796,65 +2802,67 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   }
 
   Widget _buildPdfTile(String url) {
-      final fileName = _extractFileName(url);
-      return Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.withOpacity(0.2)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.all(8),
-                  child: const Icon(
-                    Icons.picture_as_pdf,
-                    color: Color(0xFFD32F2F),
-                  ),
+    final scheme = Theme.of(context).colorScheme;
+    final fileName = _extractFileName(url);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceVariant,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outline.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: scheme.errorContainer.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    fileName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // 只保留“下载”按钮，占满一行
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _downloadPdf(url),
-                icon: const Icon(Icons.download_outlined),
-                label: const Text('下载'),
-                style: ElevatedButton.styleFrom(
-                  elevation: 0,
-                  backgroundColor: Colors.blueGrey[50],
-                  foregroundColor: Colors.blueGrey[900],
+                padding: const EdgeInsets.all(8),
+                child: Icon(
+                  Icons.picture_as_pdf,
+                  color: scheme.error,
                 ),
               ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 只保留“下载”按钮，占满一行
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _downloadPdf(url),
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('下载'),
+              style: ElevatedButton.styleFrom(
+                elevation: 0,
+                backgroundColor: scheme.surface,
+                foregroundColor: scheme.onSurface,
+              ),
             ),
-          ],
-        ),
-      );
-    }
+          ),
+        ],
+      ),
+    );
+  }
 
   /// 处理标签点击事件
   void _onTagTap(String tag) {
@@ -2872,7 +2880,12 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     if (mainDiscipline.isEmpty) {
       return const SizedBox.shrink();
     }
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final color = kDisciplineColors[mainDiscipline] ?? Colors.blue;
+    final bgColor = isDark ? color.withOpacity(0.22) : color.withOpacity(0.06);
+    final borderColor = isDark ? color.withOpacity(0.85) : color.withOpacity(0.4);
+    final labelColor = isDark ? scheme.onPrimary : color;
 
     return InkWell(
       onTap: () {
@@ -2886,27 +2899,30 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.06),
+          color: bgColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.4)),
+          border: Border.all(color: borderColor, width: 1.1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.local_offer, size: 16, color: color),
+            Icon(Icons.local_offer, size: 16, color: labelColor),
             const SizedBox(width: 6),
             Text(
               mainDiscipline,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: color,
+                color: labelColor,
               ),
             ),
             const SizedBox(width: 4),
-            const Text(
+            Text(
               '· 点击查看该分区更多笔记',
-              style: TextStyle(fontSize: 11, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark ? scheme.onSurfaceVariant : Colors.grey,
+              ),
             ),
           ],
         ),
@@ -3108,27 +3124,34 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   }
 
   Widget _buildCommentsSection() {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Divider(height: 1, color: Colors.grey.withOpacity(0.2)),
+        Divider(height: 1, color: scheme.outline.withOpacity(0.15)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
               Text(
                 '评论 (${widget.post.commentsCount})',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurface,
+                ),
               ),
               const Spacer(),
               if (_isLoadingComments)
-                const SizedBox(
+                SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: scheme.primary,
+                  ),
                 ),
               IconButton(
-                icon: const Icon(Icons.refresh, size: 20),
+                icon: Icon(Icons.refresh, size: 20, color: scheme.onSurfaceVariant),
                 onPressed: _isLoadingComments
                     ? null
                     : () => _loadComments(refresh: true),
@@ -3141,7 +3164,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: _comments.length + (_hasMoreComments ? 1 : 0),
-          separatorBuilder: (_, __) => Divider(indent: 16, color: Colors.grey.withOpacity(0.2)),
+          separatorBuilder: (_, __) =>
+              Divider(indent: 16, color: scheme.outline.withOpacity(0.15)),
           itemBuilder: (context, idx) {
             if (idx == _comments.length) {
               // 加载更多按钮
@@ -3149,11 +3173,14 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                 padding: const EdgeInsets.symmetric(vertical: 16.0),
                 child: Center(
                   child: _isLoadingComments
-                      ? const CircularProgressIndicator()
+                      ? CircularProgressIndicator(color: scheme.primary)
                       : TextButton.icon(
                           onPressed: _loadComments,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('加载更多评论'),
+                          icon: Icon(Icons.refresh, color: scheme.onSurfaceVariant),
+                          label: Text(
+                            '加载更多评论',
+                            style: TextStyle(color: scheme.primary),
+                          ),
                         ),
                 ),
               );
@@ -3203,7 +3230,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                             '回复 @${c.replyTo!.name}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.blue[700],
+                              color: scheme.primary,
                             ),
                           ),
                         ),
@@ -3214,7 +3241,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                             _formatRelative(c.createdAt),
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[600],
+                              color: scheme.onSurfaceVariant,
                             ),
                           ),
                           TextButton(
@@ -3225,14 +3252,19 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                             ),
                           ),
                           const Spacer(),
-                          Text('${c.likesCount}'),
+                          Text(
+                            '${c.likesCount}',
+                            style: TextStyle(color: scheme.onSurfaceVariant),
+                          ),
                           IconButton(
                             icon: Icon(
                               c.isLiked
                                   ? Icons.thumb_up
                                   : Icons.thumb_up_off_alt,
                               size: 18,
-                              color: c.isLiked ? Colors.blue : Colors.black87,
+                              color: c.isLiked
+                                  ? scheme.primary
+                                  : scheme.onSurfaceVariant,
                             ),
                             onPressed: inFlight
                                 ? null
@@ -3299,7 +3331,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                     '回复 @${reply.replyTo!.name}',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Colors.blue[700],
+                                      color: scheme.primary,
                                     ),
                                   ),
                                 ),
@@ -3313,7 +3345,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                     _formatRelative(reply.createdAt),
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Colors.grey[600],
+                                      color: scheme.onSurfaceVariant,
                                     ),
                                   ),
                                   TextButton(
@@ -3325,7 +3357,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                     ),
                                   ),
                                   const Spacer(),
-                                  Text('${reply.likesCount}'),
+                                  Text(
+                                    '${reply.likesCount}',
+                                    style: TextStyle(color: scheme.onSurfaceVariant),
+                                  ),
                                   IconButton(
                                     icon: Icon(
                                       reply.isLiked
@@ -3333,8 +3368,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                           : Icons.thumb_up_off_alt,
                                       size: 16,
                                       color: reply.isLiked
-                                          ? Colors.blue
-                                          : Colors.black87,
+                                          ? scheme.primary
+                                          : scheme.onSurfaceVariant,
                                     ),
                                     onPressed: replyInFlight
                                         ? null

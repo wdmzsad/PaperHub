@@ -12,6 +12,7 @@ import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/chat_screen.dart';
 import 'services/local_storage.dart';
+import 'services/api_service.dart';
 import 'services/notification_websocket_service.dart';
 import 'constants/app_colors.dart';
 import 'utils/font_utils.dart';
@@ -47,10 +48,15 @@ Future<void> main() async {
   // 读取主题模式（持久化）
   final storedTheme = LocalStorage.instance.read('themeMode');
   final initialThemeMode = _parseThemeMode(storedTheme);
+  // 预判启动路由（避免闪回登录）：有 token 时尝试静默刷新，成功/失败都优先留在首页；无 token 才去登录
+  final initialRoute = await _determineInitialRoute();
 
   // 捕获顶层未处理错误，避免在 Web 上直接变成混淆的 Uncaught Error
   runZonedGuarded(() {
-    runApp(PaperHubApp(initialThemeMode: initialThemeMode));
+    runApp(PaperHubApp(
+      initialThemeMode: initialThemeMode,
+      initialRoute: initialRoute,
+    ));
   }, (error, stack) {
     debugPrint('=== TOP LEVEL ERROR ===');
     debugPrint(error.toString());
@@ -70,10 +76,47 @@ ThemeMode _parseThemeMode(String? raw) {
   }
 }
 
+/// 根据本地 token / refreshToken 决定启动路由，避免闪回登录
+Future<String> _determineInitialRoute() async {
+  final token = LocalStorage.instance.read('accessToken');
+  final refreshToken = LocalStorage.instance.read('refreshToken');
+
+  // 无 token：直接走登录
+  if (token == null || token.isEmpty) {
+    return '/login';
+  }
+
+  // 有 token：若也有 refreshToken，尝试静默刷新
+  if (refreshToken != null && refreshToken.isNotEmpty) {
+    try {
+      final resp = await ApiService.refreshToken();
+      if (resp['statusCode'] == 200) {
+        final newToken = resp['body']['token'] ?? '';
+        final newRefresh = resp['body']['refreshToken'] ?? '';
+        if (newToken.isNotEmpty) {
+          await LocalStorage.instance.write('accessToken', newToken);
+        }
+        if (newRefresh.isNotEmpty) {
+          await LocalStorage.instance.write('refreshToken', newRefresh);
+        }
+      }
+    } catch (e) {
+      debugPrint('Startup refresh token failed: $e');
+    }
+  }
+
+  return '/home';
+}
+
 class PaperHubApp extends StatefulWidget {
-  const PaperHubApp({super.key, required this.initialThemeMode});
+  const PaperHubApp({
+    super.key,
+    required this.initialThemeMode,
+    required this.initialRoute,
+  });
 
   final ThemeMode initialThemeMode;
+  final String initialRoute;
 
   @override
   State<PaperHubApp> createState() => _PaperHubAppState();
@@ -222,9 +265,13 @@ class _PaperHubAppState extends State<PaperHubApp> {
           themeMode: mode,
           theme: _lightTheme,
           darkTheme: _darkTheme,
-          initialRoute: '/',
+          initialRoute: widget.initialRoute,
           routes: {
-            '/': (ctx) => const SplashOrLogin(),
+            '/': (ctx) => HomeScreen(
+                  themeModeNotifier: _themeModeNotifier,
+                  onThemeModeChanged: _setThemeMode,
+                  onThemeToggle: _toggleTheme,
+                ),
             // 未登录页面使用固定亮色主题，避免夜间模式下文字变白
             '/login': (ctx) => Theme(data: _unauthLightTheme, child: LoginPage()),
             '/register': (ctx) => Theme(data: _unauthLightTheme, child: RegisterPage()),
@@ -305,12 +352,31 @@ class _SplashOrLoginState extends State<SplashOrLogin> {
 
       // LocalStorage.read 当前是同步的 String?，这里直接读取即可
       final token = LocalStorage.instance.read('accessToken');
+      final refreshToken = LocalStorage.instance.read('refreshToken');
       debugPrint(
           'Startup: accessToken read -> ${token == null ? "null" : "present"}');
 
       if (!mounted) return;
 
+      // 如果已有 accessToken，尝试用 refreshToken 刷新，以避免过期后直接回登录
       if (token != null && token.isNotEmpty) {
+        if (refreshToken != null && refreshToken.isNotEmpty) {
+          try {
+            final resp = await ApiService.refreshToken();
+            if (resp['statusCode'] == 200) {
+              final newToken = resp['body']['token'] ?? '';
+              final newRefresh = resp['body']['refreshToken'] ?? '';
+              if (newToken.isNotEmpty) {
+                await LocalStorage.instance.write('accessToken', newToken);
+              }
+              if (newRefresh.isNotEmpty) {
+                await LocalStorage.instance.write('refreshToken', newRefresh);
+              }
+            }
+          } catch (e) {
+            debugPrint('Startup refresh token failed: $e');
+          }
+        }
         _pushReplacementSafely('/home');
       } else {
         _pushReplacementSafely('/login');
