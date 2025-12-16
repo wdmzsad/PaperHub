@@ -172,6 +172,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   String? _currentUserId;
   bool? _isFollowingAuthor; // 是否关注了作者
   bool _followInFlight = false; // 关注操作进行中
+  String? _currentPostStatus; // 当前帖子状态（从后端获取的最新状态）
 
   // 图片实际尺寸（用于动态计算宽高比）
   double? _actualImageWidth;
@@ -239,6 +240,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     isLiked = widget.post.isLiked;
     isSaved = widget.post.isSaved;
     likeCount = widget.post.likesCount;
+    _currentPostStatus = widget.post.status; // 初始化状态
 
     _heartCtrl = AnimationController(
       vsync: this,
@@ -414,6 +416,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             widget.post.likesCount = updatedPost.likesCount;
             widget.post.isLiked = updatedPost.isLiked;
             widget.post.commentsCount = updatedPost.commentsCount;
+            _currentPostStatus = updatedPost.status; // 更新帖子状态
           });
         }
       }
@@ -2396,6 +2399,74 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     );
   }
 
+  /// 构建帖子不可见提示页面（用于 DRAFT、AUDIT、REMOVED 状态）
+  Widget _buildPostUnavailableView() {
+    String message;
+    IconData icon;
+    Color color;
+
+    final status = _currentPostStatus?.toUpperCase() ?? widget.post.status?.toUpperCase();
+    switch (status) {
+      case 'DRAFT':
+        message = '该笔记目前为草稿状态，不可见';
+        icon = Icons.edit_note;
+        color = Colors.orange;
+        break;
+      case 'AUDIT':
+        message = '该笔记正在审核中，暂不可见';
+        icon = Icons.hourglass_empty;
+        color = Colors.blue;
+        break;
+      case 'REMOVED':
+        message = '该笔记已被下架，不可见';
+        icon = Icons.block;
+        color = Colors.red;
+        break;
+      default:
+        message = '该笔记目前不可见';
+        icon = Icons.visibility_off;
+        color = Colors.grey;
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 64,
+              color: color,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[700],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (widget.post.hiddenReason != null && widget.post.hiddenReason!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '原因：${widget.post.hiddenReason}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAuthorRow() {
     // 如果是查看自己的帖子，不显示关注按钮
     if (_isFollowingAuthor == null) {
@@ -3801,28 +3872,37 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    // 检查帖子状态，如果不是 NORMAL，显示不可见提示页面
+    final status = _currentPostStatus?.toUpperCase() ?? widget.post.status?.toUpperCase();
+    final isPostUnavailable = status != null && status != 'NORMAL';
+
     return Scaffold(
       appBar: _buildTopBar(),
       body: Stack(
         children: [
-          SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildMediaGallery(),
-                if (widget.post.status == 'REMOVED' && widget.post.hiddenReason != null)
-                  _buildRemovedWarning(),
-                const SizedBox(height: 8),
-                _buildAuthorRow(),
-                _buildContent(),
-                _buildActionBar(),
-                _buildCommentsSection(),
-                const SizedBox(height: 16),
-              ],
+          if (isPostUnavailable)
+            // 帖子不可见，显示提示页面
+            _buildPostUnavailableView()
+          else
+            // 帖子可见，显示正常内容
+            SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildMediaGallery(),
+                  if (widget.post.status == 'REMOVED' && widget.post.hiddenReason != null)
+                    _buildRemovedWarning(),
+                  const SizedBox(height: 8),
+                  _buildAuthorRow(),
+                  _buildContent(),
+                  _buildActionBar(),
+                  _buildCommentsSection(),
+                  const SizedBox(height: 16),
+                ],
+              ),
             ),
-          ),
           if (_isImageFullscreen) _buildFullscreenOverlay(),
-          _buildBottomCommentInput(),
+          if (!isPostUnavailable) _buildBottomCommentInput(),
           if (_isDeleting)
             Positioned.fill(
               child: Container(
