@@ -30,6 +30,7 @@ class AdminModeScreen extends StatefulWidget {
 
 class _AdminModeScreenState extends State<AdminModeScreen> {
   late _AdminSection _selectedSection;
+  bool _sidebarCollapsed = false;
 
   // ==== 用户管理 ====
   String _userSearchKeyword = '';
@@ -221,8 +222,10 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -247,10 +250,11 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
   }
 
   Widget _buildTopBar(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         boxShadow: [
           BoxShadow(
             offset: const Offset(0, 1),
@@ -261,11 +265,11 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.dashboard_customize_outlined, size: 28),
+          Icon(Icons.dashboard_customize_outlined, size: 28, color: scheme.onSurface),
           const SizedBox(width: 12),
-          const Text(
+          Text(
             'PaperHub 管理员后台',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: scheme.onSurface),
           ),
           const Spacer(),
           Chip(
@@ -292,20 +296,44 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
   }
 
   Widget _buildSidebar() {
+    final scheme = Theme.of(context).colorScheme;
+    final sidebarWidth = _sidebarCollapsed ? 72.0 : 220.0;
     return Container(
-      width: 220,
-      color: Colors.white,
+      width: sidebarWidth,
+      color: scheme.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFFEAEAEA))),
+            padding: EdgeInsets.symmetric(
+              horizontal: _sidebarCollapsed ? 12 : 20,
+              vertical: 18,
             ),
-            child: const Text(
-              '管理员后台',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: scheme.outline.withOpacity(0.12))),
+            ),
+            child: Row(
+              children: [
+                if (!_sidebarCollapsed)
+                  Text(
+                    '管理员后台',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                if (!_sidebarCollapsed) const Spacer(),
+                IconButton(
+                  icon: Icon(
+                    _sidebarCollapsed ? Icons.chevron_right : Icons.chevron_left,
+                    color: scheme.onSurface.withOpacity(0.8),
+                    size: 20,
+                  ),
+                  tooltip: _sidebarCollapsed ? '展开侧栏' : '收起侧栏',
+                  onPressed: () => setState(() => _sidebarCollapsed = !_sidebarCollapsed),
+                ),
+              ],
             ),
           ),
           Expanded(
@@ -316,6 +344,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                     label: item.label,
                     icon: item.icon,
                     selected: _selectedSection == item.section,
+                    collapsed: _sidebarCollapsed,
                     onTap: () {
                       setState(() {
                         _selectedSection = item.section;
@@ -2749,9 +2778,11 @@ class _AdminSectionScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Container(
       key: ValueKey(title),
-      color: const Color(0xFFF5F7FA),
+      color: theme.scaffoldBackgroundColor,
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
@@ -2855,39 +2886,52 @@ class _AdminMenuTile extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool selected;
+  final bool collapsed;
   final VoidCallback onTap;
 
   const _AdminMenuTile({
     required this.label,
     required this.icon,
     required this.selected,
+    required this.collapsed,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final Color activeColor = scheme.primary;
+    final Color inactiveColor = scheme.onSurface;
+    final bgColor = selected ? scheme.primary.withOpacity(0.14) : Colors.transparent;
     return Material(
-      color: selected ? const Color(0xFFE8F1FF) : Colors.transparent,
+      color: bgColor,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          padding: EdgeInsets.symmetric(
+            horizontal: collapsed ? 16 : 20,
+            vertical: 14,
+          ),
           child: Row(
             children: [
               Icon(
                 icon,
                 size: 20,
-                color: selected ? Colors.blueAccent : Colors.grey[700],
+                color: selected ? activeColor : inactiveColor,
               ),
-              const SizedBox(width: 12),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                  color: selected ? Colors.blueAccent : Colors.grey[800],
+              if (!collapsed) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                      color: selected ? activeColor : inactiveColor,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

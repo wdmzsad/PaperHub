@@ -111,7 +111,10 @@ class _RegisterPageState extends State<RegisterPage> {
                                   borderSide: const BorderSide(color: AppColors.borderFocused, width: 2),
                                 ),
                               ),
-                              style: FontUtils.textStyle(text: email),
+                              style: FontUtils.textStyle(
+                                text: email,
+                                color: AppColors.textPrimary,
+                              ),
                               keyboardType: TextInputType.emailAddress,
                               validator: (v) {
                                 if (v == null || v.trim().isEmpty) return '请输入邮箱';
@@ -148,7 +151,10 @@ class _RegisterPageState extends State<RegisterPage> {
                                 ),
                               ),
                               obscureText: _obscurePassword,
-                              style: FontUtils.textStyle(text: password),
+                              style: FontUtils.textStyle(
+                                text: password,
+                                color: AppColors.textPrimary,
+                              ),
                               onChanged: (v) => password = v,
                               validator: (v) {
                                 if (v == null || v.isEmpty) return '请输入密码';
@@ -184,7 +190,10 @@ class _RegisterPageState extends State<RegisterPage> {
                                 ),
                               ),
                               obscureText: _obscureConfirm,
-                              style: FontUtils.textStyle(text: confirm),
+                              style: FontUtils.textStyle(
+                                text: confirm,
+                                color: AppColors.textPrimary,
+                              ),
                               onChanged: (v) => confirm = v,
                               validator: (v) {
                                 if (v == null || v.isEmpty) return '请确认密码';

@@ -287,13 +287,14 @@ class _SearchScreenState extends State<SearchScreen> {
   ///   2) 历史记录区（加载中/空/列表）
   ///   3) 热搜榜区（列表）
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
             // 顶部搜索栏
-            _buildSearchHeader(),
+            _buildSearchHeader(scheme),
 
             // 内容区域
             Expanded(
@@ -320,11 +321,11 @@ class _SearchScreenState extends State<SearchScreen> {
   /// - 返回按钮：`Navigator.pop`
   /// - 输入框：根据 `_selectedSearchType` 切换 hint；右侧清空/搜索图标动态切换
   /// - “搜索”按钮：仅在输入非空时显示
-  Widget _buildSearchHeader() {
+  Widget _buildSearchHeader(ColorScheme scheme) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -337,7 +338,7 @@ class _SearchScreenState extends State<SearchScreen> {
         children: [
           // 返回按钮
           IconButton(
-            icon: const Icon(Icons.arrow_back),
+            icon: Icon(Icons.arrow_back, color: scheme.onSurface),
             onPressed: () => Navigator.pop(context),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
@@ -349,7 +350,7 @@ class _SearchScreenState extends State<SearchScreen> {
             child: Container(
               height: 40,
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: scheme.surfaceVariant,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: TextField(
@@ -357,19 +358,20 @@ class _SearchScreenState extends State<SearchScreen> {
                 focusNode: _searchFocusNode,
                 decoration: InputDecoration(
                   hintText: _searchHints[_selectedSearchType],
-                  hintStyle: const TextStyle(color: Colors.grey),
+                  hintStyle: TextStyle(color: scheme.onSurface.withOpacity(0.6)),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, size: 20),
+                          icon: Icon(Icons.clear, size: 20, color: scheme.onSurface),
                           onPressed: () {
                             _searchController.clear();
                             setState(() {});
                           },
                         )
-                      : const Icon(Icons.search, color: Colors.grey, size: 20),
+                      : Icon(Icons.search, color: scheme.onSurface.withOpacity(0.6), size: 20),
                 ),
+                style: TextStyle(color: scheme.onSurface),
                 onChanged: (value) => setState(() {}),
                 onSubmitted: _onSearchSubmitted,
               ),
@@ -380,7 +382,7 @@ class _SearchScreenState extends State<SearchScreen> {
           if (_searchController.text.isNotEmpty)
             TextButton(
               onPressed: () => _onSearchSubmitted(_searchController.text),
-              child: const Text('搜索'),
+              child: Text('搜索', style: TextStyle(color: scheme.primary)),
             ),
         ],
       ),
@@ -391,35 +393,40 @@ class _SearchScreenState extends State<SearchScreen> {
   /// - 使用 `ExpansionTile` 展示三个选项（单选 Radio）
   /// - 展开状态同步到 `_isSearchTypeExpanded`，以控制箭头图标
   Widget _buildSearchTypeSelector() {
+    final scheme = Theme.of(context).colorScheme;
     return SliverToBoxAdapter(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+          color: scheme.surface,
+          border: Border(bottom: BorderSide(color: scheme.outline.withOpacity(0.12))),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               '搜索方式',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Colors.grey,
+                color: scheme.onSurface.withOpacity(0.7),
               ),
             ),
             const SizedBox(height: 8),
             Container(
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey[300]!),
+                color: scheme.surfaceVariant,
+                border: Border.all(color: scheme.outline.withOpacity(0.3)),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: ExpansionTile(
-                title: Text(_searchTypeOptions[_selectedSearchType]!),
+                title: Text(
+                  _searchTypeOptions[_selectedSearchType]!,
+                  style: TextStyle(color: scheme.onSurface),
+                ),
                 trailing: Icon(
                   _isSearchTypeExpanded ? Icons.expand_less : Icons.expand_more,
-                  color: Colors.grey,
+                  color: scheme.onSurface.withOpacity(0.7),
                 ),
                 initiallyExpanded: false,
                 onExpansionChanged: (expanded) {
@@ -429,11 +436,12 @@ class _SearchScreenState extends State<SearchScreen> {
                 },
                 children: _searchTypeOptions.entries.map((entry) {
                   return ListTile(
-                    title: Text(entry.value),
+                    title: Text(entry.value, style: TextStyle(color: scheme.onSurface)),
                     leading: Radio<String>(
                       value: entry.key,
                       groupValue: _selectedSearchType,
                       onChanged: (value) => _onSearchTypeChanged(value!),
+                      activeColor: scheme.primary,
                     ),
                     onTap: () => _onSearchTypeChanged(entry.key),
                   );
@@ -451,11 +459,12 @@ class _SearchScreenState extends State<SearchScreen> {
   /// - 空状态：文案占位
   /// - 否则：列表项 + “清空历史”按钮
   Widget _buildHistorySection() {
+    final scheme = Theme.of(context).colorScheme;
     return SliverToBoxAdapter(
       child: Container(
         margin: const EdgeInsets.only(top: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: scheme.surface,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -556,11 +565,12 @@ class _SearchScreenState extends State<SearchScreen> {
   /// - 从后端API获取实时热搜数据，失败时显示错误信息并提供重试
   /// - 每项展示：排名、标题、标签徽标（新/热）、热度文案
   Widget _buildHotSearchSection() {
+    final scheme = Theme.of(context).colorScheme;
     return SliverToBoxAdapter(
       child: Container(
         margin: const EdgeInsets.only(top: 16, bottom: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: scheme.surface,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -572,14 +582,18 @@ class _SearchScreenState extends State<SearchScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     '热搜榜',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: scheme.onSurface,
+                    ),
                   ),
                   // 刷新按钮（非加载状态时显示）
                   if (!_isLoadingHotSearches && _hotSearchesError == null)
                     IconButton(
-                      icon: const Icon(Icons.refresh, size: 20),
+                      icon: Icon(Icons.refresh, size: 20, color: scheme.onSurface),
                       onPressed: _loadHotSearches,
                       tooltip: '刷新热搜榜',
                     ),
@@ -615,7 +629,8 @@ class _SearchScreenState extends State<SearchScreen> {
   /// - 若存在 tag：渲染带边框的小徽标（新/热）
   /// - 右侧展示 `formattedHeat`（热度格式化文案）
   Widget _buildHotSearchItem(HotSearchItem item) {
-    Color rankColor = Colors.grey;
+    final scheme = Theme.of(context).colorScheme;
+    Color rankColor = scheme.onSurfaceVariant;
     if (item.rank <= 3) {
       rankColor = const Color(0xFFFF2D55); // 前3名用红色
     }
@@ -638,7 +653,10 @@ class _SearchScreenState extends State<SearchScreen> {
           Expanded(
             child: Text(
               item.title,
-              style: const TextStyle(fontSize: 14),
+              style: TextStyle(
+                fontSize: 14,
+                color: scheme.onSurface,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -668,7 +686,7 @@ class _SearchScreenState extends State<SearchScreen> {
       ),
       trailing: Text(
         item.formattedHeat,
-        style: const TextStyle(fontSize: 12, color: Colors.grey),
+        style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
       ),
       onTap: () => _onHotSearchTap(item),
     );
@@ -676,15 +694,16 @@ class _SearchScreenState extends State<SearchScreen> {
 
   /// 空状态占位
   Widget _buildEmptyState(String message) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(32),
       child: Column(
         children: [
-          Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
+          Icon(Icons.search_off, size: 48, color: scheme.onSurfaceVariant),
           const SizedBox(height: 16),
           Text(
             message,
-            style: TextStyle(color: Colors.grey[500], fontSize: 14),
+            style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14),
           ),
         ],
       ),
@@ -693,6 +712,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   /// 错误状态占位
   Widget _buildErrorState(String errorMessage) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(32),
       child: Column(
@@ -701,7 +721,7 @@ class _SearchScreenState extends State<SearchScreen> {
           const SizedBox(height: 16),
           Text(
             errorMessage,
-            style: TextStyle(color: Colors.grey[600], fontSize: 14),
+            style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
@@ -710,8 +730,8 @@ class _SearchScreenState extends State<SearchScreen> {
             icon: const Icon(Icons.refresh, size: 16),
             label: const Text('重新加载'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[50],
-              foregroundColor: Colors.blue[700],
+              backgroundColor: scheme.primary,
+              foregroundColor: scheme.onPrimary,
               elevation: 0,
             ),
           ),

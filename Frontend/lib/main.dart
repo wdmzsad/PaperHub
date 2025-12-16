@@ -83,6 +83,32 @@ class _PaperHubAppState extends State<PaperHubApp> {
   late final ValueNotifier<ThemeMode> _themeModeNotifier =
       ValueNotifier(widget.initialThemeMode);
 
+  ThemeData get _unauthLightTheme {
+    final base = ThemeData.light();
+    return base.copyWith(
+      colorScheme: base.colorScheme.copyWith(
+        primary: AppColors.primary,
+        onPrimary: AppColors.textOnPrimary,
+        onSurface: AppColors.textPrimary,
+        onBackground: AppColors.textPrimary,
+      ),
+      textTheme: base.textTheme.apply(
+        bodyColor: AppColors.textPrimary,
+        displayColor: AppColors.textPrimary,
+      ),
+      inputDecorationTheme: base.inputDecorationTheme.copyWith(
+        filled: true,
+        fillColor: AppColors.primaryLighter.withOpacity(0.6),
+        hintStyle: const TextStyle(color: AppColors.textSecondary),
+        labelStyle: const TextStyle(color: AppColors.textPrimary),
+      ),
+      textSelectionTheme: const TextSelectionThemeData(
+        cursorColor: AppColors.textPrimary,
+        selectionHandleColor: AppColors.primary,
+      ),
+    );
+  }
+
   ThemeData get _lightTheme => ThemeData(
         brightness: Brightness.light,
         primaryColor: AppColors.primary,
@@ -199,11 +225,12 @@ class _PaperHubAppState extends State<PaperHubApp> {
           initialRoute: '/',
           routes: {
             '/': (ctx) => const SplashOrLogin(),
-            '/login': (ctx) => LoginPage(),
-            '/register': (ctx) => RegisterPage(),
-            '/verify': (ctx) => VerifyEmailPage(),
-            '/forgot': (ctx) => ForgotPasswordPage(),
-            '/reset': (ctx) => ResetPasswordPage(),
+            // 未登录页面使用固定亮色主题，避免夜间模式下文字变白
+            '/login': (ctx) => Theme(data: _unauthLightTheme, child: LoginPage()),
+            '/register': (ctx) => Theme(data: _unauthLightTheme, child: RegisterPage()),
+            '/verify': (ctx) => Theme(data: _unauthLightTheme, child: VerifyEmailPage()),
+            '/forgot': (ctx) => Theme(data: _unauthLightTheme, child: ForgotPasswordPage()),
+            '/reset': (ctx) => Theme(data: _unauthLightTheme, child: ResetPasswordPage()),
             '/home': (ctx) => HomeScreen(
                   themeModeNotifier: _themeModeNotifier,
                   onThemeModeChanged: _setThemeMode,

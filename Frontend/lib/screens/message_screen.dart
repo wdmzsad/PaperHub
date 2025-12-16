@@ -1215,6 +1215,11 @@ class _MessageScreenState extends State<MessageScreen> {
 
   // 小红书风格的顶部图标导航
   Widget _buildTopIconNavigation() {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final containerBg = isDark ? scheme.surface : Colors.white;
+    final labelColor = isDark ? scheme.onSurface : const Color(0xFF222222);
+
     // 小红书风格的静态配色
     const likesBg = Color(0xFFFFEEF0);
     const likesIcon = Color(0xFFE53935);
@@ -1222,10 +1227,8 @@ class _MessageScreenState extends State<MessageScreen> {
     const followsIcon = Color(0xFF1E88E5);
     const commentsBg = Color(0xFFEFF8F1);
     const commentsIcon = Color(0xFF2E7D32);
-    const labelColor = Color(0xFF222222);
-
     return Container(
-      color: Colors.white,
+      color: containerBg,
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1238,6 +1241,7 @@ class _MessageScreenState extends State<MessageScreen> {
             backgroundColor: likesBg,
             iconColor: likesIcon,
             labelColor: labelColor,
+            activeLabelColor: labelColor,
             onTap: () {
               _navigateToLikesAndFavorites();
               _loadUnreadCount(); // 刷新未读数量
@@ -1251,6 +1255,7 @@ class _MessageScreenState extends State<MessageScreen> {
             backgroundColor: followsBg,
             iconColor: followsIcon,
             labelColor: labelColor,
+            activeLabelColor: labelColor,
             onTap: () {
               _navigateToNewFollowers();
               _loadUnreadCount(); // 刷新未读数量
@@ -1264,6 +1269,7 @@ class _MessageScreenState extends State<MessageScreen> {
             backgroundColor: commentsBg,
             iconColor: commentsIcon,
             labelColor: labelColor,
+            activeLabelColor: labelColor,
             onTap: () {
               _navigateToCommentsAndMentions();
               _loadUnreadCount(); // 刷新未读数量
@@ -1283,6 +1289,7 @@ class _MessageScreenState extends State<MessageScreen> {
     Color? backgroundColor,
     Color? iconColor,
     Color? labelColor,
+    Color? activeLabelColor,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -1394,14 +1401,7 @@ class _MessageScreenState extends State<MessageScreen> {
     // 根据home_screen的逻辑处理导航
     if (index == 0) {
       // 首页
-      Navigator.push(
-        context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) => child,
-          transitionDuration: Duration.zero,
-        ),
-      ).then((_) {
+      Navigator.pushNamed(context, '/home').then((_) {
         // 当从首页返回时，恢复消息页面高亮
         setState(() {
           _currentIndex = 1;

@@ -1038,13 +1038,18 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   // 外部链接输入区
   Widget _buildExternalLinksSection() {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 16),
-        const Text(
+        Text(
           '外部链接',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: scheme.onSurface,
+          ),
         ),
         const SizedBox(height: 8),
         Row(
@@ -1052,11 +1057,18 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             Expanded(
               child: TextField(
                 controller: _linkController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: '输入链接后点击右侧添加',
-                  border: OutlineInputBorder(),
+                  hintStyle: TextStyle(color: scheme.onSurface.withOpacity(0.6)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: scheme.outline.withOpacity(0.3)),
+                  ),
                   isDense: true,
+                  filled: true,
+                  fillColor: scheme.surfaceVariant,
                 ),
+                style: TextStyle(color: scheme.onSurface),
               ),
             ),
             const SizedBox(width: 8),
@@ -1086,6 +1098,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               icon: const Icon(Icons.add_link, size: 18),
               label: const Text('添加'),
               style: ElevatedButton.styleFrom(
+                backgroundColor: scheme.primary,
+                foregroundColor: scheme.onPrimary,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 10,
@@ -1119,6 +1133,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   // 一级标签选择（放在外部链接之上）- 下拉隐藏式选择器
   Widget _buildDisciplineSelector() {
+    final scheme = Theme.of(context).colorScheme;
     final filteredDisciplines = _getFilteredDisciplines();
 
     return Column(
@@ -1127,15 +1142,15 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         // 标题行
         Row(
           children: [
-            const Text(
+            Text(
               '选择分区',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: scheme.onSurface),
             ),
             const SizedBox(width: 6),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: Colors.red.shade50,
+                color: scheme.error.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: const Text(
@@ -1196,16 +1211,16 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
+                      color: scheme.surfaceVariant,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(color: scheme.outline.withOpacity(0.3)),
                     ),
                     child: Icon(
                       _showDisciplineDropdown
                           ? Icons.keyboard_arrow_up
                           : Icons.keyboard_arrow_down,
                       size: 20,
-                      color: Colors.grey.shade700,
+                      color: scheme.onSurface.withOpacity(0.8),
                     ),
                   ),
                 ),
@@ -1219,12 +1234,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         if (_showDisciplineDropdown)
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: scheme.surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(color: scheme.outline.withOpacity(0.3)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withOpacity(0.08),
                   blurRadius: 12,
                   offset: const Offset(0, 6),
                 ),
@@ -1237,12 +1252,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 // 标题和关闭按钮
                 Row(
                   children: [
-                    const Text(
+                    Text(
                       '选择分区',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: Colors.black87,
+                        color: scheme.onSurface,
                       ),
                     ),
                     const Spacer(),
@@ -1255,13 +1270,13 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
+                          color: scheme.surfaceVariant,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Icon(
                           Icons.close,
                           size: 16,
-                          color: Colors.grey.shade700,
+                          color: scheme.onSurface.withOpacity(0.8),
                         ),
                       ),
                     ),
@@ -1275,9 +1290,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   runSpacing: 10, // 垂直间距
                   children: filteredDisciplines.map((discipline) {
                     final bool selected = _selectedDiscipline == discipline;
-                    final color =
-                        kDisciplineColors[discipline] ??
-                        const Color(0xFF1976D2);
+                    final scheme = Theme.of(context).colorScheme;
+                    final chipColor =
+                        kDisciplineColors[discipline] ?? scheme.primary;
+                    final textColor = scheme.onSurface;
+                    final borderColor = scheme.onSurface.withOpacity(0.45);
 
                     return GestureDetector(
                       onTap: () {
@@ -1294,17 +1311,17 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                         ),
                         decoration: BoxDecoration(
                           color: selected
-                              ? color.withOpacity(0.12)
-                              : Colors.grey.shade50,
+                              ? chipColor.withOpacity(0.16)
+                              : Theme.of(context).colorScheme.surfaceVariant,
                           borderRadius: BorderRadius.circular(20), // 椭圆形
                           border: Border.all(
-                            color: selected ? color : Colors.grey.shade300,
+                            color: borderColor,
                             width: selected ? 1.5 : 1,
                           ),
                           boxShadow: selected
                               ? [
                                   BoxShadow(
-                                    color: color.withOpacity(0.25),
+                                    color: chipColor.withOpacity(0.25),
                                     blurRadius: 8,
                                     offset: const Offset(0, 3),
                                   ),
@@ -1326,11 +1343,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                               height: 8,
                               margin: const EdgeInsets.only(right: 8),
                               decoration: BoxDecoration(
-                                color: color,
+                                color: chipColor,
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: color.withOpacity(0.4),
+                                    color: chipColor.withOpacity(0.4),
                                     blurRadius: 3,
                                     offset: const Offset(0, 1),
                                   ),
@@ -1341,10 +1358,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                               discipline,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: selected ? color : Colors.black87,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
+                                color: textColor,
+                                fontWeight:
+                                    selected ? FontWeight.w600 : FontWeight.normal,
                               ),
                             ),
                             if (selected)
@@ -1353,7 +1369,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                                 child: Icon(
                                   Icons.check_circle,
                                   size: 14,
-                                  color: color,
+                                  color: chipColor,
                                 ),
                               ),
                           ],
@@ -1891,12 +1907,17 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   // 引用文献输入区
   Widget _buildReferencesSection() {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '引用文献',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: scheme.onSurface,
+          ),
         ),
         const SizedBox(height: 8),
         Row(
@@ -1906,8 +1927,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               icon: const Icon(Icons.library_books, size: 18),
               label: const Text('添加引用文献'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey[100],
-                foregroundColor: Colors.black87,
+                backgroundColor: scheme.surfaceVariant,
+                foregroundColor: scheme.onSurface,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -1920,14 +1941,14 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.green[100],
+                  color: scheme.primaryContainer.withOpacity(0.4),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   '已选择 ${_selectedReferences.length} 篇',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.green[700],
+                    color: scheme.onPrimaryContainer,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -1939,19 +1960,19 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.blue[50],
+              color: scheme.surfaceVariant,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.blue[200]!),
+              border: Border.all(color: scheme.outline.withOpacity(0.2)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   '已选择的引用文献：',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: Colors.blue,
+                    color: scheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -1970,7 +1991,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                           Expanded(
                             child: Text(
                               '[${_selectedReferences.indexOf(postId) + 1}] ${post.author.name}. ${post.title}. ${post.mainDiscipline}, ${post.createdAt.year}-${post.createdAt.month.toString().padLeft(2, '0')}-${post.createdAt.day.toString().padLeft(2, '0')}.',
-                              style: const TextStyle(fontSize: 12),
+                              style: TextStyle(fontSize: 12, color: scheme.onSurface),
                             ),
                           ),
                           IconButton(
@@ -2025,6 +2046,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   // PDF 附件区域
   Widget _buildPdfSection(bool hasPdf) {
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
         ElevatedButton.icon(
@@ -2032,8 +2054,8 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           icon: const Icon(Icons.picture_as_pdf_outlined),
           label: Text(hasPdf ? '替换 PDF' : '添加 PDF 附件（仅一篇）'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.grey[100],
-            foregroundColor: Colors.black87,
+            backgroundColor: scheme.surfaceVariant,
+            foregroundColor: scheme.onSurface,
             elevation: 0,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           ),
@@ -2044,7 +2066,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: scheme.surfaceVariant,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -2057,7 +2079,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                           ? (_pdfFileName ?? '已选择 PDF')
                           : (_existingPdfUrl!.split('/').last),
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14),
+                      style: TextStyle(fontSize: 14, color: scheme.onSurface),
                     ),
                   ),
                   IconButton(
@@ -2088,98 +2110,100 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         isDraft && (editingPost?.hiddenReason?.trim().isNotEmpty ?? false);
     final bool isAdminRejectedDraft = isDraft && hasHiddenReason;
 
-    return Theme(
-      data: ThemeData.light(),
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          elevation: 0.3,
-          backgroundColor: Colors.white,
-          automaticallyImplyLeading: false,
-          title: Text(
-            _isEditing ? '编辑笔记' : '发布笔记',
-            style: const TextStyle(color: Colors.black),
-          ),
-          centerTitle: true,
-          leading: IconButton(
-            icon: const Icon(Icons.close, color: Colors.black),
-            onPressed: () => Navigator.of(context).maybePop(),
-          ),
-          actions: const [SizedBox(width: 48)],
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        elevation: 0.3,
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
+        automaticallyImplyLeading: false,
+        title: Text(
+          _isEditing ? '编辑笔记' : '发布笔记',
+          style: TextStyle(color: scheme.onSurface),
         ),
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (isAdminRejectedDraft) ...[
-                  _buildAdminFeedbackBanner(
-                    editingPost!.draftReason ?? editingPost.hiddenReason ?? '',
+        centerTitle: true,
+        leading: IconButton(
+          icon: Icon(Icons.close, color: scheme.onSurface),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+        actions: const [SizedBox(width: 48)],
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (isAdminRejectedDraft) ...[
+                _buildAdminFeedbackBanner(
+                  editingPost!.draftReason ?? editingPost.hiddenReason ?? '',
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              //选择图片
+              _buildImageGrid(),
+              const SizedBox(height: 16),
+
+              // 标题
+              TextField(
+                controller: _titleController,
+                textInputAction: TextInputAction.next,
+                maxLines: 1,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+                decoration: InputDecoration(
+                  hintText: '添加标题（最多一行）',
+                  hintStyle: TextStyle(color: scheme.onSurface.withOpacity(0.6)),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                ),
+              ),
+              Divider(height: 1, color: scheme.outline.withOpacity(0.3)),
+              const SizedBox(height: 8),
+
+              // 正文（支持#符号添加标签）
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: _contentController,
+                    focusNode: _contentFocusNode,
+                    keyboardType: TextInputType.multiline,
+                    maxLines: null,
+                    minLines: 6,
+                    onChanged: _onContentChanged,
+                    decoration: InputDecoration(
+                      hintText: '写下你的笔记（输入#添加标签，支持学术笔记格式）',
+                      hintStyle: TextStyle(color: scheme.onSurface.withOpacity(0.6)),
+                      border: InputBorder.none,
+                      isCollapsed: false,
+                    ),
+                    style: TextStyle(color: scheme.onSurface),
                   ),
-                  const SizedBox(height: 16),
+                  _buildTagSuggestions(),
                 ],
+              ),
 
-                //选择图片
-                _buildImageGrid(),
-                const SizedBox(height: 16),
+              // 一级标签选择（学科分区）
+              _buildDisciplineSelector(),
+              const SizedBox(height: 16),
 
-                // 标题
-                TextField(
-                  controller: _titleController,
-                  textInputAction: TextInputAction.next,
-                  maxLines: 1,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  decoration: const InputDecoration(
-                    hintText: '添加标题（最多一行）',
-                    hintStyle: TextStyle(color: Colors.grey),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 4),
-                  ),
-                ),
-                const Divider(height: 1, color: Colors.grey),
-                const SizedBox(height: 8),
-
-                // 正文（支持#符号添加标签）
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      controller: _contentController,
-                      focusNode: _contentFocusNode,
-                      keyboardType: TextInputType.multiline,
-                      maxLines: null,
-                      minLines: 6,
-                      onChanged: _onContentChanged,
-                      decoration: const InputDecoration(
-                        hintText: '写下你的笔记（输入#添加标签，支持学术笔记格式）',
-                        hintStyle: TextStyle(color: Colors.grey),
-                        border: InputBorder.none,
-                        isCollapsed: false,
-                      ),
+              // 高级选项入口（+ 号展开 / 收起）
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '更多学术选项（可选）',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: scheme.onSurface,
                     ),
-                    _buildTagSuggestions(),
-                  ],
-                ),
-
-                // 一级标签选择（学科分区）
-                _buildDisciplineSelector(),
-                const SizedBox(height: 16),
-
-                // 高级选项入口（+ 号展开 / 收起）
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      '更多学术选项（可选）',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                  ),
                     IconButton(
                       onPressed: () {
                         setState(() {
@@ -2188,14 +2212,13 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                       },
                       icon: Icon(
                         _showAdvancedOptions
-                            ? Icons
-                                  .remove_circle_outline // 展开时显示 -
+                            ? Icons.remove_circle_outline // 展开时显示 -
                             : Icons.add_circle_outline, // 收起时显示 +
-                        color: const Color(0xFF1976D2),
+                        color: scheme.primary,
                       ),
                     ),
-                  ],
-                ),
+                ],
+              ),
 
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 200),
@@ -2224,15 +2247,14 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   secondChild: const SizedBox.shrink(),
                 ),
 
-                const SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-                // 发布按钮
-                _buildBottomActions(
-                  isDraft: isDraft,
-                  isAdminRejectedDraft: isAdminRejectedDraft,
-                ),
-              ],
-            ),
+              // 发布按钮
+              _buildBottomActions(
+                isDraft: isDraft,
+                isAdminRejectedDraft: isAdminRejectedDraft,
+              ),
+            ],
           ),
         ),
       ),
