@@ -2004,21 +2004,23 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   }
 
   PreferredSizeWidget _buildTopBar() {
+    final scheme = Theme.of(context).colorScheme;
     return AppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: scheme.surface,
+      foregroundColor: scheme.onSurface,
       elevation: 0.5,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Colors.black87),
+        icon: Icon(Icons.arrow_back, color: scheme.onSurface),
         onPressed: () => Navigator.of(context).pop(),
       ),
       title: Text(
         widget.post.title,
-        style: const TextStyle(color: Colors.black87, fontSize: 16),
+        style: TextStyle(color: scheme.onSurface, fontSize: 16),
         overflow: TextOverflow.ellipsis,
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.more_horiz, color: Colors.black54),
+          icon: Icon(Icons.more_horiz, color: scheme.onSurface.withOpacity(0.7)),
           onPressed: _isDeleting ? null : _openMoreActions,
         ),
       ],
@@ -3061,42 +3063,43 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   }
 
   Widget _buildActionBar() {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.withOpacity(0.15))),
+        color: scheme.surface,
+        border: Border(top: BorderSide(color: scheme.outline.withOpacity(0.15))),
       ),
       child: Row(
         children: [
           IconButton(
             icon: Icon(
               isLiked ? Icons.favorite : Icons.favorite_border,
-              color: isLiked ? Colors.red : Colors.black87,
+              color: isLiked ? Colors.redAccent : scheme.onSurface,
             ),
             onPressed: _toggleLike,
           ),
-          Text('$likeCount'),
+          Text('$likeCount', style: TextStyle(color: scheme.onSurface)),
           const SizedBox(width: 12),
           IconButton(
-            icon: const Icon(Icons.mode_comment_outlined),
+            icon: Icon(Icons.mode_comment_outlined, color: scheme.onSurface),
             onPressed: () => FocusScope.of(context).requestFocus(FocusNode()),
           ),
           const SizedBox(width: 8),
-          Text('${widget.post.commentsCount}'),
+          Text('${widget.post.commentsCount}', style: TextStyle(color: scheme.onSurface)),
           const SizedBox(width: 12),
           IconButton(
             icon: Icon(
               isSaved ? Icons.bookmark : Icons.bookmark_border,
-              color: isSaved ? Colors.blue : Colors.black87,
+              color: isSaved ? scheme.primary : scheme.onSurface,
             ),
             onPressed: _toggleSave,
           ),
           const SizedBox(width: 8),
-          Text('${widget.post.favoriteCount}'),
+          Text('${widget.post.favoriteCount}', style: TextStyle(color: scheme.onSurface)),
           const Spacer(),
           IconButton(
-            icon: const Icon(Icons.share_outlined),
+            icon: Icon(Icons.share_outlined, color: scheme.onSurface),
             onPressed: _onShare,
           ),
         ],
@@ -3409,12 +3412,14 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   }
 
   Widget _buildBottomCommentInput() {
+    final scheme = Theme.of(context).colorScheme;
+    final bg = scheme.surface;
     return Positioned(
       left: 0,
       right: 0,
       bottom: 0,
       child: Container(
-        color: Colors.white,
+        color: bg,
         padding: EdgeInsets.only(
           left: 12,
           right: 12,
@@ -3433,13 +3438,13 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                 height: 100,
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: bg,
                   border: Border(
-                    bottom: BorderSide(color: Colors.grey[200]!, width: 0.5),
+                    bottom: BorderSide(color: scheme.outline.withOpacity(0.15), width: 0.5),
                   ),
                 ),
                 child: _mentionCandidates.isEmpty && _selectedMentions.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -3448,16 +3453,14 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                               height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.grey,
-                                ),
+                                valueColor: AlwaysStoppedAnimation<Color>(scheme.primary),
                               ),
                             ),
                             SizedBox(width: 8),
                             Text(
                               '搜索用户中...',
                               style: TextStyle(
-                                color: Colors.grey,
+                                color: scheme.onSurface.withOpacity(0.8),
                                 fontSize: 12,
                               ),
                             ),
@@ -3698,13 +3701,13 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                   horizontal: 12,
                   vertical: 8,
                 ),
-                color: Colors.grey[100],
+                color: scheme.surfaceVariant,
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         '回复 @${_currentReplyTo!.author.name}',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                        style: TextStyle(fontSize: 12, color: scheme.onSurface),
                       ),
                     ),
                     IconButton(
@@ -3734,8 +3737,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                         borderSide: BorderSide.none,
                       ),
                       filled: true,
-                      fillColor: Colors.grey[100],
+                      fillColor: scheme.surfaceVariant,
+                      hintStyle: TextStyle(color: scheme.onSurface.withOpacity(0.6)),
                     ),
+                    style: TextStyle(color: scheme.onSurface),
                   ),
                 ),
                 const SizedBox(width: 8),

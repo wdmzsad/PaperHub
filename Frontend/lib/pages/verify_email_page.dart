@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../constants/app_colors.dart';
+import '../utils/font_utils.dart';
 import '../services/api_service.dart';
 import 'package:email_validator/email_validator.dart';
 
@@ -66,11 +68,13 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
                 TextFormField(
                   initialValue: email,
                   decoration: InputDecoration(labelText: '邮箱'),
+                  style: FontUtils.textStyle(text: email, color: AppColors.textPrimary),
                   onChanged: (v) => email = v,
                 ),
                 SizedBox(height: 12),
                 TextFormField(
                   decoration: InputDecoration(labelText: '验证码'),
+                  style: FontUtils.textStyle(text: code, color: AppColors.textPrimary),
                   onChanged: (v) => code = v,
                 ),
                 SizedBox(height: 12),

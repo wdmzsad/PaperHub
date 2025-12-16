@@ -97,19 +97,21 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: scheme.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           '隐私设置',
           style: TextStyle(
-            color: Colors.black87,
+            color: scheme.onSurface,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -179,6 +181,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
     required String title,
     required List<Widget> children,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -186,15 +189,18 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.grey,
+              color: scheme.onSurface.withOpacity(0.7),
             ),
           ),
         ),
         Container(
-          color: Colors.white,
+          decoration: BoxDecoration(
+            color: scheme.surfaceVariant,
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Column(
             children: children,
           ),
@@ -209,12 +215,16 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return ListTile(
+      tileColor: scheme.surfaceVariant,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       title: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w500,
+          color: scheme.onSurface,
         ),
       ),
       subtitle: Padding(
@@ -223,14 +233,14 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
           subtitle,
           style: TextStyle(
             fontSize: 13,
-            color: Colors.grey[600],
+            color: scheme.onSurface.withOpacity(0.7),
           ),
         ),
       ),
       trailing: Switch(
         value: value,
         onChanged: onChanged,
-        activeColor: Colors.black87,
+        activeColor: scheme.primary,
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     );

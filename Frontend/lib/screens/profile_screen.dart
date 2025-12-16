@@ -1388,8 +1388,6 @@ class _ProfilePageState extends State<ProfilePage>
   Widget _buildTabsSection() {
     final scheme = Theme.of(context).colorScheme;
     final cardColor = scheme.surfaceVariant;
-    final onSurface = scheme.onSurface;
-    final primary = scheme.primary;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       padding: const EdgeInsets.all(12),
@@ -1407,8 +1405,9 @@ class _ProfilePageState extends State<ProfilePage>
       child: Column(
         children: [
           TabBar(
-            labelColor: Colors.black,
-            indicatorColor: Colors.blueAccent,
+            labelColor: scheme.primary,
+            unselectedLabelColor: scheme.onSurface.withOpacity(0.7),
+            indicatorColor: scheme.primary,
             tabs: [
               const Tab(text: '笔记'),
               const Tab(text: '收藏'),
@@ -1532,16 +1531,8 @@ class _ProfilePageState extends State<ProfilePage>
         setState(() => _currentIndex = index);
 
         if (index == 0) {
-          Navigator.push(
-            context,
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  const HomeScreen(),
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) => child,
-              transitionDuration: Duration.zero,
-            ),
-          ).then((_) => setState(() => _currentIndex = 3));
+          Navigator.pushNamed(context, '/home')
+              .then((_) => setState(() => _currentIndex = 3));
         } else if (index == 1) {
           Navigator.push(
             context,

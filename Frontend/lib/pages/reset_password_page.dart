@@ -128,6 +128,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                                 ),
                               ),
                               keyboardType: TextInputType.emailAddress,
+                              style: FontUtils.textStyle(
+                                text: email,
+                                color: AppColors.textPrimary,
+                              ),
                               onChanged: (v) => email = v,
                             ),
                             SizedBox(height: 16),
@@ -149,6 +153,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                                   borderRadius: BorderRadius.circular(8),
                                   borderSide: const BorderSide(color: AppColors.borderFocused, width: 2),
                                 ),
+                              ),
+                              style: FontUtils.textStyle(
+                                text: code,
+                                color: AppColors.textPrimary,
                               ),
                               onChanged: (v) => code = v,
                               validator: (v) {
@@ -184,6 +192,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                                 ),
                               ),
                               obscureText: _obscurePassword,
+                              style: FontUtils.textStyle(
+                                text: newPassword,
+                                color: AppColors.textPrimary,
+                              ),
                               onChanged: (v) => newPassword = v,
                               validator: (v) {
                                 if (v == null || v.isEmpty) return '请输入新密码';
@@ -219,6 +231,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                                 ),
                               ),
                               obscureText: _obscureConfirm,
+                              style: FontUtils.textStyle(
+                                text: confirm,
+                                color: AppColors.textPrimary,
+                              ),
                               onChanged: (v) => confirm = v,
                               validator: (v) {
                                 if (v == null || v.isEmpty) return '请确认密码';

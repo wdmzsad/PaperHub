@@ -109,6 +109,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                                 ),
                               ),
                               keyboardType: TextInputType.emailAddress,
+                              style: FontUtils.textStyle(
+                                text: email,
+                                color: AppColors.textPrimary,
+                              ),
                               validator: (v) {
                                 if (v == null || v.trim().isEmpty) return '请输入邮箱';
                                 if (!EmailValidator.validate(v.trim())) return '邮箱格式不正确';

@@ -139,7 +139,10 @@ class _LoginPageState extends State<LoginPage> {
                                   borderSide: const BorderSide(color: AppColors.borderFocused, width: 2),
                                 ),
                               ),
-                              style: FontUtils.textStyle(text: email),
+                            style: FontUtils.textStyle(
+                              text: email,
+                              color: AppColors.textPrimary,
+                            ),
                               keyboardType: TextInputType.emailAddress,
                               validator: (v) {
                                 if (v == null || v.trim().isEmpty) return '请输入邮箱';
@@ -176,7 +179,10 @@ class _LoginPageState extends State<LoginPage> {
                                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                 ),
                               ),
-                              style: FontUtils.textStyle(text: password),
+                              style: FontUtils.textStyle(
+                                text: password,
+                                color: AppColors.textPrimary,
+                              ),
                               obscureText: _obscurePassword,
                               validator: (v) {
                                 if (v == null || v.isEmpty) return '请输入密码';
