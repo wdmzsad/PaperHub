@@ -134,14 +134,12 @@ class ApiService {
         final retryResp = await requestFn();
         return _parseResponse(retryResp);
       } else {
-        // 刷新失败，清除token并抛出错误
-        await _clearTokens();
+        // 刷新失败，不主动清除本地Token，直接返回结果交由调用方处理
         _processRefreshQueue(null, Exception('刷新Token失败'));
         return refreshResult;
       }
     } catch (e) {
-      // 刷新失败，清除token
-      await _clearTokens();
+      // 刷新失败，不主动清除本地Token，直接返回401结果
       _processRefreshQueue(null, e as Exception);
       return {
         'statusCode': 401,
