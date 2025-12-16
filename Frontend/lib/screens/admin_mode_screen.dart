@@ -265,11 +265,19 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
       ),
       child: Row(
         children: [
-          Icon(Icons.dashboard_customize_outlined, size: 28, color: scheme.onSurface),
+          Icon(
+            Icons.dashboard_customize_outlined,
+            size: 28,
+            color: scheme.onSurface,
+          ),
           const SizedBox(width: 12),
           Text(
             'PaperHub 管理员后台',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: scheme.onSurface),
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: scheme.onSurface,
+            ),
           ),
           const Spacer(),
           Chip(
@@ -310,7 +318,9 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
               vertical: 18,
             ),
             decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: scheme.outline.withOpacity(0.12))),
+              border: Border(
+                bottom: BorderSide(color: scheme.outline.withOpacity(0.12)),
+              ),
             ),
             child: Row(
               children: [
@@ -326,12 +336,15 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                 if (!_sidebarCollapsed) const Spacer(),
                 IconButton(
                   icon: Icon(
-                    _sidebarCollapsed ? Icons.chevron_right : Icons.chevron_left,
+                    _sidebarCollapsed
+                        ? Icons.chevron_right
+                        : Icons.chevron_left,
                     color: scheme.onSurface.withOpacity(0.8),
                     size: 20,
                   ),
                   tooltip: _sidebarCollapsed ? '展开侧栏' : '收起侧栏',
-                  onPressed: () => setState(() => _sidebarCollapsed = !_sidebarCollapsed),
+                  onPressed: () =>
+                      setState(() => _sidebarCollapsed = !_sidebarCollapsed),
                 ),
               ],
             ),
@@ -506,7 +519,9 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                           ),
                           const SizedBox(width: 8),
                           ElevatedButton(
-                            onPressed: (p['status']?.toString().toUpperCase() == 'REMOVED')
+                            onPressed:
+                                (p['status']?.toString().toUpperCase() ==
+                                    'REMOVED')
                                 ? null
                                 : () => _showRemovePostDialog(p),
                             style: ElevatedButton.styleFrom(
@@ -953,7 +968,17 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                       rows: visible
                           .map(
                             (u) => [
-                              Text(u['name']?.toString() ?? ''),
+                              Text(() {
+                                String? name = u['name']?.toString();
+                                String? email = u['email']?.toString();
+                                String display = '';
+                                if (name != null && name.isNotEmpty) {
+                                  display = name.split('@').first;
+                                } else if (email != null && email.isNotEmpty) {
+                                  display = email.split('@').first;
+                                }
+                                return display;
+                              }()),
                               Text(u['role']?.toString() ?? ''),
                               if ((u['role'] ?? '').toString().toUpperCase() ==
                                   'SUPER_ADMIN')
@@ -1682,7 +1707,9 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                           Row(
                             children: [
                               const Text('状态: '),
-                              _buildPostStatusChip(postData['status']?.toString()),
+                              _buildPostStatusChip(
+                                postData['status']?.toString(),
+                              ),
                             ],
                           ),
                           if (postData['hiddenReason'] != null) ...[
@@ -1767,18 +1794,12 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
           children: [
             Text(
               '帖子标题: ${post['title'] ?? ''}',
-              style: TextStyle(
-                fontSize: 14.0,
-                color: AppColors.dialogContent,
-              ),
+              style: TextStyle(fontSize: 14.0, color: AppColors.dialogContent),
             ),
             const SizedBox(height: 8),
             Text(
               '作者: ${post['authorName'] ?? ''}',
-              style: TextStyle(
-                fontSize: 14.0,
-                color: AppColors.dialogContent,
-              ),
+              style: TextStyle(fontSize: 14.0, color: AppColors.dialogContent),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -1794,10 +1815,7 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8.0),
-                  borderSide: BorderSide(
-                    color: AppColors.primary,
-                    width: 1.5,
-                  ),
+                  borderSide: BorderSide(color: AppColors.primary, width: 1.5),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16.0,
@@ -1817,9 +1835,9 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
             onPressed: () async {
               final reason = reasonController.text.trim();
               if (reason.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('请输入下架原因')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('请输入下架原因')));
                 return;
               }
               Navigator.pop(ctx);
@@ -1841,23 +1859,23 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
     try {
       final resp = await ApiService.adminHidePost(postId);
       if (resp['statusCode'] == 200 && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('帖子已下架')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('帖子已下架')));
         await _loadPosts(page: _postPage);
       } else {
         final msg = resp['body']?['message']?.toString() ?? '下架失败';
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(msg)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(msg)));
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('操作失败: $e')));
       }
     }
   }
@@ -2902,7 +2920,9 @@ class _AdminMenuTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final Color activeColor = scheme.primary;
     final Color inactiveColor = scheme.onSurface;
-    final bgColor = selected ? scheme.primary.withOpacity(0.14) : Colors.transparent;
+    final bgColor = selected
+        ? scheme.primary.withOpacity(0.14)
+        : Colors.transparent;
     return Material(
       color: bgColor,
       child: InkWell(
@@ -2926,7 +2946,9 @@ class _AdminMenuTile extends StatelessWidget {
                     label,
                     style: TextStyle(
                       fontSize: 15,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: selected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                       color: selected ? activeColor : inactiveColor,
                     ),
                   ),

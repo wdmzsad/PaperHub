@@ -1554,7 +1554,7 @@ class _ProfilePageState extends State<ProfilePage>
                   (context, animation, secondaryAnimation, child) => child,
               transitionDuration: Duration.zero,
             ),
-          ).then((_) => setState(() => _currentIndex = 0));
+          ).then((_) => setState(() => _currentIndex = 3));
         } else if (index == 3) {
           if (!_isViewingSelf) {
             // 从其他页面进入自己的主页，显示为主页面
