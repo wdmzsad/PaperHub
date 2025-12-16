@@ -516,10 +516,12 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       if (status >= 200 && status < 300) {
         if (mounted) {
           Post? createdPost;
-          // 尝试从响应体解析新建的帖子，便于返回给首页直接展示
+          Map<String, dynamic>? createdPostRaw;
+          // 尝试从响应体解析新建的帖子，并缓存原始 JSON 以便首页置顶显示
           if (!_isEditing && body != null) {
             final raw = body['post'] ?? body;
             if (raw is Map<String, dynamic>) {
+              createdPostRaw = raw;
               createdPost = Post.fromJson(raw);
             }
           }
@@ -531,8 +533,27 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               ),
             ),
           );
-          // 返回 true，告诉上一个页面“需要刷新”
-          Navigator.of(context).pop(createdPost ?? true);
+
+          if (_isEditing) {
+            // 编辑模式：仍然返回上一页，由上一页决定是否刷新
+            Navigator.of(context).pop(createdPost ?? true);
+          } else {
+            // 新建笔记：无论从哪个页面进入，统一跳转到首页，
+            // 并通过本地存储把新帖子传递给首页，用于临时置顶展示
+            if (createdPostRaw != null) {
+              try {
+                LocalStorage.instance
+                    .write('lastCreatedPost', jsonEncode(createdPostRaw));
+              } catch (e) {
+                print('缓存新建帖子到本地失败: $e');
+              }
+            }
+
+            Navigator.of(context).pushNamedAndRemoveUntil(
+              '/home',
+              (route) => false,
+            );
+          }
         }
       } else {
         final msg = body != null && body['message'] != null

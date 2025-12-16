@@ -107,6 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _followingHasMore = true;
   int _followingPage = 1;
   bool _followingHasNew = false;
+  /// 最近一次“已在关注页看过”的顶部帖子 ID（用于跨页面防止红点反复出现）
   String? _lastFollowingTopPostIdSeen;
   final ScrollController _followingScrollController = ScrollController();
 
@@ -131,6 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _preloadUnreadBadges();
     _loadViewedPostIds();
     _evaluateUserSignals();
+    _loadLastFollowingSeenFromStorage();
     // 初始进入首页也要检查关注流，便于及时展示红点
     _refreshFollowingFeed();
 
@@ -258,7 +260,10 @@ class _HomeScreenState extends State<HomeScreen> {
             .toList();
 
         final bool useHot = _shouldUseHotRankingOnChunk(newPosts);
-        final ordered = useHot ? _sortedByHeat(newPosts) : newPosts;
+        final List<Post> ordered = useHot ? _sortedByHeat(newPosts) : newPosts;
+
+        // 检查是否有“刚发布的新帖子”需要置顶展示
+        Post? pinnedFromStorage = _consumeLastCreatedPostForPin(ordered);
 
         // 调试：打印每个帖子的 imageAspectRatio
         print('=== 帖子 imageAspectRatio 调试信息 ===');
@@ -278,6 +283,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
         setState(() {
           _useHotRanking = useHot;
+          if (pinnedFromStorage != null) {
+            _pinnedSelfPost = pinnedFromStorage;
+          }
           _posts.clear();
           _posts.addAll(ordered);
           _hasMore = _posts.length < total;
@@ -485,6 +493,11 @@ class _HomeScreenState extends State<HomeScreen> {
             .map((p) => Post.fromJson(p as Map<String, dynamic>))
             .toList();
 
+        // 如果还没有记录“看过的关注顶部帖子”，先记录一次，避免新建 Home 实例时误亮红点
+        if (_lastFollowingTopPostIdSeen == null && newPosts.isNotEmpty) {
+          _updateLastFollowingSeen(newPosts.first.id);
+        }
+
         final bool hasNewFollowing = _shouldShowFollowingBadge(newPosts);
 
         setState(() {
@@ -495,7 +508,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _followingPage = 2;
           _followingLoading = false;
           if (_selectedTab == 0 && newPosts.isNotEmpty) {
-            _lastFollowingTopPostIdSeen = newPosts.first.id;
+            _updateLastFollowingSeen(newPosts.first.id);
           }
           if (hasNewFollowing) {
             _followingHasNew = true;
@@ -577,6 +590,11 @@ class _HomeScreenState extends State<HomeScreen> {
             .map((p) => Post.fromJson(p as Map<String, dynamic>))
             .toList();
 
+        // 如果还没有记录“看过的关注顶部帖子”，先记录一次，避免新建 Home 实例时误亮红点
+        if (_lastFollowingTopPostIdSeen == null && newPosts.isNotEmpty) {
+          _updateLastFollowingSeen(newPosts.first.id);
+        }
+
         final bool hasNewFollowing = _shouldShowFollowingBadge(newPosts);
 
         setState(() {
@@ -606,6 +624,30 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// 从本地缓存中读取“刚刚发布的新帖子”，用于在首页临时置顶展示一条
+  /// - 如果推荐流中已经包含这条帖子，会从列表中移除以避免重复
+  /// - 只消费一次，读取后会清空本地缓存
+  Post? _consumeLastCreatedPostForPin(List<Post> currentList) {
+    try {
+      final raw = LocalStorage.instance.read('lastCreatedPost');
+      if (raw == null || raw is! String || raw.trim().isEmpty) {
+        return null;
+      }
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      final pinned = Post.fromJson(decoded);
+
+      // 避免与推荐流中的相同帖子重复展示
+      currentList.removeWhere((p) => p.id == pinned.id);
+
+      // 仅消费一次：清空本地缓存
+      LocalStorage.instance.write('lastCreatedPost', '');
+      return pinned;
+    } catch (e) {
+      print('读取本地 lastCreatedPost 失败: $e');
+      return null;
+    }
+  }
+
   /// 判断关注流是否有新帖子需要显示红点
   bool _shouldShowFollowingBadge(List<Post> newPosts) {
     if (newPosts.isEmpty) return false;
@@ -613,6 +655,29 @@ class _HomeScreenState extends State<HomeScreen> {
     if (latestId == null || latestId.isEmpty) return false;
     // 已在关注页则不显示红点；仅当有新的顶部帖子且未在关注页时展示
     return _selectedTab != 0 && latestId != _lastFollowingTopPostIdSeen;
+  }
+
+  /// 从本地存储恢复最近一次“已看过的关注顶部帖子”
+  void _loadLastFollowingSeenFromStorage() {
+    try {
+      final raw = LocalStorage.instance.read('lastFollowingTopIdSeen');
+      if (raw is String && raw.trim().isNotEmpty) {
+        _lastFollowingTopPostIdSeen = raw.trim();
+      }
+    } catch (e) {
+      print('读取 lastFollowingTopIdSeen 失败: $e');
+    }
+  }
+
+  /// 更新最近一次“已看过的关注顶部帖子”，并持久化到本地
+  void _updateLastFollowingSeen(String? id) {
+    if (id == null || id.isEmpty) return;
+    _lastFollowingTopPostIdSeen = id;
+    try {
+      LocalStorage.instance.write('lastFollowingTopIdSeen', id);
+    } catch (e) {
+      print('写入 lastFollowingTopIdSeen 失败: $e');
+    }
   }
 
   /// 关注流滚动监听
