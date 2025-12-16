@@ -107,6 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _followingHasMore = true;
   int _followingPage = 1;
   bool _followingHasNew = false;
+  String? _lastFollowingTopPostIdSeen;
   final ScrollController _followingScrollController = ScrollController();
 
   /// 已浏览过的帖子ID集合（用于在关注流中标记未读红点）
@@ -130,6 +131,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _preloadUnreadBadges();
     _loadViewedPostIds();
     _evaluateUserSignals();
+    // 初始进入首页也要检查关注流，便于及时展示红点
+    _refreshFollowingFeed();
 
     // 检查WebSocket连接状态
     _checkWebSocketConnection();
@@ -482,6 +485,8 @@ class _HomeScreenState extends State<HomeScreen> {
             .map((p) => Post.fromJson(p as Map<String, dynamic>))
             .toList();
 
+        final bool hasNewFollowing = _shouldShowFollowingBadge(newPosts);
+
         setState(() {
           _followingPosts
             ..clear()
@@ -489,7 +494,10 @@ class _HomeScreenState extends State<HomeScreen> {
           _followingHasMore = _followingPosts.length < total;
           _followingPage = 2;
           _followingLoading = false;
-          if (_selectedTab != 0 && newPosts.isNotEmpty) {
+          if (_selectedTab == 0 && newPosts.isNotEmpty) {
+            _lastFollowingTopPostIdSeen = newPosts.first.id;
+          }
+          if (hasNewFollowing) {
             _followingHasNew = true;
           }
         });
@@ -569,6 +577,8 @@ class _HomeScreenState extends State<HomeScreen> {
             .map((p) => Post.fromJson(p as Map<String, dynamic>))
             .toList();
 
+        final bool hasNewFollowing = _shouldShowFollowingBadge(newPosts);
+
         setState(() {
           _followingPosts
             ..clear()
@@ -576,8 +586,11 @@ class _HomeScreenState extends State<HomeScreen> {
           _followingHasMore = _followingPosts.length < total;
           _followingPage = 2;
           _followingLoading = false;
+          if (_selectedTab == 0 && newPosts.isNotEmpty) {
+            _lastFollowingTopPostIdSeen = newPosts.first.id;
+          }
           // 不在关注页时展示红点提示
-          if (_selectedTab != 0 && newPosts.isNotEmpty) {
+          if (hasNewFollowing) {
             _followingHasNew = true;
           }
         });
@@ -591,6 +604,15 @@ class _HomeScreenState extends State<HomeScreen> {
         _followingLoading = false;
       });
     }
+  }
+
+  /// 判断关注流是否有新帖子需要显示红点
+  bool _shouldShowFollowingBadge(List<Post> newPosts) {
+    if (newPosts.isEmpty) return false;
+    final String? latestId = newPosts.first.id;
+    if (latestId == null || latestId.isEmpty) return false;
+    // 已在关注页则不显示红点；仅当有新的顶部帖子且未在关注页时展示
+    return _selectedTab != 0 && latestId != _lastFollowingTopPostIdSeen;
   }
 
   /// 关注流滚动监听
@@ -852,6 +874,10 @@ class _HomeScreenState extends State<HomeScreen> {
           _selectedTab = index;
           if (index == 0) {
             _followingHasNew = false; // 进入关注页后红点立即消失
+            if (_followingPosts.isNotEmpty) {
+              // 记录当前关注流顶部帖子，后续刷新用于判断是否有新内容
+              _lastFollowingTopPostIdSeen = _followingPosts.first.id;
+            }
           }
           // 离开发现页即清除置顶的“我刚发的”帖子
           if (index != 1) {
