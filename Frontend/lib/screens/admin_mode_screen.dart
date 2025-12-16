@@ -971,13 +971,13 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                               Text(() {
                                 String? name = u['name']?.toString();
                                 String? email = u['email']?.toString();
-                                String display = '';
                                 if (name != null && name.isNotEmpty) {
-                                  display = name.split('@').first;
+                                  return name.split('@').first;
                                 } else if (email != null && email.isNotEmpty) {
-                                  display = email.split('@').first;
+                                  return email.split('@').first;
+                                } else {
+                                  return '';
                                 }
-                                return display;
                               }()),
                               Text(u['role']?.toString() ?? ''),
                               if ((u['role'] ?? '').toString().toUpperCase() ==
@@ -1049,7 +1049,17 @@ class _AdminModeScreenState extends State<AdminModeScreen> {
                       rows: visible
                           .map(
                             (u) => [
-                              Text(u['name']?.toString() ?? ''),
+                              Text(() {
+                                String? name = u['name']?.toString();
+                                String? email = u['email']?.toString();
+                                if (name != null && name.isNotEmpty) {
+                                  return name.split('@').first;
+                                } else if (email != null && email.isNotEmpty) {
+                                  return email.split('@').first;
+                                } else {
+                                  return '';
+                                }
+                              }()),
                               Text(u['role']?.toString() ?? ''),
                               ElevatedButton(
                                 onPressed: () =>
