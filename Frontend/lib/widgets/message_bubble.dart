@@ -711,12 +711,43 @@ class _MessageBubbleState extends State<MessageBubble> {
 
         return GestureDetector(
           onTap: () async {
-            // 获取帖子详情并导航
+            // 获取帖子详情并检查状态
             try {
               final result = await ApiService.getPost(postId);
               if (result['statusCode'] == 200) {
                 final postData = result['body'] as Map<String, dynamic>;
                 final postObj = Post.fromJson(postData);
+                
+                // 检查帖子状态，如果不是 NORMAL，显示提示而不是导航
+                final status = postObj.status?.toUpperCase();
+                if (status != null && status != 'NORMAL') {
+                  String message;
+                  switch (status) {
+                    case 'DRAFT':
+                      message = '该笔记目前不可见';
+                      break;
+                    case 'AUDIT':
+                      message = '该笔记正在审核中，暂不可见';
+                      break;
+                    case 'REMOVED':
+                      message = '该笔记已被下架，不可见';
+                      break;
+                    default:
+                      message = '该笔记目前不可见';
+                  }
+                  
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(message),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                  return;
+                }
+                
+                // 状态正常，可以导航
                 if (context.mounted) {
                   Navigator.of(context).push(
                     MaterialPageRoute(
