@@ -535,7 +535,11 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
       if (cached != null) {
         return MapEntry(actorId, cached);
       }
-      final isFollowed = await _isCurrentUserInFollowers(actorId, currentUserId);
+      // 使用“我的关注列表”判断我是否已经关注了对方，避免对方隐藏粉丝列表导致误判
+      final isFollowed = await _isActorInMyFollowing(
+        currentUserId: currentUserId,
+        targetUserId: actorId,
+      );
       _followStatusCache[actorId] = isFollowed;
       return MapEntry(actorId, isFollowed);
     });
@@ -550,13 +554,19 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
     return followedIds;
   }
 
-  Future<bool> _isCurrentUserInFollowers(String targetUserId, String currentUserId) async {
+  /// 判断当前用户是否已关注目标用户
+  /// 通过“我的关注列表”来判断，避免目标用户关闭粉丝可见性时误判
+  Future<bool> _isActorInMyFollowing({
+    required String currentUserId,
+    required String targetUserId,
+  }) async {
     int page = 0;
     const int pageSize = 50;
+
     while (true) {
       try {
-        final resp = await ApiService.getFollowers(
-          targetUserId,
+        final resp = await ApiService.getFollowing(
+          currentUserId,
           page: page,
           pageSize: pageSize,
         );
@@ -567,7 +577,7 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
         final users = (body['users'] as List?) ?? const [];
         final found = users.any((userJson) {
           final id = (userJson['id'] ?? userJson['userId'])?.toString() ?? '';
-          return id == currentUserId;
+          return id == targetUserId;
         });
         if (found) return true;
         if (users.length < pageSize) {
