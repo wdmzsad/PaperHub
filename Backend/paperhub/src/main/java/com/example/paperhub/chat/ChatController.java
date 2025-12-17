@@ -55,7 +55,8 @@ public class ChatController {
     @GetMapping
     public ResponseEntity<List<ConversationResponse>> getConversations(@AuthenticationPrincipal com.example.paperhub.auth.User user) {
         if (user == null) {
-            return ResponseEntity.badRequest().build();
+            // 页面刷新时容忍匿名状态，返回空会话列表
+            return ResponseEntity.ok(List.of());
         }
         List<ConversationResponse> conversations = chatService.getUserConversations(user.getId());
         return ResponseEntity.ok(conversations);

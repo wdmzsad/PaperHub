@@ -31,7 +31,12 @@ public class BrowseHistoryController {
             @RequestParam(name = "limit", defaultValue = "50") int limit
     ) {
         if (currentUser == null) {
-            return ResponseEntity.status(401).body(Map.of("message", "未认证，请先登录"));
+            // 页面刷新时容忍匿名状态，返回空历史
+            Map<String, Object> body = new HashMap<>();
+            body.put("items", List.of());
+            body.put("count", 0);
+            body.put("timestamp", Instant.now().toString());
+            return ResponseEntity.ok(body);
         }
         Long userId = currentUser.getId();
         List<BrowseHistory> history = browseHistoryService.getHistory(userId, limit);

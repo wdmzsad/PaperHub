@@ -28,7 +28,8 @@ public class NotificationController {
     public ResponseEntity<NotificationDtos.UnreadCountResp> getUnreadCount(
             @AuthenticationPrincipal User user) {
         if (user == null) {
-            return ResponseEntity.status(401).build();
+            // 页面刷新时容忍匿名状态，返回全0计数
+            return ResponseEntity.ok(new NotificationDtos.UnreadCountResp(0L, 0L, 0L));
         }
 
         Map<String, Long> counts = notificationService.getUnreadCounts(user);
@@ -50,12 +51,14 @@ public class NotificationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
         if (user == null) {
-            return ResponseEntity.status(401).build();
+            // 页面刷新时容忍匿名状态，返回空列表
+            return ResponseEntity.ok(new NotificationDtos.NotificationListResp(
+                    List.of(), 0L, page, pageSize));
         }
 
         Pageable pageable = PageRequest.of(page, pageSize);
         var notificationPage = notificationService.getLikesAndFavorites(user, pageable);
-        
+
         var notifications = notificationPage.getContent().stream()
                 .map(NotificationDtos.NotificationResp::from)
                 .toList();
@@ -79,12 +82,14 @@ public class NotificationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
         if (user == null) {
-            return ResponseEntity.status(401).build();
+            // 页面刷新时容忍匿名状态，返回空列表
+            return ResponseEntity.ok(new NotificationDtos.NotificationListResp(
+                    List.of(), 0L, page, pageSize));
         }
 
         Pageable pageable = PageRequest.of(page, pageSize);
         var notificationPage = notificationService.getFollows(user, pageable);
-        
+
         var notifications = notificationPage.getContent().stream()
                 .map(NotificationDtos.NotificationResp::from)
                 .toList();
@@ -108,12 +113,14 @@ public class NotificationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
         if (user == null) {
-            return ResponseEntity.status(401).build();
+            // 页面刷新时容忍匿名状态，返回空列表
+            return ResponseEntity.ok(new NotificationDtos.NotificationListResp(
+                    List.of(), 0L, page, pageSize));
         }
 
         Pageable pageable = PageRequest.of(page, pageSize);
         var notificationPage = notificationService.getCommentsAndMentions(user, pageable);
-        
+
         var notifications = notificationPage.getContent().stream()
                 .map(NotificationDtos.NotificationResp::from)
                 .toList();

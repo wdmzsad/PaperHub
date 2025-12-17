@@ -13,6 +13,7 @@ import '../config/app_env.dart';
 import '../services/api_service.dart';
 import '../services/arxiv_service.dart';
 import '../services/local_storage.dart';
+import '../services/page_state_service.dart';
 import '../constants/discipline_constants.dart';
 import '../models/post_model.dart';
 import '../models/user_profile.dart';
@@ -89,9 +90,16 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     // 如果传入了 initialPost，则进入编辑模式，预填内容
     if (_isEditing && widget.initialPost != null) {
       _applyExistingPost(widget.initialPost!);
+    } else {
+      // 新建模式：尝试恢复之前未提交的表单数据
+      _restoreFormState();
     }
     // 获取当前用户角色
     _loadCurrentUserRole();
+
+    // 监听文本变化，自动保存
+    _titleController.addListener(_saveFormState);
+    _contentController.addListener(_saveFormState);
   }
 
   // 加载当前用户角色
@@ -215,6 +223,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           _images.add(file);
         }
       });
+      _saveFormState(); // 保存状态
     }
   }
 
@@ -514,6 +523,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       final body = resp['body'] as Map<String, dynamic>?;
 
       if (status >= 200 && status < 300) {
+        // 发布成功，清除保存的表单状态
+        await _clearFormState();
+
         if (mounted) {
           Post? createdPost;
           Map<String, dynamic>? createdPostRaw;
@@ -668,8 +680,84 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     });
   }
 
+  /// 保存表单状态到本地存储
+  void _saveFormState() {
+    if (_isEditing) return; // 编辑模式不保存
+
+    PageStateService.instance.saveFormData('note_editor', {
+      'title': _titleController.text,
+      'content': _contentController.text,
+      'selectedDiscipline': _selectedDiscipline,
+      'externalLinks': _externalLinks,
+      'arxivId': _arxivId,
+      'arxivControllerText': _arxivController.text,
+      'doi': _doi,
+      'journal': _journal,
+      'year': _year,
+      'selectedReferences': _selectedReferences,
+      // arXiv 元数据
+      'arxivMetadata': _arxivMetadata != null ? {
+        'id': _arxivMetadata!.id,
+        'title': _arxivMetadata!.title,
+        'authors': _arxivMetadata!.authors,
+        'publishedDate': _arxivMetadata!.publishedDate?.toIso8601String(),
+        'categories': _arxivMetadata!.categories,
+        'doi': _arxivMetadata!.doi,
+        'journal': _arxivMetadata!.journal,
+        'year': _arxivMetadata!.year,
+      } : null,
+    });
+  }
+
+  /// 从本地存储恢复表单状态
+  void _restoreFormState() {
+    final formData = PageStateService.instance.restoreFormData('note_editor');
+    if (formData == null) return;
+
+    setState(() {
+      _titleController.text = formData['title'] ?? '';
+      _contentController.text = formData['content'] ?? '';
+      _selectedDiscipline = formData['selectedDiscipline'];
+      _externalLinks.clear();
+      _externalLinks.addAll((formData['externalLinks'] as List?)?.cast<String>() ?? []);
+      _arxivId = formData['arxivId'];
+      _arxivController.text = formData['arxivControllerText'] ?? '';
+      _doi = formData['doi'];
+      _journal = formData['journal'];
+      _year = formData['year'];
+      _selectedReferences.clear();
+      _selectedReferences.addAll((formData['selectedReferences'] as List?)?.cast<int>() ?? []);
+
+      // 恢复 arXiv 元数据
+      final arxivMetadataMap = formData['arxivMetadata'] as Map<String, dynamic>?;
+      if (arxivMetadataMap != null) {
+        _arxivMetadata = ArxivMetadata(
+          id: arxivMetadataMap['id'] ?? '',
+          title: arxivMetadataMap['title'] ?? '',
+          authors: (arxivMetadataMap['authors'] as List?)?.cast<String>() ?? [],
+          abstract: null,
+          publishedDate: arxivMetadataMap['publishedDate'] != null
+              ? DateTime.tryParse(arxivMetadataMap['publishedDate'])
+              : null,
+          updatedDate: null,
+          categories: (arxivMetadataMap['categories'] as List?)?.cast<String>() ?? [],
+          doi: arxivMetadataMap['doi'],
+          journal: arxivMetadataMap['journal'],
+          year: arxivMetadataMap['year'],
+        );
+      }
+    });
+  }
+
+  /// 清除保存的表单状态
+  Future<void> _clearFormState() async {
+    await PageStateService.instance.clearFormData('note_editor');
+  }
+
   @override
   void dispose() {
+    _titleController.removeListener(_saveFormState);
+    _contentController.removeListener(_saveFormState);
     _titleController.dispose();
     _contentController.dispose();
     _linkController.dispose();
@@ -1115,6 +1203,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   _externalLinks.add(text);
                   _linkController.clear();
                 });
+                _saveFormState(); // 保存状态
               },
               icon: const Icon(Icons.add_link, size: 18),
               label: const Text('添加'),
@@ -1144,6 +1233,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   setState(() {
                     _externalLinks.remove(link);
                   });
+                  _saveFormState(); // 保存状态
                 },
               );
             }).toList(),
@@ -1323,6 +1413,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                           _selectedDiscipline = discipline;
                           _showDisciplineDropdown = false; // 选择后收起下拉菜单
                         });
+                        _saveFormState(); // 保存状态
                       },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
