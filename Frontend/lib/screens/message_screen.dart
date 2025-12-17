@@ -47,7 +47,10 @@ class _LikesAndFavoritesScreenState extends State<LikesAndFavoritesScreen> {
     _loadNotifications();
   }
 
-  Future<void> _loadNotifications({bool loadMore = false}) async {
+  Future<void> _loadNotifications({
+    bool loadMore = false,
+    bool resolveFollowBack = true,
+  }) async {
     if (!loadMore) {
       setState(() {
         _isLoading = true;
@@ -371,6 +374,7 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
         final notifications = (body['notifications'] as List)
             .map((json) => NotificationItem.fromJson(json))
             .toList();
+        // 通过查询"我的关注列表"进行精确判断，确定哪些用户已被当前用户关注
         final resolvedFollowBackIds = await _determineFollowBackIds(notifications);
 
         setState(() {
@@ -453,8 +457,36 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
         builder: (_) => ProfilePage(userId: userId),
       ),
     );
-    // 从用户主页返回时，刷新关注状态
-    await _refreshFollowStatus();
+    // 从用户主页返回时，只更新当前访问用户的关注状态，避免影响其他用户
+    await _updateSingleUserFollowStatus(userId);
+  }
+
+  /// 更新单个用户的关注状态（从用户主页返回时使用）
+  Future<void> _updateSingleUserFollowStatus(String userId) async {
+    if (userId.isEmpty) return;
+    
+    final currentUserId = _currentUserId ??= LocalStorage.instance.read('userId');
+    if (currentUserId == null || currentUserId.isEmpty) return;
+    
+    // 清除该用户的缓存，强制重新查询
+    _followStatusCache.remove(userId);
+    
+    // 查询该用户是否在当前用户的关注列表中
+    final isFollowed = await _isActorInMyFollowing(
+      currentUserId: currentUserId,
+      targetUserId: userId,
+    );
+    
+    if (mounted) {
+      setState(() {
+        _followStatusCache[userId] = isFollowed;
+        if (isFollowed) {
+          _followedUserIds.add(userId);
+        } else {
+          _followedUserIds.remove(userId);
+        }
+      });
+    }
   }
 
   /// 刷新所有用户的关注状态
@@ -535,7 +567,11 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
       if (cached != null) {
         return MapEntry(actorId, cached);
       }
-      final isFollowed = await _isCurrentUserInFollowers(actorId, currentUserId);
+      // 使用“我的关注列表”判断我是否已经关注了对方，避免对方隐藏粉丝列表导致误判
+      final isFollowed = await _isActorInMyFollowing(
+        currentUserId: currentUserId,
+        targetUserId: actorId,
+      );
       _followStatusCache[actorId] = isFollowed;
       return MapEntry(actorId, isFollowed);
     });
@@ -550,13 +586,19 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
     return followedIds;
   }
 
-  Future<bool> _isCurrentUserInFollowers(String targetUserId, String currentUserId) async {
+  /// 判断当前用户是否已关注目标用户
+  /// 通过“我的关注列表”来判断，避免目标用户关闭粉丝可见性时误判
+  Future<bool> _isActorInMyFollowing({
+    required String currentUserId,
+    required String targetUserId,
+  }) async {
     int page = 0;
     const int pageSize = 50;
+
     while (true) {
       try {
-        final resp = await ApiService.getFollowers(
-          targetUserId,
+        final resp = await ApiService.getFollowing(
+          currentUserId,
           page: page,
           pageSize: pageSize,
         );
@@ -567,7 +609,7 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
         final users = (body['users'] as List?) ?? const [];
         final found = users.any((userJson) {
           final id = (userJson['id'] ?? userJson['userId'])?.toString() ?? '';
-          return id == currentUserId;
+          return id == targetUserId;
         });
         if (found) return true;
         if (users.length < pageSize) {
@@ -621,9 +663,9 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
                       }
                       final notification = _notifications[index];
                       final actorId = notification.actor.id;
-                      final isAlreadyFollowed =
-                          _followedUserIds.contains(actorId) ||
-                              (notification.actor.isFollowed ?? false);
+                      // 使用本地回关缓存 + 服务端返回的 isFollowed 共同判断，确保从主页关注/取关后都能正确刷新
+                      final isAlreadyFollowed = _followedUserIds.contains(actorId) ||
+                          (notification.actor.isFollowed ?? false);
                       return _buildFollowerItem(
                         notification: notification,
                         isFollowed: isAlreadyFollowed,

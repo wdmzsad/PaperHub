@@ -2091,16 +2091,6 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                 }
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.copy),
-              title: const Text('复制链接'),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('链接已复制（演示）')));
-              },
-            ),
           ],
         ),
       ),
@@ -4435,3 +4425,7 @@ class ContentWithClickableTags extends StatelessWidget {
     );
   }
 }
+
+
+
+

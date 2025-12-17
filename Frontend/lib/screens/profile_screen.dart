@@ -82,30 +82,38 @@ class _ProfilePageState extends State<ProfilePage>
     try {
       Map<String, dynamic>? payload;
 
+      // 查看自己的主页时，总是从网络获取最新数据（除非明确指定不刷新）
+      // 这样可以确保关注、粉丝、被收藏、点赞等数据及时更新
       if (_isViewingSelf && !forceNetwork) {
+        // 对于自己的主页，即使有缓存也应该从网络获取最新数据
+        // 只在首次加载时可以使用缓存来加快显示速度
         final cached = LocalStorage.instance.read('currentUser');
         if (cached != null) {
+          // 先使用缓存快速显示，然后后台更新
           payload = jsonDecode(cached) as Map<String, dynamic>;
+          setState(() {
+            _profile = UserProfile.fromJson(payload!);
+            _isFollowing = _profile!.isFollowing;
+          });
         }
       }
 
-      if (payload == null) {
-        final resp = widget.userId == null
-            ? await ApiService.getCurrentUserProfile()
-            : await ApiService.getUserProfile(widget.userId!);
-        if (resp['statusCode'] != 200) {
-          final message =
-              (resp['body'] as Map<String, dynamic>?)?['message'] ?? '加载失败';
-          throw Exception(message);
-        }
-        payload = resp['body'] as Map<String, dynamic>;
-        if (_isViewingSelf) {
-          await LocalStorage.instance.write('currentUser', jsonEncode(payload));
-          final id = payload['id'];
-          if (id != null) {
-            await LocalStorage.instance.write('userId', id.toString());
-            _currentUserId = id.toString();
-          }
+      // 总是从网络获取最新的用户信息
+      final resp = widget.userId == null
+          ? await ApiService.getCurrentUserProfile()
+          : await ApiService.getUserProfile(widget.userId!);
+      if (resp['statusCode'] != 200) {
+        final message =
+            (resp['body'] as Map<String, dynamic>?)?['message'] ?? '加载失败';
+        throw Exception(message);
+      }
+      payload = resp['body'] as Map<String, dynamic>;
+      if (_isViewingSelf) {
+        await LocalStorage.instance.write('currentUser', jsonEncode(payload));
+        final id = payload['id'];
+        if (id != null) {
+          await LocalStorage.instance.write('userId', id.toString());
+          _currentUserId = id.toString();
         }
       }
 
