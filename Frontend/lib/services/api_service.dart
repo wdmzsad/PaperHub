@@ -120,19 +120,31 @@ class ApiService {
       final refreshResult = await refreshToken();
 
       if (refreshResult['statusCode'] == 200) {
-        final newToken = refreshResult['body']['token'] ?? '';
-        final newRefreshToken = refreshResult['body']['refreshToken'] ?? '';
+        final body = refreshResult['body'] as Map<String, dynamic>?;
+        final newToken = body?['token'] as String? ?? '';
+        final newRefreshToken = body?['refreshToken'] as String? ?? '';
 
-        // 更新本地存储
-        await LocalStorage.instance.write('accessToken', newToken);
-        await LocalStorage.instance.write('refreshToken', newRefreshToken);
+        // 只有在新 token 有效时才更新本地存储并重试请求
+        if (newToken.isNotEmpty) {
+          await LocalStorage.instance.write('accessToken', newToken);
+          if (newRefreshToken.isNotEmpty) {
+            await LocalStorage.instance.write('refreshToken', newRefreshToken);
+          }
 
-        // 处理队列
-        _processRefreshQueue(refreshResult, null);
+          // 处理队列
+          _processRefreshQueue(refreshResult, null);
 
-        // 重试原请求
-        final retryResp = await requestFn();
-        return _parseResponse(retryResp);
+          // 重试原请求
+          final retryResp = await requestFn();
+          return _parseResponse(retryResp);
+        } else {
+          // 刷新返回的 token 为空，返回 401 错误
+          _processRefreshQueue(null, Exception('刷新Token返回空token'));
+          return {
+            'statusCode': 401,
+            'body': {'message': '刷新Token失败，请重新登录'},
+          };
+        }
       } else {
         // 刷新失败，不主动清除本地Token，直接返回结果交由调用方处理
         _processRefreshQueue(null, Exception('刷新Token失败'));
