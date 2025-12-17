@@ -103,7 +103,7 @@ public class PostController {
     }
 
     /**
-     * 获取"关注"信息流：只返回当前登录用户关注的作者发布的帖子。
+     * 获取“关注”信息流：只返回当前登录用户关注的作者发布的帖子。
      * GET /posts/following?page=1&pageSize=20
      */
     @GetMapping("/following")
@@ -113,13 +113,7 @@ public class PostController {
             @RequestParam(defaultValue = "20") int pageSize) {
 
         if (user == null) {
-            // 页面刷新时容忍匿名状态，返回空列表
-            return ResponseEntity.ok(new PostDtos.PostListResp(
-                    List.of(),
-                    0L,
-                    page,
-                    pageSize
-            ));
+            return ResponseEntity.status(401).body(Map.of("message", "未认证，请先登录"));
         }
 
         try {
