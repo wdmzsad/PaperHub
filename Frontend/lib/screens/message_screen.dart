@@ -453,8 +453,8 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
         builder: (_) => ProfilePage(userId: userId),
       ),
     );
-    // 从用户主页返回时，刷新关注状态
-    await _refreshFollowStatus();
+    // 从用户主页返回时，重新加载通知列表和回关状态
+    await _loadNotifications();
   }
 
   /// 刷新所有用户的关注状态
@@ -631,9 +631,9 @@ class _NewFollowersScreenState extends State<NewFollowersScreen> {
                       }
                       final notification = _notifications[index];
                       final actorId = notification.actor.id;
-                      final isAlreadyFollowed =
-                          _followedUserIds.contains(actorId) ||
-                              (notification.actor.isFollowed ?? false);
+                      // 使用本地回关缓存 + 服务端返回的 isFollowed 共同判断，确保从主页关注/取关后都能正确刷新
+                      final isAlreadyFollowed = _followedUserIds.contains(actorId) ||
+                          (notification.actor.isFollowed ?? false);
                       return _buildFollowerItem(
                         notification: notification,
                         isFollowed: isAlreadyFollowed,
