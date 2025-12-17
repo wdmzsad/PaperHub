@@ -91,20 +91,42 @@ Future<String> _determineInitialRoute() async {
     try {
       final resp = await ApiService.refreshToken();
       if (resp['statusCode'] == 200) {
-        final newToken = resp['body']['token'] ?? '';
-        final newRefresh = resp['body']['refreshToken'] ?? '';
+        final body = resp['body'] as Map<String, dynamic>?;
+        final newToken = body?['token'] as String? ?? '';
+        final newRefresh = body?['refreshToken'] as String? ?? '';
+        
+        // 只有在新 token 有效时才更新并返回首页
         if (newToken.isNotEmpty) {
           await LocalStorage.instance.write('accessToken', newToken);
+          if (newRefresh.isNotEmpty) {
+            await LocalStorage.instance.write('refreshToken', newRefresh);
+          }
+          return '/home';
+        } else {
+          // 刷新返回的 token 为空，清除旧 token 并返回登录
+          debugPrint('Startup refresh token returned empty token');
+          await LocalStorage.instance.delete('accessToken');
+          await LocalStorage.instance.delete('refreshToken');
+          return '/login';
         }
-        if (newRefresh.isNotEmpty) {
-          await LocalStorage.instance.write('refreshToken', newRefresh);
-        }
+      } else {
+        // 刷新失败（401/403等），清除旧 token 并返回登录
+        debugPrint('Startup refresh token failed with status: ${resp['statusCode']}');
+        await LocalStorage.instance.delete('accessToken');
+        await LocalStorage.instance.delete('refreshToken');
+        return '/login';
       }
     } catch (e) {
+      // 刷新异常，清除旧 token 并返回登录
       debugPrint('Startup refresh token failed: $e');
+      await LocalStorage.instance.delete('accessToken');
+      await LocalStorage.instance.delete('refreshToken');
+      return '/login';
     }
   }
 
+  // 有 accessToken 但没有 refreshToken，直接返回首页（让后续 API 调用处理 401）
+  // 这种情况可能是用户刚登录但 refreshToken 未保存，或者 refreshToken 已过期
   return '/home';
 }
 
@@ -364,19 +386,44 @@ class _SplashOrLoginState extends State<SplashOrLogin> {
           try {
             final resp = await ApiService.refreshToken();
             if (resp['statusCode'] == 200) {
-              final newToken = resp['body']['token'] ?? '';
-              final newRefresh = resp['body']['refreshToken'] ?? '';
+              final body = resp['body'] as Map<String, dynamic>?;
+              final newToken = body?['token'] as String? ?? '';
+              final newRefresh = body?['refreshToken'] as String? ?? '';
+              
+              // 只有在新 token 有效时才更新并导航到首页
               if (newToken.isNotEmpty) {
                 await LocalStorage.instance.write('accessToken', newToken);
+                if (newRefresh.isNotEmpty) {
+                  await LocalStorage.instance.write('refreshToken', newRefresh);
+                }
+                _pushReplacementSafely('/home');
+                return;
+              } else {
+                // 刷新返回的 token 为空，清除旧 token 并导航到登录
+                debugPrint('Startup refresh token returned empty token');
+                await LocalStorage.instance.delete('accessToken');
+                await LocalStorage.instance.delete('refreshToken');
+                _pushReplacementSafely('/login');
+                return;
               }
-              if (newRefresh.isNotEmpty) {
-                await LocalStorage.instance.write('refreshToken', newRefresh);
-              }
+            } else {
+              // 刷新失败（401/403等），清除旧 token 并导航到登录
+              debugPrint('Startup refresh token failed with status: ${resp['statusCode']}');
+              await LocalStorage.instance.delete('accessToken');
+              await LocalStorage.instance.delete('refreshToken');
+              _pushReplacementSafely('/login');
+              return;
             }
           } catch (e) {
+            // 刷新异常，清除旧 token 并导航到登录
             debugPrint('Startup refresh token failed: $e');
+            await LocalStorage.instance.delete('accessToken');
+            await LocalStorage.instance.delete('refreshToken');
+            _pushReplacementSafely('/login');
+            return;
           }
         }
+        // 有 accessToken 但没有 refreshToken，直接导航到首页（让后续 API 调用处理 401）
         _pushReplacementSafely('/home');
       } else {
         _pushReplacementSafely('/login');

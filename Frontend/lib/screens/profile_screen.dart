@@ -1688,11 +1688,12 @@ class _DirectionsEditSheetState extends State<_DirectionsEditSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.only(
         left: 20,
@@ -1706,13 +1707,17 @@ class _DirectionsEditSheetState extends State<_DirectionsEditSheet> {
         children: [
           Row(
             children: [
-              const Text(
+              Text(
                 '管理研究方向',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: scheme.onSurface,
+                ),
               ),
               const Spacer(),
               IconButton(
-                icon: const Icon(Icons.close),
+                icon: Icon(Icons.close, color: scheme.onSurface),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -1724,7 +1729,9 @@ class _DirectionsEditSheetState extends State<_DirectionsEditSheet> {
             children: _directions
                 .map(
                   (e) => Chip(
-                    label: Text(e),
+                    label: Text(e, style: TextStyle(color: scheme.onSurface)),
+                    backgroundColor: scheme.surfaceContainerHighest,
+                    deleteIconColor: scheme.onSurfaceVariant,
                     onDeleted: () => setState(() {
                       _directions.remove(e);
                     }),
@@ -1738,9 +1745,19 @@ class _DirectionsEditSheetState extends State<_DirectionsEditSheet> {
               Expanded(
                 child: TextField(
                   controller: _controller,
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: scheme.onSurface),
+                  decoration: InputDecoration(
                     hintText: '新增方向',
-                    border: OutlineInputBorder(),
+                    hintStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(0.6)),
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(color: scheme.outline),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: scheme.outline.withOpacity(0.5)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: scheme.primary),
+                    ),
                   ),
                   onSubmitted: (_) => _addDirection(),
                 ),
@@ -1837,11 +1854,12 @@ class _FollowListSheetState extends State<_FollowListSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final title = widget.showFollowers ? '粉丝列表' : '关注列表';
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.only(
         left: 16,
@@ -1858,41 +1876,54 @@ class _FollowListSheetState extends State<_FollowListSheet> {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: scheme.onSurface,
                   ),
                 ),
                 const Spacer(),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close),
+                  icon: Icon(Icons.close, color: scheme.onSurface),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Expanded(
               child: _users.isEmpty && !_hasMore && !_loading
-                  ? const Center(child: Text('暂无数据'))
+                  ? Center(
+                      child: Text(
+                        '暂无数据',
+                        style: TextStyle(color: scheme.onSurfaceVariant),
+                      ),
+                    )
                   : ListView.separated(
                       itemCount: _users.length + (_hasMore ? 1 : 0),
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (_, __) => Divider(
+                        height: 1,
+                        color: scheme.outline.withOpacity(0.2),
+                      ),
                       itemBuilder: (context, index) {
                         if (index == _users.length) {
                           if (_loading) {
-                            return const Padding(
-                              padding: EdgeInsets.all(16.0),
+                            return Padding(
+                              padding: const EdgeInsets.all(16.0),
                               child: Center(
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
+                                  color: scheme.primary,
                                 ),
                               ),
                             );
                           }
                           return TextButton.icon(
                             onPressed: _loadPage,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('加载更多'),
+                            icon: Icon(Icons.refresh, color: scheme.primary),
+                            label: Text(
+                              '加载更多',
+                              style: TextStyle(color: scheme.primary),
+                            ),
                           );
                         }
                         final user = _users[index];
@@ -1902,12 +1933,16 @@ class _FollowListSheetState extends State<_FollowListSheet> {
                                 ? NetworkImage(user.avatar)
                                 : AssetImage(user.avatar) as ImageProvider,
                           ),
-                          title: Text(user.displayName),
+                          title: Text(
+                            user.displayName,
+                            style: TextStyle(color: scheme.onSurface),
+                          ),
                           subtitle: user.bio != null
                               ? Text(
                                   user.bio!,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(color: scheme.onSurfaceVariant),
                                 )
                               : null,
                           onTap: () {
@@ -2038,13 +2073,14 @@ class _ProfileEditSheetState extends State<_ProfileEditSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: EdgeInsets.only(
           left: 20,
@@ -2060,13 +2096,17 @@ class _ProfileEditSheetState extends State<_ProfileEditSheet> {
             children: [
               Row(
                 children: [
-                  const Text(
+                  Text(
                     '编辑个人资料',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: scheme.onSurface,
+                    ),
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: Icon(Icons.close, color: scheme.onSurface),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -2132,23 +2172,50 @@ class _ProfileEditSheetState extends State<_ProfileEditSheet> {
               const SizedBox(height: 20),
               TextField(
                 controller: _nameController,
-                decoration: const InputDecoration(
+                style: TextStyle(color: scheme.onSurface),
+                decoration: InputDecoration(
                   labelText: '昵称',
-                  border: OutlineInputBorder(),
+                  labelStyle: TextStyle(color: scheme.onSurfaceVariant),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: scheme.outline),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: scheme.outline.withOpacity(0.5)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: scheme.primary),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: _bioController,
                 maxLines: 3,
-                decoration: const InputDecoration(
+                style: TextStyle(color: scheme.onSurface),
+                decoration: InputDecoration(
                   labelText: '一句话简介',
                   hintText: '介绍一下自己吧',
-                  border: OutlineInputBorder(),
+                  labelStyle: TextStyle(color: scheme.onSurfaceVariant),
+                  hintStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(0.6)),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: scheme.outline),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: scheme.outline.withOpacity(0.5)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: scheme.primary),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
-              const Text('研究方向', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                '研究方向',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: scheme.onSurface,
+                ),
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -2156,7 +2223,9 @@ class _ProfileEditSheetState extends State<_ProfileEditSheet> {
                 children: _directions
                     .map(
                       (e) => Chip(
-                        label: Text(e),
+                        label: Text(e, style: TextStyle(color: scheme.onSurface)),
+                        backgroundColor: scheme.surfaceContainerHighest,
+                        deleteIconColor: scheme.onSurfaceVariant,
                         onDeleted: () => setState(() => _directions.remove(e)),
                       ),
                     )
@@ -2169,9 +2238,19 @@ class _ProfileEditSheetState extends State<_ProfileEditSheet> {
                     child: TextField(
                       controller: _directionController,
                       focusNode: _directionFocus,
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: scheme.onSurface),
+                      decoration: InputDecoration(
                         hintText: '新增方向',
-                        border: OutlineInputBorder(),
+                        hintStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(0.6)),
+                        border: OutlineInputBorder(
+                          borderSide: BorderSide(color: scheme.outline),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: scheme.outline.withOpacity(0.5)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: scheme.primary),
+                        ),
                       ),
                       onSubmitted: (_) => _addDirection(),
                     ),
