@@ -69,7 +69,7 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
                   initialValue: email,
                   decoration: InputDecoration(labelText: '邮箱'),
                   style: FontUtils.textStyle(text: email, color: AppColors.textPrimary),
-                  onChanged: (v) => email = v,
+                  enabled: false,  // 锁定邮箱输入，防止在验证码步骤修改，并显示为灰色不可编辑状态
                 ),
                 SizedBox(height: 12),
                 TextFormField(

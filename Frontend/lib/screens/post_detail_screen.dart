@@ -952,7 +952,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         // 添加到已选择列表（单选和多选都累积）
         setState(() {
           _selectedMentions[userNameLower] = user;
-          print('[@功能] 添加到_selectedMentions: "$userNameLower" -> ${user.name}(${user.id})');
+          print(
+            '[@功能] 添加到_selectedMentions: "$userNameLower" -> ${user.name}(${user.id})',
+          );
           if (isMultiSelectMode) {
             // 多选模式：保持横栏打开，重置@位置
             _mentionQuery = '';
@@ -1110,7 +1112,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
       // 如果名字是email格式，也添加email前缀
       if (mention.name.contains('@')) {
-        final emailPrefix = mention.name.substring(0, mention.name.indexOf('@')).toLowerCase();
+        final emailPrefix = mention.name
+            .substring(0, mention.name.indexOf('@'))
+            .toLowerCase();
         mentionMap[emailPrefix] = mention.id;
       }
     }
@@ -1145,7 +1149,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       // 从mentions列表中查找对应的用户ID
       final userId = mentionMap[userName.toLowerCase()];
 
-      print('[@功能] mentionMap.containsKey("${userName.toLowerCase()}"): ${mentionMap.containsKey(userName.toLowerCase())}');
+      print(
+        '[@功能] mentionMap.containsKey("${userName.toLowerCase()}"): ${mentionMap.containsKey(userName.toLowerCase())}',
+      );
 
       if (userId != null) {
         // 如果用户ID存在，显示为可点击的蓝色链接
@@ -1208,13 +1214,15 @@ class _PostDetailScreenState extends State<PostDetailScreen>
           }
         } else {
           // 异步搜索用户
-          _searchUserByName(userName).then((userId) {
-            _mentionUserIdCache[userName] = userId;
-            // 搜索完成后不重新构建，因为这会改变UI
-            // 用户需要刷新页面或重新进入才能看到可点击链接
-          }).catchError((e) {
-            _mentionUserIdCache[userName] = null;
-          });
+          _searchUserByName(userName)
+              .then((userId) {
+                _mentionUserIdCache[userName] = userId;
+                // 搜索完成后不重新构建，因为这会改变UI
+                // 用户需要刷新页面或重新进入才能看到可点击链接
+              })
+              .catchError((e) {
+                _mentionUserIdCache[userName] = null;
+              });
 
           spans.add(
             TextSpan(
@@ -1605,7 +1613,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     setState(() {
       // 从顶层删除
       final tIdx = _comments.indexWhere((c) => c.id == commentId);
-        if (tIdx != -1) {
+      if (tIdx != -1) {
         final deletedComment = _comments[tIdx];
         final deletedCount = 1 + deletedComment.replies.length;
         _comments.removeAt(tIdx);
@@ -1635,7 +1643,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             replies: updatedReplies,
             createdAt: parent.createdAt,
           );
-          widget.post.commentsCount = (widget.post.commentsCount > 0) ? widget.post.commentsCount - 1 : 0;
+          widget.post.commentsCount = (widget.post.commentsCount > 0)
+              ? widget.post.commentsCount - 1
+              : 0;
           return;
         }
       }
@@ -1912,7 +1922,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       }
 
       print('[@功能] 提交评论 - actualMentionedNames: $actualMentionedNames');
-      print('[@功能] 提交评论 - _selectedMentions: ${_selectedMentions.map((k, v) => MapEntry(k, '${v.name}(${v.id})'))}');
+      print(
+        '[@功能] 提交评论 - _selectedMentions: ${_selectedMentions.map((k, v) => MapEntry(k, '${v.name}(${v.id})'))}',
+      );
       print('[@功能] 提交评论 - mentionIds: $mentionIds');
 
       // 如果_selectedMentions中没有匹配到，尝试从文本中直接解析（处理手动输入的情况）
@@ -2024,7 +2036,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       ),
       actions: [
         IconButton(
-          icon: Icon(Icons.more_horiz, color: scheme.onSurface.withOpacity(0.7)),
+          icon: Icon(
+            Icons.more_horiz,
+            color: scheme.onSurface.withOpacity(0.7),
+          ),
           onPressed: _isDeleting ? null : _openMoreActions,
         ),
       ],
@@ -2366,7 +2381,11 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       ),
       child: Row(
         children: [
-          Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 24),
+          Icon(
+            Icons.warning_amber_rounded,
+            color: Colors.red.shade700,
+            size: 24,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -2380,7 +2399,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                     fontSize: 14,
                   ),
                 ),
-                if (widget.post.hiddenReason != null && widget.post.hiddenReason!.isNotEmpty)
+                if (widget.post.hiddenReason != null &&
+                    widget.post.hiddenReason!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
@@ -2405,7 +2425,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     IconData icon;
     Color color;
 
-    final status = _currentPostStatus?.toUpperCase() ?? widget.post.status?.toUpperCase();
+    final status =
+        _currentPostStatus?.toUpperCase() ?? widget.post.status?.toUpperCase();
     switch (status) {
       case 'DRAFT':
         message = '该笔记目前为草稿状态，不可见';
@@ -2434,11 +2455,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: 64,
-              color: color,
-            ),
+            Icon(icon, size: 64, color: color),
             const SizedBox(height: 16),
             Text(
               message,
@@ -2449,15 +2466,13 @@ class _PostDetailScreenState extends State<PostDetailScreen>
               ),
               textAlign: TextAlign.center,
             ),
-            if (widget.post.hiddenReason != null && widget.post.hiddenReason!.isNotEmpty)
+            if (widget.post.hiddenReason != null &&
+                widget.post.hiddenReason!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
                   '原因：${widget.post.hiddenReason}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -2531,7 +2546,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
 
   String _formatRelative(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前';
+    if (diff.inMinutes < 4) return '刚刚';
+    if (diff.inMinutes >= 4 && diff.inMinutes < 60)
+      return '${diff.inMinutes} 分钟前';
     if (diff.inHours < 24) return '${diff.inHours} 小时前';
     return '${diff.inDays} 天前';
   }
@@ -2731,7 +2748,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                         const SizedBox(width: 8),
                         Text(
                           '[$index] 加载中...',
-                          style: const TextStyle(fontSize: 12, color: Colors.blue),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue,
+                          ),
                         ),
                       ],
                     ),
@@ -2759,7 +2779,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                   if (createdAt != null) {
                     try {
                       final date = DateTime.parse(createdAt);
-                      dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                      dateStr =
+                          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
                     } catch (e) {
                       dateStr = '';
                     }
@@ -2836,20 +2857,18 @@ class _PostDetailScreenState extends State<PostDetailScreen>
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => PostDetailScreen(
-              post: refPost,
-            ),
+            builder: (context) => PostDetailScreen(post: refPost),
           ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('引用内容已不可见')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('引用内容已不可见')));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('无法访问引用内容')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('无法访问引用内容')));
     }
   }
 
@@ -2894,10 +2913,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                   borderRadius: BorderRadius.circular(10),
                 ),
                 padding: const EdgeInsets.all(8),
-                child: Icon(
-                  Icons.picture_as_pdf,
-                  color: scheme.error,
-                ),
+                child: Icon(Icons.picture_as_pdf, color: scheme.error),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -2939,9 +2955,7 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   void _onTagTap(String tag) {
     // 跳转到搜索页面，搜索该标签相关的帖子
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SearchResultsScreen(query: '#$tag'),
-      ),
+      MaterialPageRoute(builder: (_) => SearchResultsScreen(query: '#$tag')),
     );
   }
 
@@ -2955,7 +2969,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final color = kDisciplineColors[mainDiscipline] ?? Colors.blue;
     final bgColor = isDark ? color.withOpacity(0.22) : color.withOpacity(0.06);
-    final borderColor = isDark ? color.withOpacity(0.85) : color.withOpacity(0.4);
+    final borderColor = isDark
+        ? color.withOpacity(0.85)
+        : color.withOpacity(0.4);
     final labelColor = isDark ? scheme.onPrimary : color;
 
     return InkWell(
@@ -3000,7 +3016,6 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       ),
     );
   }
-
 
   void _openPdfPreview(String url, String title) {
     final uri = Uri.tryParse(url);
@@ -3108,7 +3123,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             // 计算需要减少的评论数（包括所有子回复）
             final deletedCount = 1 + comment.replies.length;
             _comments.removeWhere((c) => c.id == comment.id);
-            widget.post.commentsCount = (widget.post.commentsCount >= deletedCount)
+            widget.post.commentsCount =
+                (widget.post.commentsCount >= deletedCount)
                 ? widget.post.commentsCount - deletedCount
                 : 0;
           } else if (parentComment != null) {
@@ -3132,7 +3148,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                 replies: updatedReplies,
                 createdAt: parentComment.createdAt,
               );
-              widget.post.commentsCount = (widget.post.commentsCount > 0) ? widget.post.commentsCount - 1 : 0;
+              widget.post.commentsCount = (widget.post.commentsCount > 0)
+                  ? widget.post.commentsCount - 1
+                  : 0;
             }
           }
         });
@@ -3155,7 +3173,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: scheme.surface,
-        border: Border(top: BorderSide(color: scheme.outline.withOpacity(0.15))),
+        border: Border(
+          top: BorderSide(color: scheme.outline.withOpacity(0.15)),
+        ),
       ),
       child: Row(
         children: [
@@ -3173,7 +3193,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             onPressed: () => FocusScope.of(context).requestFocus(FocusNode()),
           ),
           const SizedBox(width: 8),
-          Text('${widget.post.commentsCount}', style: TextStyle(color: scheme.onSurface)),
+          Text(
+            '${widget.post.commentsCount}',
+            style: TextStyle(color: scheme.onSurface),
+          ),
           const SizedBox(width: 12),
           IconButton(
             icon: Icon(
@@ -3183,7 +3206,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
             onPressed: _toggleSave,
           ),
           const SizedBox(width: 8),
-          Text('${widget.post.favoriteCount}', style: TextStyle(color: scheme.onSurface)),
+          Text(
+            '${widget.post.favoriteCount}',
+            style: TextStyle(color: scheme.onSurface),
+          ),
           const Spacer(),
           IconButton(
             icon: Icon(Icons.share_outlined, color: scheme.onSurface),
@@ -3222,7 +3248,11 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                   ),
                 ),
               IconButton(
-                icon: Icon(Icons.refresh, size: 20, color: scheme.onSurfaceVariant),
+                icon: Icon(
+                  Icons.refresh,
+                  size: 20,
+                  color: scheme.onSurfaceVariant,
+                ),
                 onPressed: _isLoadingComments
                     ? null
                     : () => _loadComments(refresh: true),
@@ -3247,7 +3277,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                       ? CircularProgressIndicator(color: scheme.primary)
                       : TextButton.icon(
                           onPressed: _loadComments,
-                          icon: Icon(Icons.refresh, color: scheme.onSurfaceVariant),
+                          icon: Icon(
+                            Icons.refresh,
+                            color: scheme.onSurfaceVariant,
+                          ),
                           label: Text(
                             '加载更多评论',
                             style: TextStyle(color: scheme.primary),
@@ -3430,7 +3463,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                                   const Spacer(),
                                   Text(
                                     '${reply.likesCount}',
-                                    style: TextStyle(color: scheme.onSurfaceVariant),
+                                    style: TextStyle(
+                                      color: scheme.onSurfaceVariant,
+                                    ),
                                   ),
                                   IconButton(
                                     icon: Icon(
@@ -3546,7 +3581,10 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                 decoration: BoxDecoration(
                   color: bg,
                   border: Border(
-                    bottom: BorderSide(color: scheme.outline.withOpacity(0.15), width: 0.5),
+                    bottom: BorderSide(
+                      color: scheme.outline.withOpacity(0.15),
+                      width: 0.5,
+                    ),
                   ),
                 ),
                 child: _mentionCandidates.isEmpty && _selectedMentions.isEmpty
@@ -3559,7 +3597,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                               height: 16,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(scheme.primary),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  scheme.primary,
+                                ),
                               ),
                             ),
                             SizedBox(width: 8),
@@ -3844,7 +3884,9 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                       ),
                       filled: true,
                       fillColor: scheme.surfaceVariant,
-                      hintStyle: TextStyle(color: scheme.onSurface.withOpacity(0.6)),
+                      hintStyle: TextStyle(
+                        color: scheme.onSurface.withOpacity(0.6),
+                      ),
                     ),
                     style: TextStyle(color: scheme.onSurface),
                   ),
@@ -3873,7 +3915,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
   @override
   Widget build(BuildContext context) {
     // 检查帖子状态，如果不是 NORMAL，显示不可见提示页面
-    final status = _currentPostStatus?.toUpperCase() ?? widget.post.status?.toUpperCase();
+    final status =
+        _currentPostStatus?.toUpperCase() ?? widget.post.status?.toUpperCase();
     final isPostUnavailable = status != null && status != 'NORMAL';
 
     return Scaffold(
@@ -3890,7 +3933,8 @@ class _PostDetailScreenState extends State<PostDetailScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildMediaGallery(),
-                  if (widget.post.status == 'REMOVED' && widget.post.hiddenReason != null)
+                  if (widget.post.status == 'REMOVED' &&
+                      widget.post.hiddenReason != null)
                     _buildRemovedWarning(),
                   const SizedBox(height: 8),
                   _buildAuthorRow(),
@@ -4281,11 +4325,7 @@ class ClickableTagWidget extends StatelessWidget {
   final String tag;
   final VoidCallback onTap;
 
-  const ClickableTagWidget({
-    super.key,
-    required this.tag,
-    required this.onTap,
-  });
+  const ClickableTagWidget({super.key, required this.tag, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -4338,10 +4378,7 @@ class ContentWithClickableTags extends StatelessWidget {
 
     if (matches.isEmpty) {
       // 没有标签，直接返回文本
-      return Text(
-        content,
-        style: const TextStyle(fontSize: 14, height: 1.6),
-      );
+      return Text(content, style: const TextStyle(fontSize: 14, height: 1.6));
     }
 
     // 构建富文本
@@ -4351,47 +4388,49 @@ class ContentWithClickableTags extends StatelessWidget {
     for (final match in matches) {
       // 添加匹配前的普通文本
       if (match.start > lastEnd) {
-        textSpans.add(TextSpan(
-          text: content.substring(lastEnd, match.start),
-          style: const TextStyle(fontSize: 14, height: 1.6),
-        ));
+        textSpans.add(
+          TextSpan(
+            text: content.substring(lastEnd, match.start),
+            style: const TextStyle(fontSize: 14, height: 1.6),
+          ),
+        );
       }
 
       // 添加可点击的标签
       final tag = match.group(2)!; // 获取#后面的标签内容
-      textSpans.add(TextSpan(
-        text: match.group(1), // 完整的#标签文本
-        style: const TextStyle(
-          fontSize: 14,
-          height: 1.6,
-          color: Colors.blue,
-          fontWeight: FontWeight.w500,
+      textSpans.add(
+        TextSpan(
+          text: match.group(1), // 完整的#标签文本
+          style: const TextStyle(
+            fontSize: 14,
+            height: 1.6,
+            color: Colors.blue,
+            fontWeight: FontWeight.w500,
+          ),
+          recognizer: TapGestureRecognizer()
+            ..onTap = () {
+              onTagTap(tag);
+            },
         ),
-        recognizer: TapGestureRecognizer()
-          ..onTap = () {
-            onTagTap(tag);
-          },
-      ));
+      );
 
       lastEnd = match.end;
     }
 
     // 添加剩余的文本
     if (lastEnd < content.length) {
-      textSpans.add(TextSpan(
-        text: content.substring(lastEnd),
-        style: const TextStyle(fontSize: 14, height: 1.6),
-      ));
+      textSpans.add(
+        TextSpan(
+          text: content.substring(lastEnd),
+          style: const TextStyle(fontSize: 14, height: 1.6),
+        ),
+      );
     }
 
     return RichText(
       text: TextSpan(
         children: textSpans,
-        style: const TextStyle(
-          fontSize: 14,
-          height: 1.6,
-          color: Colors.black,
-        ),
+        style: const TextStyle(fontSize: 14, height: 1.6, color: Colors.black),
       ),
     );
   }
