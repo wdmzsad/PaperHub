@@ -78,7 +78,7 @@ public class UserController {
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal User currentUser) {
         if (currentUser == null) {
-            return ResponseEntity.ok(null);  // 页面刷新时容忍匿名状态，返回空结果
+            return ResponseEntity.status(401).body(Map.of("message", "未认证，请先登录"));
         }
         return ResponseEntity.ok(userService.toProfile(currentUser));
     }
@@ -89,8 +89,7 @@ public class UserController {
     @GetMapping("/me/privacy")
     public ResponseEntity<?> getMyPrivacySettings(@AuthenticationPrincipal User currentUser) {
         if (currentUser == null) {
-            // 页面刷新时容忍匿名状态，返回默认隐私设置
-            return ResponseEntity.ok(new UserDtos.PrivacySettingsResp(false, false, true));
+            return ResponseEntity.status(401).body(Map.of("message", "未认证，请先登录"));
         }
         User fresh = userRepository.findById(currentUser.getId())
                 .orElseThrow(() -> new IllegalStateException("当前用户不存在"));
@@ -413,8 +412,7 @@ public class UserController {
             @RequestParam(defaultValue = "20") int pageSize,
             @AuthenticationPrincipal User currentUser) {
         if (currentUser == null) {
-            // 页面刷新时容忍匿名状态，返回空列表
-            return ResponseEntity.ok(new UserDtos.UserListResp(
+            return ResponseEntity.status(401).body(new UserDtos.UserListResp(
                     List.of(), 0, page, pageSize));
         }
 
