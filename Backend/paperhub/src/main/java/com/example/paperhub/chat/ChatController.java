@@ -116,6 +116,22 @@ public class ChatController {
             return ResponseEntity.badRequest().build();
         }
 
+        logger.info("【会话消息访问】conversationId={}, userId={}, userName={}",
+                conversationId, user.getId(), user.getName());
+
+        // 验证用户是否是会话参与者
+        boolean isParticipant = conversationParticipantRepository
+                .existsByConversationIdAndUserId(conversationId, user.getId());
+
+        logger.info("【权限验证结果】conversationId={}, userId={}, isParticipant={}",
+                conversationId, user.getId(), isParticipant);
+
+        if (!isParticipant) {
+            logger.warn("【越权访问被拦截】conversationId={}, userId={}, userName={}",
+                    conversationId, user.getId(), user.getName());
+            return ResponseEntity.status(403).build();
+        }
+
         Page<MessageResponse> messages = chatService.getConversationMessages(conversationId, user.getId(), page, size);
         return ResponseEntity.ok(messages);
     }
@@ -131,6 +147,13 @@ public class ChatController {
 
         if (user == null) {
             return ResponseEntity.badRequest().build();
+        }
+
+        // 验证用户是否是会话参与者
+        boolean isParticipant = conversationParticipantRepository
+                .existsByConversationIdAndUserId(conversationId, user.getId());
+        if (!isParticipant) {
+            return ResponseEntity.status(403).build();
         }
 
         Message message;
@@ -185,6 +208,13 @@ public class ChatController {
             return ResponseEntity.badRequest().build();
         }
 
+        // 验证用户是否是会话参与者
+        boolean isParticipant = conversationParticipantRepository
+                .existsByConversationIdAndUserId(conversationId, user.getId());
+        if (!isParticipant) {
+            return ResponseEntity.status(403).build();
+        }
+
         chatService.markAsRead(conversationId, user.getId());
         return ResponseEntity.ok().build();
     }
@@ -200,6 +230,22 @@ public class ChatController {
 
         if (user == null) {
             return ResponseEntity.badRequest().build();
+        }
+
+        logger.info("【获取最新消息】conversationId={}, userId={}, userName={}, limit={}",
+                conversationId, user.getId(), user.getName(), limit);
+
+        // 验证用户是否是会话参与者
+        boolean isParticipant = conversationParticipantRepository
+                .existsByConversationIdAndUserId(conversationId, user.getId());
+
+        logger.info("【权限验证结果】conversationId={}, userId={}, isParticipant={}",
+                conversationId, user.getId(), isParticipant);
+
+        if (!isParticipant) {
+            logger.warn("【越权访问被拦截】conversationId={}, userId={}, userName={}",
+                    conversationId, user.getId(), user.getName());
+            return ResponseEntity.status(403).build();
         }
 
         List<MessageResponse> messages = chatService.getLatestMessages(conversationId, user.getId(), limit);
