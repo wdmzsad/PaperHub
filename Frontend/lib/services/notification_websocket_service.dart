@@ -227,6 +227,19 @@ class NotificationWebSocketService {
   /// 获取当前用户ID
   Future<int?> _getCurrentUserId() async {
     try {
+      // 首先尝试从LocalStorage直接读取userId（登录时已缓存）
+      final cachedUserId = LocalStorage.instance.read('userId');
+      if (cachedUserId != null && cachedUserId.isNotEmpty) {
+        final int? id = int.tryParse(cachedUserId);
+        if (id != null) {
+          print('从LocalStorage读取用户ID: $id');
+          return id;
+        } else {
+          print('LocalStorage中的userId不是有效数字: $cachedUserId');
+        }
+      }
+
+      // 如果LocalStorage中没有，再尝试从JWT token中解析
       final token = LocalStorage.instance.read('accessToken');
       if (token == null || token.isEmpty) {
         print('未找到accessToken');
@@ -255,7 +268,15 @@ class NotificationWebSocketService {
           return null;
         }
 
-        return int.tryParse(userId.toString());
+        // 如果userId是邮箱（sub字段通常是邮箱），需要调用API获取数字ID
+        // 但这里先尝试解析为数字，如果失败则返回null
+        final int? id = int.tryParse(userId.toString());
+        if (id == null) {
+          print('JWT中的用户标识不是数字ID，可能是邮箱: $userId');
+          // 可以在这里调用API获取用户信息，但为了避免循环依赖，先返回null
+          // 实际应用中，登录时已经缓存了userId，所以这里应该不会执行到
+        }
+        return id;
       } catch (e) {
         print('解析JWT payload失败: $e');
         return null;
