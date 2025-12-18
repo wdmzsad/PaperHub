@@ -200,23 +200,23 @@ public class ChatController {
      * 标记会话为已读
      */
     @PutMapping("/{conversationId}/read")
-    public ResponseEntity<Void> markAsRead(
+    public ResponseEntity<Map<String, Object>> markAsRead(
             @AuthenticationPrincipal com.example.paperhub.auth.User user,
             @PathVariable Long conversationId) {
 
         if (user == null) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(Map.of("error", "用户未认证"));
         }
 
         // 验证用户是否是会话参与者
         boolean isParticipant = conversationParticipantRepository
                 .existsByConversationIdAndUserId(conversationId, user.getId());
         if (!isParticipant) {
-            return ResponseEntity.status(403).build();
+            return ResponseEntity.status(403).body(Map.of("error", "无权限访问此会话"));
         }
 
         chatService.markAsRead(conversationId, user.getId());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(Map.of("success", true));
     }
 
     /**
