@@ -44,6 +44,8 @@ class ApiService {
   static bool _isRefreshing = false;
   // 存储等待刷新的请求队列
   static final List<Completer<Map<String, dynamic>>> _refreshQueue = [];
+  // 全局 401 错误回调（当刷新 token 失败时调用）
+  static void Function()? onAuthFailed;
 
   static Map<String, String> _buildHeaders({
     bool json = true,
@@ -67,16 +69,26 @@ class ApiService {
   static Future<Map<String, dynamic>> refreshToken() async {
     final refreshToken = LocalStorage.instance.read('refreshToken');
     if (refreshToken == null || refreshToken.isEmpty) {
+      print('刷新Token失败: 没有refreshToken');
       throw Exception('没有refreshToken，请重新登录');
     }
 
+    print('开始刷新Token，baseUrl: $baseUrl');
     final headers = <String, String>{'Content-Type': 'application/json'};
-    final resp = await http.post(
-      Uri.parse('$baseUrl/auth/refresh'),
-      headers: headers,
-      body: jsonEncode({'refreshToken': refreshToken}),
-    );
-    return _parseResponse(resp);
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/auth/refresh'),
+        headers: headers,
+        body: jsonEncode({'refreshToken': refreshToken}),
+      );
+      print('刷新Token响应状态码: ${resp.statusCode}');
+      final result = _parseResponse(resp);
+      print('刷新Token解析结果: statusCode=${result['statusCode']}');
+      return result;
+    } catch (e) {
+      print('刷新Token请求异常: $e');
+      rethrow;
+    }
   }
 
   /// 处理队列中等待的请求
@@ -138,21 +150,39 @@ class ApiService {
           final retryResp = await requestFn();
           return _parseResponse(retryResp);
         } else {
-          // 刷新返回的 token 为空，返回 401 错误
+          // 刷新返回的 token 为空，清除 token 并触发回调
+          print('刷新Token返回空token，清除本地token');
+          await _clearTokens();
           _processRefreshQueue(null, Exception('刷新Token返回空token'));
+          // 触发全局回调
+          if (onAuthFailed != null) {
+            onAuthFailed!();
+          }
           return {
             'statusCode': 401,
             'body': {'message': '刷新Token失败，请重新登录'},
           };
         }
       } else {
-        // 刷新失败，不主动清除本地Token，直接返回结果交由调用方处理
+        // 刷新失败（401/403等），清除 token 并触发回调
+        print('刷新Token失败，状态码: ${refreshResult['statusCode']}，清除本地token');
+        await _clearTokens();
         _processRefreshQueue(null, Exception('刷新Token失败'));
+        // 触发全局回调
+        if (onAuthFailed != null) {
+          onAuthFailed!();
+        }
         return refreshResult;
       }
     } catch (e) {
-      // 刷新失败，不主动清除本地Token，直接返回401结果
+      // 刷新异常，清除 token 并触发回调
+      print('刷新Token异常: $e，清除本地token');
+      await _clearTokens();
       _processRefreshQueue(null, e as Exception);
+      // 触发全局回调
+      if (onAuthFailed != null) {
+        onAuthFailed!();
+      }
       return {
         'statusCode': 401,
         'body': {'message': '刷新Token失败，请重新登录'},

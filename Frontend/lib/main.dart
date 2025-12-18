@@ -17,6 +17,9 @@ import 'services/notification_websocket_service.dart';
 import 'constants/app_colors.dart';
 import 'utils/font_utils.dart';
 
+// 全局导航键，用于在静态上下文中导航
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -147,6 +150,27 @@ class PaperHubApp extends StatefulWidget {
 class _PaperHubAppState extends State<PaperHubApp> {
   late final ValueNotifier<ThemeMode> _themeModeNotifier =
       ValueNotifier(widget.initialThemeMode);
+
+  @override
+  void initState() {
+    super.initState();
+    // 注册全局 401 错误处理回调
+    ApiService.onAuthFailed = () {
+      // 清除 token 后跳转到登录页
+      debugPrint('检测到认证失败，跳转到登录页');
+      final navigator = navigatorKey.currentState;
+      if (navigator != null) {
+        navigator.pushNamedAndRemoveUntil('/login', (route) => false);
+      }
+    };
+  }
+
+  @override
+  void dispose() {
+    // 取消注册回调
+    ApiService.onAuthFailed = null;
+    super.dispose();
+  }
 
   ThemeData get _unauthLightTheme {
     final base = ThemeData.light();
@@ -283,6 +307,7 @@ class _PaperHubAppState extends State<PaperHubApp> {
       valueListenable: _themeModeNotifier,
       builder: (context, mode, _) {
         return MaterialApp(
+          navigatorKey: navigatorKey,
           title: 'PaperHub (Mock Demo)',
           themeMode: mode,
           theme: _lightTheme,
