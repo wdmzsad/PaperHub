@@ -44,6 +44,8 @@ class ApiService {
   static bool _isRefreshing = false;
   // 存储等待刷新的请求队列
   static final List<Completer<Map<String, dynamic>>> _refreshQueue = [];
+  // 全局 401 错误回调（当刷新 token 失败时调用）
+  static void Function()? onAuthFailed;
 
   static Map<String, String> _buildHeaders({
     bool json = true,
@@ -66,17 +68,55 @@ class ApiService {
   /// 刷新Token
   static Future<Map<String, dynamic>> refreshToken() async {
     final refreshToken = LocalStorage.instance.read('refreshToken');
+    print('准备刷新Token: refreshToken=${refreshToken != null && refreshToken.isNotEmpty ? "present" : "missing"}');
+    
     if (refreshToken == null || refreshToken.isEmpty) {
-      throw Exception('没有refreshToken，请重新登录');
+      print('刷新Token失败: 没有refreshToken');
+      // 再次尝试从缓存读取，以防是时序问题
+      await Future.delayed(const Duration(milliseconds: 100));
+      final retryRefreshToken = LocalStorage.instance.read('refreshToken');
+      print('延迟重试读取refreshToken: ${retryRefreshToken != null && retryRefreshToken.isNotEmpty ? "present" : "missing"}');
+      if (retryRefreshToken == null || retryRefreshToken.isEmpty) {
+        throw Exception('没有refreshToken，请重新登录');
+      }
+      // 如果延迟后读取到了，使用它
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      try {
+        final resp = await http.post(
+          Uri.parse('$baseUrl/auth/refresh'),
+          headers: headers,
+          body: jsonEncode({'refreshToken': retryRefreshToken}),
+        );
+        print('刷新Token响应状态码: ${resp.statusCode}');
+        final result = _parseResponse(resp);
+        print('刷新Token解析结果: statusCode=${result['statusCode']}');
+        return result;
+      } catch (e) {
+        print('刷新Token请求异常: $e');
+        rethrow;
+      }
     }
 
+    print('开始刷新Token，baseUrl: $baseUrl');
     final headers = <String, String>{'Content-Type': 'application/json'};
-    final resp = await http.post(
-      Uri.parse('$baseUrl/auth/refresh'),
-      headers: headers,
-      body: jsonEncode({'refreshToken': refreshToken}),
-    );
-    return _parseResponse(resp);
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/auth/refresh'),
+        headers: headers,
+        body: jsonEncode({'refreshToken': refreshToken}),
+      );
+      print('刷新Token响应状态码: ${resp.statusCode}');
+      final result = _parseResponse(resp);
+      print('刷新Token解析结果: statusCode=${result['statusCode']}');
+      if (resp.statusCode == 200) {
+        final body = result['body'] as Map<String, dynamic>?;
+        print('刷新Token响应体: token=${body?['token'] != null ? "present" : "missing"}, refreshToken=${body?['refreshToken'] != null ? "present" : "missing"}');
+      }
+      return result;
+    } catch (e) {
+      print('刷新Token请求异常: $e');
+      rethrow;
+    }
   }
 
   /// 处理队列中等待的请求
@@ -124,11 +164,23 @@ class ApiService {
         final newToken = body?['token'] as String? ?? '';
         final newRefreshToken = body?['refreshToken'] as String? ?? '';
 
-        // 只有在新 token 有效时才更新本地存储并重试请求
-        if (newToken.isNotEmpty) {
+        // 只有在新 token 和新 refreshToken 都有效时才更新本地存储并重试请求
+        if (newToken.isNotEmpty && newRefreshToken.isNotEmpty) {
           await LocalStorage.instance.write('accessToken', newToken);
-          if (newRefreshToken.isNotEmpty) {
-            await LocalStorage.instance.write('refreshToken', newRefreshToken);
+          await LocalStorage.instance.write('refreshToken', newRefreshToken);
+          print('刷新Token成功，已保存新的accessToken和refreshToken');
+          // 验证保存是否成功
+          final savedToken = LocalStorage.instance.read('accessToken');
+          final savedRefresh = LocalStorage.instance.read('refreshToken');
+          print('保存后验证: accessToken=${savedToken != null && savedToken.isNotEmpty ? "present" : "missing"}, refreshToken=${savedRefresh != null && savedRefresh.isNotEmpty ? "present" : "missing"}');
+          if (savedToken == null || savedToken.isEmpty || savedRefresh == null || savedRefresh.isEmpty) {
+            print('保存验证失败，清除token');
+            await _clearTokens();
+            _processRefreshQueue(null, Exception('刷新Token保存失败'));
+            return {
+              'statusCode': 401,
+              'body': {'message': '刷新Token保存失败，请重新登录'},
+            };
           }
 
           // 处理队列
@@ -138,21 +190,39 @@ class ApiService {
           final retryResp = await requestFn();
           return _parseResponse(retryResp);
         } else {
-          // 刷新返回的 token 为空，返回 401 错误
+          // 刷新返回的 token 为空，清除 token 并触发回调
+          print('刷新Token返回空token，清除本地token');
+          await _clearTokens();
           _processRefreshQueue(null, Exception('刷新Token返回空token'));
+          // 触发全局回调
+          if (onAuthFailed != null) {
+            onAuthFailed!();
+          }
           return {
             'statusCode': 401,
             'body': {'message': '刷新Token失败，请重新登录'},
           };
         }
       } else {
-        // 刷新失败，不主动清除本地Token，直接返回结果交由调用方处理
+        // 刷新失败（401/403等），清除 token 并触发回调
+        print('刷新Token失败，状态码: ${refreshResult['statusCode']}，清除本地token');
+        await _clearTokens();
         _processRefreshQueue(null, Exception('刷新Token失败'));
+        // 触发全局回调
+        if (onAuthFailed != null) {
+          onAuthFailed!();
+        }
         return refreshResult;
       }
     } catch (e) {
-      // 刷新失败，不主动清除本地Token，直接返回401结果
+      // 刷新异常，清除 token 并触发回调
+      print('刷新Token异常: $e，清除本地token');
+      await _clearTokens();
       _processRefreshQueue(null, e as Exception);
+      // 触发全局回调
+      if (onAuthFailed != null) {
+        onAuthFailed!();
+      }
       return {
         'statusCode': 401,
         'body': {'message': '刷新Token失败，请重新登录'},
@@ -1417,7 +1487,7 @@ class ApiService {
       final uri = Uri.parse(
         '$baseUrl/posts',
       ).replace(queryParameters: queryParameters);
-      print('请求帖子列表: $uri'); // 调试日志
+      // 移除调试日志
       final result = await _makeRequest(
         () => http
             .get(uri, headers: _buildHeaders())
@@ -1429,7 +1499,7 @@ class ApiService {
             ),
         '/posts',
       );
-      print('响应状态码: ${result['statusCode']}'); // 调试日志
+      // 移除调试日志
       return result;
     } catch (e) {
       print('API请求异常: $e'); // 调试日志
@@ -1791,6 +1861,7 @@ class ApiService {
         }
         // 对于 401 Unauthorized，返回友好的错误消息
         if (resp.statusCode == 401) {
+          print('检测到401空响应体，返回未认证错误');
           return {
             'statusCode': resp.statusCode,
             'body': {'message': '未认证，请先登录'},

@@ -17,6 +17,9 @@ import 'services/notification_websocket_service.dart';
 import 'constants/app_colors.dart';
 import 'utils/font_utils.dart';
 
+// 全局导航键，用于在静态上下文中导航
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -80,54 +83,74 @@ ThemeMode _parseThemeMode(String? raw) {
 Future<String> _determineInitialRoute() async {
   final token = LocalStorage.instance.read('accessToken');
   final refreshToken = LocalStorage.instance.read('refreshToken');
+  
+  debugPrint('启动路由判断: accessToken=${token != null && token.isNotEmpty ? "present" : "missing"}, refreshToken=${refreshToken != null && refreshToken.isNotEmpty ? "present" : "missing"}');
 
   // 无 token：直接走登录
   if (token == null || token.isEmpty) {
+    debugPrint('没有accessToken，返回登录页');
     return '/login';
   }
 
   // 有 token：若也有 refreshToken，尝试静默刷新
   if (refreshToken != null && refreshToken.isNotEmpty) {
     try {
+      debugPrint('启动时尝试刷新Token，refreshToken长度: ${refreshToken.length}');
       final resp = await ApiService.refreshToken();
+      debugPrint('启动时刷新Token响应: statusCode=${resp['statusCode']}');
       if (resp['statusCode'] == 200) {
         final body = resp['body'] as Map<String, dynamic>?;
         final newToken = body?['token'] as String? ?? '';
         final newRefresh = body?['refreshToken'] as String? ?? '';
         
-        // 只有在新 token 有效时才更新并返回首页
-        if (newToken.isNotEmpty) {
+        debugPrint('刷新Token成功: newToken=${newToken.isNotEmpty ? "present" : "empty"}, newRefresh=${newRefresh.isNotEmpty ? "present" : "empty"}');
+        
+        // 只有在新 token 和新 refreshToken 都有效时才更新并返回首页
+        if (newToken.isNotEmpty && newRefresh.isNotEmpty) {
           await LocalStorage.instance.write('accessToken', newToken);
-          if (newRefresh.isNotEmpty) {
-            await LocalStorage.instance.write('refreshToken', newRefresh);
+          await LocalStorage.instance.write('refreshToken', newRefresh);
+          debugPrint('已保存新的accessToken和refreshToken');
+          // 验证保存是否成功
+          final savedToken = LocalStorage.instance.read('accessToken');
+          final savedRefresh = LocalStorage.instance.read('refreshToken');
+          debugPrint('保存后验证: accessToken=${savedToken != null && savedToken.isNotEmpty ? "present" : "missing"}, refreshToken=${savedRefresh != null && savedRefresh.isNotEmpty ? "present" : "missing"}');
+          if (savedToken != null && savedToken.isNotEmpty && savedRefresh != null && savedRefresh.isNotEmpty) {
+            return '/home';
+          } else {
+            debugPrint('保存验证失败，清除token并返回登录');
+            await LocalStorage.instance.delete('accessToken');
+            await LocalStorage.instance.delete('refreshToken');
+            return '/login';
           }
-          return '/home';
         } else {
-          // 刷新返回的 token 为空，清除旧 token 并返回登录
-          debugPrint('Startup refresh token returned empty token');
+          // 如果后端没有返回新的 refreshToken，说明刷新失败，清除所有 token
+          debugPrint('后端未返回新的refreshToken或token，清除本地token并返回登录');
           await LocalStorage.instance.delete('accessToken');
           await LocalStorage.instance.delete('refreshToken');
           return '/login';
         }
       } else {
         // 刷新失败（401/403等），清除旧 token 并返回登录
-        debugPrint('Startup refresh token failed with status: ${resp['statusCode']}');
+        debugPrint('启动时刷新Token失败，状态码: ${resp['statusCode']}，清除本地token并返回登录');
         await LocalStorage.instance.delete('accessToken');
         await LocalStorage.instance.delete('refreshToken');
         return '/login';
       }
     } catch (e) {
       // 刷新异常，清除旧 token 并返回登录
-      debugPrint('Startup refresh token failed: $e');
+      debugPrint('启动时刷新Token异常: $e，清除本地token并返回登录');
       await LocalStorage.instance.delete('accessToken');
       await LocalStorage.instance.delete('refreshToken');
       return '/login';
     }
   }
 
-  // 有 accessToken 但没有 refreshToken，直接返回首页（让后续 API 调用处理 401）
-  // 这种情况可能是用户刚登录但 refreshToken 未保存，或者 refreshToken 已过期
-  return '/home';
+  // 有 accessToken 但没有 refreshToken，说明 token 可能已过期或无效
+  // 直接返回登录页，避免进入首页后所有 API 调用都失败
+  debugPrint('启动时检测到有accessToken但没有refreshToken，返回登录页');
+  await LocalStorage.instance.delete('accessToken');
+  await LocalStorage.instance.delete('refreshToken');
+  return '/login';
 }
 
 class PaperHubApp extends StatefulWidget {
@@ -147,6 +170,27 @@ class PaperHubApp extends StatefulWidget {
 class _PaperHubAppState extends State<PaperHubApp> {
   late final ValueNotifier<ThemeMode> _themeModeNotifier =
       ValueNotifier(widget.initialThemeMode);
+
+  @override
+  void initState() {
+    super.initState();
+    // 注册全局 401 错误处理回调
+    ApiService.onAuthFailed = () {
+      // 清除 token 后跳转到登录页
+      debugPrint('检测到认证失败，跳转到登录页');
+      final navigator = navigatorKey.currentState;
+      if (navigator != null) {
+        navigator.pushNamedAndRemoveUntil('/login', (route) => false);
+      }
+    };
+  }
+
+  @override
+  void dispose() {
+    // 取消注册回调
+    ApiService.onAuthFailed = null;
+    super.dispose();
+  }
 
   ThemeData get _unauthLightTheme {
     final base = ThemeData.light();
@@ -283,6 +327,7 @@ class _PaperHubAppState extends State<PaperHubApp> {
       valueListenable: _themeModeNotifier,
       builder: (context, mode, _) {
         return MaterialApp(
+          navigatorKey: navigatorKey,
           title: 'PaperHub (Mock Demo)',
           themeMode: mode,
           theme: _lightTheme,

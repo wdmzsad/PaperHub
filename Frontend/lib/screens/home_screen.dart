@@ -210,6 +210,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _preloadUnreadBadges() async {
+    // 检查是否有 token，没有 token 就不发起需要认证的请求
+    final token = LocalStorage.instance.read('accessToken');
+    if (token == null || token.isEmpty) {
+      return; // 未登录，不加载需要认证的数据
+    }
+
     // 预加载聊天未读
     _chatService.loadConversations();
 
@@ -240,20 +246,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final status = resp['statusCode'] as int? ?? 500;
       final body = resp['body'] as Map<String, dynamic>?;
 
-      print('加载帖子响应: status=$status, body=$body'); // 调试日志
+      // 移除调试日志，减少控制台输出
 
       if (status >= 200 && status < 300 && body != null) {
         final postsData = (body['posts'] as List<dynamic>?) ?? <dynamic>[];
         final total = body['total'] as int? ?? 0;
-
-        print('获取到 ${postsData.length} 条帖子'); // 调试日志
-        
-        // 调试：打印第一条帖子的原始 JSON 数据（查看后端返回的字段）
-        if (postsData.isNotEmpty) {
-          print('=== 第一条帖子的原始 JSON 数据 ===');
-          print(postsData[0]);
-          print('================================');
-        }
 
         final newPosts = postsData
             .map((p) => Post.fromJson(p as Map<String, dynamic>))
@@ -262,24 +259,8 @@ class _HomeScreenState extends State<HomeScreen> {
         final bool useHot = _shouldUseHotRankingOnChunk(newPosts);
         final List<Post> ordered = useHot ? _sortedByHeat(newPosts) : newPosts;
 
-        // 检查是否有“刚发布的新帖子”需要置顶展示
+        // 检查是否有"刚发布的新帖子"需要置顶展示
         Post? pinnedFromStorage = _consumeLastCreatedPostForPin(ordered);
-
-        // 调试：打印每个帖子的 imageAspectRatio
-        print('=== 帖子 imageAspectRatio 调试信息 ===');
-        for (var post in newPosts) {
-          print('Post ID: ${post.id}');
-          print('  - imageAspectRatio: ${post.imageAspectRatio}');
-          print('  - imageNaturalWidth: ${post.imageNaturalWidth}');
-          print('  - imageNaturalHeight: ${post.imageNaturalHeight}');
-          print('  - media count: ${post.media.length}');
-          if (post.media.isNotEmpty) {
-            print('  - first media URL: ${post.media.first}');
-          }
-          print('  - 计算出的宽高比: ${post.imageNaturalWidth / post.imageNaturalHeight}');
-          print('---');
-        }
-        print('=====================================');
 
         setState(() {
           _useHotRanking = useHot;
@@ -299,7 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final errorMsg = body != null && body['message'] != null
             ? '加载失败: ${body['message']}'
             : '加载失败: HTTP $status，请确保后端服务已启动 (http://localhost:8080)';
-        print('加载帖子失败: $errorMsg'); // 调试日志
+        // 移除调试日志
 
         // 如果后端失败，可以使用模拟数据作为降级方案（可选）
         // 取消下面的注释以启用降级方案
@@ -337,8 +318,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _isLoading = false;
       });
-      print('加载帖子异常: $e'); // 调试日志
-      print('堆栈跟踪: $stackTrace'); // 调试日志
+      // 移除调试日志，只在用户界面显示错误提示
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -476,6 +456,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadInitialFollowingPosts() async {
     if (_followingLoading) return;
 
+    // 检查是否有 token，没有 token 就不发起需要认证的请求
+    final token = LocalStorage.instance.read('accessToken');
+    if (token == null || token.isEmpty) {
+      setState(() {
+        _followingLoading = false;
+        _followingHasMore = false;
+      });
+      return; // 未登录，不加载关注流
+    }
+
     setState(() {
       _followingLoading = true;
     });
@@ -574,6 +564,17 @@ class _HomeScreenState extends State<HomeScreen> {
   /// 刷新关注流（用于其他页面触发的全局刷新）
   Future<void> _refreshFollowingFeed() async {
     if (_followingLoading) return;
+
+    // 检查是否有 token，没有 token 就不发起需要认证的请求
+    final token = LocalStorage.instance.read('accessToken');
+    if (token == null || token.isEmpty) {
+      setState(() {
+        _followingLoading = false;
+        _followingHasMore = false;
+      });
+      return; // 未登录，不刷新关注流
+    }
+
     setState(() {
       _followingLoading = true;
     });
@@ -643,7 +644,7 @@ class _HomeScreenState extends State<HomeScreen> {
       LocalStorage.instance.write('lastCreatedPost', '');
       return pinned;
     } catch (e) {
-      print('读取本地 lastCreatedPost 失败: $e');
+      // 移除调试日志
       return null;
     }
   }
@@ -1034,6 +1035,30 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// 检查用户画像信号，决定是否使用热度排序兜底
   Future<void> _evaluateUserSignals() async {
+    // 检查是否有 token，没有 token 就不发起需要认证的请求
+    final token = LocalStorage.instance.read('accessToken');
+    if (token == null || token.isEmpty) {
+      // 未登录，尝试从本地缓存读取
+      try {
+        final cached = LocalStorage.instance.read('currentUser');
+        if (cached != null) {
+          final decoded = jsonDecode(cached) as Map<String, dynamic>;
+          final profile = UserProfile.fromJson(decoded);
+          final bool missingDirections = profile.researchDirections.isEmpty;
+          setState(() {
+            _currentUserProfile = profile;
+            _useHotRanking = missingDirections || _useHotRanking;
+          });
+          if (_useHotRanking && _posts.isNotEmpty) {
+            _sortDiscoverByHeat();
+          }
+        }
+      } catch (_) {
+        // 忽略本地读取异常
+      }
+      return; // 未登录，不请求网络
+    }
+
     try {
       final resp = await ApiService.getCurrentUserProfile();
       if (resp['statusCode'] == 200) {

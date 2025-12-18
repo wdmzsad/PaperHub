@@ -99,6 +99,18 @@ class _ProfilePageState extends State<ProfilePage>
       }
 
       // 总是从网络获取最新的用户信息
+      // 查看自己的主页时，需要检查是否有 token
+      if (widget.userId == null) {
+        final token = LocalStorage.instance.read('accessToken');
+        if (token == null || token.isEmpty) {
+          // 未登录，无法获取自己的信息
+          setState(() {
+            _error = '请先登录';
+            _loading = false;
+          });
+          return;
+        }
+      }
       final resp = widget.userId == null
           ? await ApiService.getCurrentUserProfile()
           : await ApiService.getUserProfile(widget.userId!);
