@@ -1140,6 +1140,7 @@ class _MessageScreenState extends State<MessageScreen> {
     _loadData();
     _loadUnreadCount();
     _searchController.addListener(_onSearchChanged);
+    _chatService.addListener(_onChatServiceChanged);
   }
 
   Future<void> _loadUnreadCount() async {
@@ -1157,8 +1158,15 @@ class _MessageScreenState extends State<MessageScreen> {
     }
   }
 
+  void _onChatServiceChanged() {
+    if (mounted) {
+      _updateConversationState();
+    }
+  }
+
   @override
   void dispose() {
+    _chatService.removeListener(_onChatServiceChanged);
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     super.dispose();
@@ -1588,6 +1596,17 @@ class _MessageScreenState extends State<MessageScreen> {
               fontSize: 14,
             ),
           ),
+          if (!_isSearching) ...[
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _loadData,
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF1976D2),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              ),
+              child: const Text('重新加载'),
+            ),
+          ],
         ],
       ),
     );
