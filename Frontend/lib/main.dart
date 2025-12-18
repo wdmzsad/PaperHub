@@ -92,45 +92,56 @@ Future<String> _determineInitialRoute() async {
   // 有 token：若也有 refreshToken，尝试静默刷新
   if (refreshToken != null && refreshToken.isNotEmpty) {
     try {
+      debugPrint('启动时尝试刷新Token...');
       final resp = await ApiService.refreshToken();
       if (resp['statusCode'] == 200) {
         final body = resp['body'] as Map<String, dynamic>?;
         final newToken = body?['token'] as String? ?? '';
         final newRefresh = body?['refreshToken'] as String? ?? '';
         
+        debugPrint('刷新Token成功: newToken=${newToken.isNotEmpty ? "present" : "empty"}, newRefresh=${newRefresh.isNotEmpty ? "present" : "empty"}');
+        
         // 只有在新 token 有效时才更新并返回首页
         if (newToken.isNotEmpty) {
           await LocalStorage.instance.write('accessToken', newToken);
+          // 确保 refreshToken 也被保存（即使后端没有返回新的，也保留旧的）
           if (newRefresh.isNotEmpty) {
             await LocalStorage.instance.write('refreshToken', newRefresh);
+            debugPrint('已保存新的refreshToken');
+          } else {
+            // 如果后端没有返回新的 refreshToken，保留旧的
+            debugPrint('后端未返回新的refreshToken，保留旧的');
           }
           return '/home';
         } else {
           // 刷新返回的 token 为空，清除旧 token 并返回登录
-          debugPrint('Startup refresh token returned empty token');
+          debugPrint('启动时刷新Token返回空token，清除本地token并返回登录');
           await LocalStorage.instance.delete('accessToken');
           await LocalStorage.instance.delete('refreshToken');
           return '/login';
         }
       } else {
         // 刷新失败（401/403等），清除旧 token 并返回登录
-        debugPrint('Startup refresh token failed with status: ${resp['statusCode']}');
+        debugPrint('启动时刷新Token失败，状态码: ${resp['statusCode']}，清除本地token并返回登录');
         await LocalStorage.instance.delete('accessToken');
         await LocalStorage.instance.delete('refreshToken');
         return '/login';
       }
     } catch (e) {
       // 刷新异常，清除旧 token 并返回登录
-      debugPrint('Startup refresh token failed: $e');
+      debugPrint('启动时刷新Token异常: $e，清除本地token并返回登录');
       await LocalStorage.instance.delete('accessToken');
       await LocalStorage.instance.delete('refreshToken');
       return '/login';
     }
   }
 
-  // 有 accessToken 但没有 refreshToken，直接返回首页（让后续 API 调用处理 401）
-  // 这种情况可能是用户刚登录但 refreshToken 未保存，或者 refreshToken 已过期
-  return '/home';
+  // 有 accessToken 但没有 refreshToken，说明 token 可能已过期或无效
+  // 直接返回登录页，避免进入首页后所有 API 调用都失败
+  debugPrint('启动时检测到有accessToken但没有refreshToken，返回登录页');
+  await LocalStorage.instance.delete('accessToken');
+  await LocalStorage.instance.delete('refreshToken');
+  return '/login';
 }
 
 class PaperHubApp extends StatefulWidget {

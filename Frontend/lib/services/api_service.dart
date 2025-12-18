@@ -139,8 +139,18 @@ class ApiService {
         // 只有在新 token 有效时才更新本地存储并重试请求
         if (newToken.isNotEmpty) {
           await LocalStorage.instance.write('accessToken', newToken);
+          // 确保 refreshToken 也被保存（即使后端没有返回新的，也保留旧的）
           if (newRefreshToken.isNotEmpty) {
             await LocalStorage.instance.write('refreshToken', newRefreshToken);
+            print('刷新Token成功，已保存新的refreshToken');
+          } else {
+            // 如果后端没有返回新的 refreshToken，尝试保留旧的
+            final oldRefreshToken = LocalStorage.instance.read('refreshToken');
+            if (oldRefreshToken != null && oldRefreshToken.isNotEmpty) {
+              print('后端未返回新的refreshToken，保留旧的');
+            } else {
+              print('警告: 刷新Token成功但refreshToken为空，且本地也没有旧的refreshToken');
+            }
           }
 
           // 处理队列
