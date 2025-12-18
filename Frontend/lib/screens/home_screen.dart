@@ -606,7 +606,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _followingPage = 2;
           _followingLoading = false;
           if (_selectedTab == 0 && newPosts.isNotEmpty) {
-            _lastFollowingTopPostIdSeen = newPosts.first.id;
+            _updateLastFollowingSeen(newPosts.first.id);
           }
           // 不在关注页时展示红点提示
           if (hasNewFollowing) {
@@ -942,7 +942,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _followingHasNew = false; // 进入关注页后红点立即消失
             if (_followingPosts.isNotEmpty) {
               // 记录当前关注流顶部帖子，后续刷新用于判断是否有新内容
-              _lastFollowingTopPostIdSeen = _followingPosts.first.id;
+              _updateLastFollowingSeen(_followingPosts.first.id);
             }
           }
           // 离开发现页即清除置顶的“我刚发的”帖子
