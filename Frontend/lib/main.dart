@@ -95,8 +95,9 @@ Future<String> _determineInitialRoute() async {
   // 有 token：若也有 refreshToken，尝试静默刷新
   if (refreshToken != null && refreshToken.isNotEmpty) {
     try {
-      debugPrint('启动时尝试刷新Token...');
+      debugPrint('启动时尝试刷新Token，refreshToken长度: ${refreshToken.length}');
       final resp = await ApiService.refreshToken();
+      debugPrint('启动时刷新Token响应: statusCode=${resp['statusCode']}');
       if (resp['statusCode'] == 200) {
         final body = resp['body'] as Map<String, dynamic>?;
         final newToken = body?['token'] as String? ?? '';
@@ -104,26 +105,30 @@ Future<String> _determineInitialRoute() async {
         
         debugPrint('刷新Token成功: newToken=${newToken.isNotEmpty ? "present" : "empty"}, newRefresh=${newRefresh.isNotEmpty ? "present" : "empty"}');
         
-        // 只有在新 token 有效时才更新并返回首页
-        if (newToken.isNotEmpty) {
+        // 只有在新 token 和新 refreshToken 都有效时才更新并返回首页
+        if (newToken.isNotEmpty && newRefresh.isNotEmpty) {
           await LocalStorage.instance.write('accessToken', newToken);
-          // 确保 refreshToken 也被保存
-          if (newRefresh.isNotEmpty) {
-            await LocalStorage.instance.write('refreshToken', newRefresh);
-            debugPrint('已保存新的refreshToken');
-          } else {
-            // 如果后端没有返回新的 refreshToken，重新写入旧的以确保它还在
-            if (refreshToken != null && refreshToken.isNotEmpty) {
-              await LocalStorage.instance.write('refreshToken', refreshToken);
-              debugPrint('后端未返回新的refreshToken，重新保存旧的refreshToken');
-            } else {
-              debugPrint('警告: 后端未返回新的refreshToken，且本地也没有旧的refreshToken');
-            }
-          }
+          await LocalStorage.instance.write('refreshToken', newRefresh);
+          debugPrint('已保存新的accessToken和refreshToken');
           // 验证保存是否成功
+          final savedToken = LocalStorage.instance.read('accessToken');
           final savedRefresh = LocalStorage.instance.read('refreshToken');
-          debugPrint('保存后验证: refreshToken=${savedRefresh != null && savedRefresh.isNotEmpty ? "present" : "missing"}');
-          return '/home';
+          debugPrint('保存后验证: accessToken=${savedToken != null && savedToken.isNotEmpty ? "present" : "missing"}, refreshToken=${savedRefresh != null && savedRefresh.isNotEmpty ? "present" : "missing"}');
+          if (savedToken != null && savedToken.isNotEmpty && savedRefresh != null && savedRefresh.isNotEmpty) {
+            return '/home';
+          } else {
+            debugPrint('保存验证失败，清除token并返回登录');
+            await LocalStorage.instance.delete('accessToken');
+            await LocalStorage.instance.delete('refreshToken');
+            return '/login';
+          }
+        } else {
+          // 如果后端没有返回新的 refreshToken，说明刷新失败，清除所有 token
+          debugPrint('后端未返回新的refreshToken或token，清除本地token并返回登录');
+          await LocalStorage.instance.delete('accessToken');
+          await LocalStorage.instance.delete('refreshToken');
+          return '/login';
+        }
         } else {
           // 刷新返回的 token 为空，清除旧 token 并返回登录
           debugPrint('启动时刷新Token返回空token，清除本地token并返回登录');

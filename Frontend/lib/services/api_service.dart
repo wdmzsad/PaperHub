@@ -164,26 +164,24 @@ class ApiService {
         final newToken = body?['token'] as String? ?? '';
         final newRefreshToken = body?['refreshToken'] as String? ?? '';
 
-        // 只有在新 token 有效时才更新本地存储并重试请求
-        if (newToken.isNotEmpty) {
+        // 只有在新 token 和新 refreshToken 都有效时才更新本地存储并重试请求
+        if (newToken.isNotEmpty && newRefreshToken.isNotEmpty) {
           await LocalStorage.instance.write('accessToken', newToken);
-          // 确保 refreshToken 也被保存
-          if (newRefreshToken.isNotEmpty) {
-            await LocalStorage.instance.write('refreshToken', newRefreshToken);
-            print('刷新Token成功，已保存新的refreshToken');
-          } else {
-            // 如果后端没有返回新的 refreshToken，重新写入旧的以确保它还在
-            final oldRefreshToken = LocalStorage.instance.read('refreshToken');
-            if (oldRefreshToken != null && oldRefreshToken.isNotEmpty) {
-              await LocalStorage.instance.write('refreshToken', oldRefreshToken);
-              print('后端未返回新的refreshToken，重新保存旧的refreshToken');
-            } else {
-              print('警告: 刷新Token成功但refreshToken为空，且本地也没有旧的refreshToken');
-            }
-          }
+          await LocalStorage.instance.write('refreshToken', newRefreshToken);
+          print('刷新Token成功，已保存新的accessToken和refreshToken');
           // 验证保存是否成功
+          final savedToken = LocalStorage.instance.read('accessToken');
           final savedRefresh = LocalStorage.instance.read('refreshToken');
-          print('保存后验证: refreshToken=${savedRefresh != null && savedRefresh.isNotEmpty ? "present" : "missing"}');
+          print('保存后验证: accessToken=${savedToken != null && savedToken.isNotEmpty ? "present" : "missing"}, refreshToken=${savedRefresh != null && savedRefresh.isNotEmpty ? "present" : "missing"}');
+          if (savedToken == null || savedToken.isEmpty || savedRefresh == null || savedRefresh.isEmpty) {
+            print('保存验证失败，清除token');
+            await _clearTokens();
+            _processRefreshQueue(null, Exception('刷新Token保存失败'));
+            return {
+              'statusCode': 401,
+              'body': {'message': '刷新Token保存失败，请重新登录'},
+            };
+          }
 
           // 处理队列
           _processRefreshQueue(refreshResult, null);
@@ -1863,6 +1861,7 @@ class ApiService {
         }
         // 对于 401 Unauthorized，返回友好的错误消息
         if (resp.statusCode == 401) {
+          print('检测到401空响应体，返回未认证错误');
           return {
             'statusCode': resp.statusCode,
             'body': {'message': '未认证，请先登录'},
