@@ -68,9 +68,33 @@ class ApiService {
   /// 刷新Token
   static Future<Map<String, dynamic>> refreshToken() async {
     final refreshToken = LocalStorage.instance.read('refreshToken');
+    print('准备刷新Token: refreshToken=${refreshToken != null && refreshToken.isNotEmpty ? "present" : "missing"}');
+    
     if (refreshToken == null || refreshToken.isEmpty) {
       print('刷新Token失败: 没有refreshToken');
-      throw Exception('没有refreshToken，请重新登录');
+      // 再次尝试从缓存读取，以防是时序问题
+      await Future.delayed(const Duration(milliseconds: 100));
+      final retryRefreshToken = LocalStorage.instance.read('refreshToken');
+      print('延迟重试读取refreshToken: ${retryRefreshToken != null && retryRefreshToken.isNotEmpty ? "present" : "missing"}');
+      if (retryRefreshToken == null || retryRefreshToken.isEmpty) {
+        throw Exception('没有refreshToken，请重新登录');
+      }
+      // 如果延迟后读取到了，使用它
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      try {
+        final resp = await http.post(
+          Uri.parse('$baseUrl/auth/refresh'),
+          headers: headers,
+          body: jsonEncode({'refreshToken': retryRefreshToken}),
+        );
+        print('刷新Token响应状态码: ${resp.statusCode}');
+        final result = _parseResponse(resp);
+        print('刷新Token解析结果: statusCode=${result['statusCode']}');
+        return result;
+      } catch (e) {
+        print('刷新Token请求异常: $e');
+        rethrow;
+      }
     }
 
     print('开始刷新Token，baseUrl: $baseUrl');
@@ -84,6 +108,10 @@ class ApiService {
       print('刷新Token响应状态码: ${resp.statusCode}');
       final result = _parseResponse(resp);
       print('刷新Token解析结果: statusCode=${result['statusCode']}');
+      if (resp.statusCode == 200) {
+        final body = result['body'] as Map<String, dynamic>?;
+        print('刷新Token响应体: token=${body?['token'] != null ? "present" : "missing"}, refreshToken=${body?['refreshToken'] != null ? "present" : "missing"}');
+      }
       return result;
     } catch (e) {
       print('刷新Token请求异常: $e');
@@ -139,19 +167,23 @@ class ApiService {
         // 只有在新 token 有效时才更新本地存储并重试请求
         if (newToken.isNotEmpty) {
           await LocalStorage.instance.write('accessToken', newToken);
-          // 确保 refreshToken 也被保存（即使后端没有返回新的，也保留旧的）
+          // 确保 refreshToken 也被保存
           if (newRefreshToken.isNotEmpty) {
             await LocalStorage.instance.write('refreshToken', newRefreshToken);
             print('刷新Token成功，已保存新的refreshToken');
           } else {
-            // 如果后端没有返回新的 refreshToken，尝试保留旧的
+            // 如果后端没有返回新的 refreshToken，重新写入旧的以确保它还在
             final oldRefreshToken = LocalStorage.instance.read('refreshToken');
             if (oldRefreshToken != null && oldRefreshToken.isNotEmpty) {
-              print('后端未返回新的refreshToken，保留旧的');
+              await LocalStorage.instance.write('refreshToken', oldRefreshToken);
+              print('后端未返回新的refreshToken，重新保存旧的refreshToken');
             } else {
               print('警告: 刷新Token成功但refreshToken为空，且本地也没有旧的refreshToken');
             }
           }
+          // 验证保存是否成功
+          final savedRefresh = LocalStorage.instance.read('refreshToken');
+          print('保存后验证: refreshToken=${savedRefresh != null && savedRefresh.isNotEmpty ? "present" : "missing"}');
 
           // 处理队列
           _processRefreshQueue(refreshResult, null);

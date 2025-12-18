@@ -83,9 +83,12 @@ ThemeMode _parseThemeMode(String? raw) {
 Future<String> _determineInitialRoute() async {
   final token = LocalStorage.instance.read('accessToken');
   final refreshToken = LocalStorage.instance.read('refreshToken');
+  
+  debugPrint('启动路由判断: accessToken=${token != null && token.isNotEmpty ? "present" : "missing"}, refreshToken=${refreshToken != null && refreshToken.isNotEmpty ? "present" : "missing"}');
 
   // 无 token：直接走登录
   if (token == null || token.isEmpty) {
+    debugPrint('没有accessToken，返回登录页');
     return '/login';
   }
 
@@ -104,14 +107,22 @@ Future<String> _determineInitialRoute() async {
         // 只有在新 token 有效时才更新并返回首页
         if (newToken.isNotEmpty) {
           await LocalStorage.instance.write('accessToken', newToken);
-          // 确保 refreshToken 也被保存（即使后端没有返回新的，也保留旧的）
+          // 确保 refreshToken 也被保存
           if (newRefresh.isNotEmpty) {
             await LocalStorage.instance.write('refreshToken', newRefresh);
             debugPrint('已保存新的refreshToken');
           } else {
-            // 如果后端没有返回新的 refreshToken，保留旧的
-            debugPrint('后端未返回新的refreshToken，保留旧的');
+            // 如果后端没有返回新的 refreshToken，重新写入旧的以确保它还在
+            if (refreshToken != null && refreshToken.isNotEmpty) {
+              await LocalStorage.instance.write('refreshToken', refreshToken);
+              debugPrint('后端未返回新的refreshToken，重新保存旧的refreshToken');
+            } else {
+              debugPrint('警告: 后端未返回新的refreshToken，且本地也没有旧的refreshToken');
+            }
           }
+          // 验证保存是否成功
+          final savedRefresh = LocalStorage.instance.read('refreshToken');
+          debugPrint('保存后验证: refreshToken=${savedRefresh != null && savedRefresh.isNotEmpty ? "present" : "missing"}');
           return '/home';
         } else {
           // 刷新返回的 token 为空，清除旧 token 并返回登录

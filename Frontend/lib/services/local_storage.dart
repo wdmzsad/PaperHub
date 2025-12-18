@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 简单封装：提供同步读取 + 持久化存储（底层使用 SharedPreferences）。
@@ -33,6 +34,10 @@ class LocalStorage {
     await _ensurePrefs();
     _cache[key] = value;
     await _prefs?.setString(key, value);
+    // 在调试模式下，如果写入的是 token 相关键，记录日志
+    if (kDebugMode && (key == 'accessToken' || key == 'refreshToken')) {
+      print('LocalStorage.write($key): saved (${value.length} chars), cache now has: ${_cache[key] != null ? "present" : "missing"}');
+    }
   }
 
   Future<void> delete(String key) async {
@@ -42,7 +47,12 @@ class LocalStorage {
   }
 
   String? read(String key) {
-    return _cache[key];
+    final value = _cache[key];
+    // 在调试模式下，如果读取的是 token 相关键，记录日志
+    if (kDebugMode && (key == 'accessToken' || key == 'refreshToken')) {
+      print('LocalStorage.read($key): ${value != null && value.isNotEmpty ? "present (${value.length} chars)" : "missing"}');
+    }
+    return value;
   }
 
   Future<void> _ensurePrefs() async {
