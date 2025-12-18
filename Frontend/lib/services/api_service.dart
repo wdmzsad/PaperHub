@@ -1487,7 +1487,7 @@ class ApiService {
       final uri = Uri.parse(
         '$baseUrl/posts',
       ).replace(queryParameters: queryParameters);
-      print('请求帖子列表: $uri'); // 调试日志
+      // 移除调试日志
       final result = await _makeRequest(
         () => http
             .get(uri, headers: _buildHeaders())
@@ -1499,7 +1499,7 @@ class ApiService {
             ),
         '/posts',
       );
-      print('响应状态码: ${result['statusCode']}'); // 调试日志
+      // 移除调试日志
       return result;
     } catch (e) {
       print('API请求异常: $e'); // 调试日志

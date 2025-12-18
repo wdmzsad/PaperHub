@@ -5,6 +5,7 @@ import '../models/conversation_model.dart';
 import '../models/message_model.dart';
 import 'api_service.dart';
 import 'unread_service.dart';
+import 'local_storage.dart';
 
 /// 聊天服务类
 ///
@@ -148,6 +149,14 @@ class ChatService extends ChangeNotifier {
 
   /// 获取会话列表
   Future<void> loadConversations() async {
+    // 检查是否有 token，没有 token 就不发起需要认证的请求
+    final token = LocalStorage.instance.read('accessToken');
+    if (token == null || token.isEmpty) {
+      _conversations = [];
+      _syncUnreadBadges();
+      return; // 未登录，不加载会话列表
+    }
+
     _isLoadingConversations = true;
     notifyListeners();
 
