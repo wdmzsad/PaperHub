@@ -129,13 +129,6 @@ Future<String> _determineInitialRoute() async {
           await LocalStorage.instance.delete('refreshToken');
           return '/login';
         }
-        } else {
-          // 刷新返回的 token 为空，清除旧 token 并返回登录
-          debugPrint('启动时刷新Token返回空token，清除本地token并返回登录');
-          await LocalStorage.instance.delete('accessToken');
-          await LocalStorage.instance.delete('refreshToken');
-          return '/login';
-        }
       } else {
         // 刷新失败（401/403等），清除旧 token 并返回登录
         debugPrint('启动时刷新Token失败，状态码: ${resp['statusCode']}，清除本地token并返回登录');
