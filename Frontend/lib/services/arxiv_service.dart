@@ -45,7 +45,7 @@ class ArxivService {
   // 使用后端代理解决 CORS 问题
   // 后端代理端点：GET /arxiv?id=1234.5678
   //static const String _proxyBaseUrl = 'http://localhost:8080/arxiv';
-  static const String _proxyBaseUrl = 'http://124.70.87.106:8080/arxiv';
+  static const String _proxyBaseUrl = 'http://1.95.209.72:8080/arxiv';
   static const String _arxivBaseUrl = 'http://export.arxiv.org/api/query';
   
   // 优先使用后端代理（推荐），如果后端未配置则回退到直接访问

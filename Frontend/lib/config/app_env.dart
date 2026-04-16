@@ -7,7 +7,7 @@ class AppEnv {
       String.fromEnvironment('WS_BASE_URL', defaultValue: '');
 
   static const String _localHttpBase = 'http://localhost:8080';
-  static const String _cloudHttpBase = 'http://124.70.87.106:8080';
+  static const String _cloudHttpBase = 'http://1.95.209.72:8080';
 
   static String get apiBaseUrl {
     final fallback = kReleaseMode ? _cloudHttpBase : _localHttpBase;
